@@ -13,10 +13,11 @@ export default defineConfig(({ command }) => {
   let devToken = "";
   if (command === "serve") {
     const state =
+      process.env.WERUBWORKER_STATE_DIR ||
       process.env.COWORKER_STATE_DIR ||
       (process.platform === "win32"
-        ? path.join(process.env.APPDATA || os.homedir(), "coworker")
-        : path.join(os.homedir(), ".config", "coworker"));
+        ? path.join(process.env.APPDATA || os.homedir(), "werubworker")
+        : path.join(os.homedir(), ".config", "werubworker"));
     try {
       devToken = fs.readFileSync(path.join(state, "sidecar-8765.token"), "utf8").trim();
     } catch {

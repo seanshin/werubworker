@@ -1,0 +1,51 @@
+{
+  "tool": {
+    "ran": "Ran",
+    "startedBg": "Started in the background:",
+    "checkedBg": "Checked on a background command",
+    "stoppedBg": "Stopped a background command",
+    "read": "Read",
+    "wrote": "Wrote",
+    "edited": "Edited",
+    "gitLog": "Looked through recent git history",
+    "updatedPlan": "Updated the plan",
+    "sentMessage": "Sent a message to",
+    "searchedWeb": "Searched the web",
+    "readWebPage": "Read a web page",
+    "sentSubAgent": "Sent a sub-agent to explore",
+    "usedSkill": "Used skill:",
+    "askedQuestion": "Asked you a question",
+    "proposedPlan": "Proposed a plan",
+    "askedFolderAccess": "Asked for folder access"
+  },
+  "approval": {
+    "writeFile": "Write a file",
+    "editFile": "Edit a file",
+    "applyPatch": "Apply a patch",
+    "runCommand": "Run a command",
+    "sendMessage": "Send a message to",
+    "sendMessageGeneric": "Send a message",
+    "sendFile": "Send a file to",
+    "sendFileGeneric": "Send a file",
+    "createAutomation": "Create the automation",
+    "createAutomationGeneric": "Create an automation",
+    "addSkill": "Add skill",
+    "toYourSkills": "to your skills",
+    "use": "Use",
+    "allowOnce": "Allow once",
+    "deny": "Deny",
+    "alwaysAllow": "Always allow",
+    "alwaysAllowCommand": "Always allow this command",
+    "allowEveryTime": "Allow every time",
+    "allow": "Allow",
+    "addToSkills": "Add to my skills",
+    "notNow": "Not now"
+  },
+  "denied": {
+    "wantedToRun": "Wanted to run",
+    "wantedToWrite": "Wanted to write",
+    "wantedToEdit": "Wanted to edit",
+    "wantedToMessage": "Wanted to message",
+    "wantedToUse": "Wanted to use"
+  }
+}

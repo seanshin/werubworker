@@ -62,7 +62,19 @@ const baseProps = {
   scheduledActive: false,
   integrationsActive: false,
   auditActive: false,
+  aboutActive: false,
   inboxActive: false,
+  onOpenAbout: vi.fn(),
+  onOpenOps: vi.fn(),
+  onOpenDev: vi.fn(),
+  onOpenDatabase: vi.fn(),
+  onOpenServices: vi.fn(),
+  opsActive: false,
+  devActive: false,
+  databaseActive: false,
+  servicesActive: false,
+  onOpenWiki: vi.fn(),
+  wikiActive: false,
 };
 
 afterEach(() => {

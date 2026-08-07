@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import { useTranslation } from "react-i18next";
 import {
   announceInboxUnlock,
   finalizeAutomationRun,
@@ -25,7 +26,6 @@ import {
   type MessageSource,
   type Persona,
   type RecentWorkspace,
-  type SurfaceVisibility,
   type WorkspaceCommandTrust,
 } from "./api";
 import type {
@@ -61,117 +61,98 @@ import { SettingsView } from "./components/SettingsView";
 import { PersonaView } from "./components/PersonaView";
 import { AuditView } from "./components/AuditView";
 import { InboxView } from "./components/InboxView";
+import { AboutView } from "./components/AboutView";
+import { OpsView } from "./components/OpsView";
+import { DevView } from "./components/DevView";
+import { DatabaseView } from "./components/DatabaseView";
+import { ServiceConfigView } from "./components/ServiceConfigView";
+import { WikiView } from "./components/WikiView";
 import { ApprovalCard } from "./components/ApprovalCard";
 import { DirectoryRequestCard } from "./components/DirectoryRequestCard";
 import { PlanCard } from "./components/PlanCard";
 import { WorkspaceTrustPrompt } from "./components/WorkspaceTrustPrompt";
-
-const newId = () =>
-  (crypto as any).randomUUID ? crypto.randomUUID().slice(0, 12) : Math.random().toString(36).slice(2, 14);
-
-const SUGGESTIONS = [
-  { ico: "⚙", text: "Run the test suite and summarize any failures." },
-  { ico: "✦", text: "Read the project and give me a 5-bullet overview." },
-  { ico: "↻", text: "Find and fix the failing build." },
-];
-
-// Tools whose success means a new/changed file should show up under Artifacts right away.
-const FILE_WRITE_TOOLS = new Set(["write_file", "apply_patch", "apply_unified_diff", "replace_in_file"]);
-
-// Models sometimes pass todo items as bare strings instead of {content, status} objects (the
-// backend tool normalizes them the same way; the GUI reads the raw proposal args, so mirror it).
-function normalizeTodos(raw: unknown): TodoItem[] {
-  if (!Array.isArray(raw)) return [];
-  const statuses = new Set(["pending", "in_progress", "done"]);
-  return raw.map((entry: any) => {
-    if (entry && typeof entry === "object") {
-      const status = entry.status === "completed" ? "done" : entry.status; // common model alias
-      return {
-        content: String(entry.content ?? ""),
-        status: statuses.has(status) ? status : "pending",
-      };
-    }
-    return { content: String(entry ?? ""), status: "pending" as const };
-  });
-}
-
-// Fallbacks used only before the persona list loads (the in-component, family-aware
-// needsWorkspace/gatesWorkspace consult the real persona once available).
-const needsWorkspaceFallback = (a: string) => a === "code" || a === "cowork";
-const gatesWorkspaceFallback = (a: string) => a === "code";
-const LAST_SESSION_KEY = "coworker:last-session-by-agent:v1";
-const NAV_COLLAPSED_KEY = "coworker:nav-collapsed:v1";
-
-type LastSession = { sessionId: string; workspace: string; updatedAt: number };
-
-function readLastSessions(): Record<string, LastSession> {
-  try {
-    const raw = localStorage.getItem(LAST_SESSION_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function rememberLastSession(agent: string, sessionId: string, workspace: string | null) {
-  if (!agent || !sessionId) return;
-  try {
-    const all = readLastSessions();
-    all[agent] = { sessionId, workspace: workspace || "", updatedAt: Date.now() };
-    localStorage.setItem(LAST_SESSION_KEY, JSON.stringify(all));
-  } catch {
-    /* localStorage may be unavailable; session restore is best effort. */
-  }
-}
-
-function sessionTs(s: SessionInfo): number {
-  return Date.parse(s.updated_at || "") || Number(s.updated_at) || 0;
-}
-
-function resumeTargetForAgent(agent: string, sessions: SessionInfo[]): LastSession | null {
-  const remembered = readLastSessions()[agent];
-  if (remembered?.sessionId) {
-    const live = sessions.find((s) => s.session_id === remembered.sessionId && s.agent === agent);
-    if (live || remembered.workspace) {
-      return {
-        sessionId: remembered.sessionId,
-        workspace: live?.workspace ?? remembered.workspace ?? "",
-        updatedAt: live ? sessionTs(live) : remembered.updatedAt,
-      };
-    }
-  }
-  const recent = sessions
-    .filter((s) => s.agent === agent && s.session_id && !s.session_id.startsWith("__"))
-    .sort((a, b) => sessionTs(b) - sessionTs(a))[0];
-  return recent ? { sessionId: recent.session_id, workspace: recent.workspace || "", updatedAt: sessionTs(recent) } : null;
-}
-
-function fallbackWorkspace(current: string | null, projects: RecentWorkspace[]): string {
-  if (current) return current;
-  const existing = projects.find((p) => p.exists);
-  return existing?.path || projects[0]?.path || "";
-}
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import {
+  newId,
+  FILE_WRITE_TOOLS,
+  normalizeTodos,
+  needsWorkspaceFallback,
+  gatesWorkspaceFallback,
+  rememberLastSession,
+  resumeTargetForAgent,
+  fallbackWorkspace,
+} from "./appHelpers";
+import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
+import { UIProvider, useUI } from "./contexts/UIContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { LoginView } from "./components/LoginView";
 
 export function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
+  );
+}
+
+/** Shows the login/setup screen when locked; otherwise renders the normal app. */
+function AuthGate() {
+  const { checking, authenticated } = useAuth();
+
+  if (checking) return null; // still resolving auth status
+
+  if (!authenticated) return <LoginView />;
+
+  return (
+    <SettingsProvider>
+      <UIProvider>
+        <AppInner />
+      </UIProvider>
+    </SettingsProvider>
+  );
+}
+
+function AppInner() {
+  const { t } = useTranslation(["session", "common"]);
+  // Consume contexts
+  const {
+    model, setModel, models, modelLabels, modelContextWindows,
+    contextBar, modelReady, surfaces, settingsTab, setSettingsTab,
+    loadSettings,
+  } = useSettings();
+  const {
+    surface, setSurface,
+    navCollapsed, toggleNav, navPeek, setNavPeek,
+    railHidden, setRailHidden,
+    searchOpen, setSearchOpen,
+    browserRefreshKey, setBrowserRefreshKey,
+    artifactCount, setArtifactCount,
+    accessKey, openAccess,
+    personaViewId,
+    personaViewReturn,
+    openPersona,
+    scheduledOpenId, setScheduledOpenId,
+    gateCreate, setGateCreate,
+    onArtifactPreview,
+  } = useUI();
+  // openSettings bridges both contexts (needs setSettingsTab from Settings + setSurface from UI).
+  const openSettings = useCallback(
+    (tab: string = "appearance") => {
+      setSettingsTab(tab);
+      setSurface("settings");
+    },
+    [setSettingsTab, setSurface],
+  );
+
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [branch, setBranch] = useState<string | null>(null);
   const [showGate, setShowGate] = useState(false);
   const [workspaceTrustRequest, setWorkspaceTrustRequest] =
     useState<WorkspaceCommandTrust | null>(null);
   const [agent, setAgent] = useState("cowork");
-  const [model, setModel] = useState("gpt-5.6-sol");
-  const [models, setModels] = useState<string[]>([]);
-  const [modelLabels, setModelLabels] = useState<Record<string, string>>({});
-  // {full model id → context window in tokens} from the curated matrix (verified only);
-  // drives the composer usage chip's context-fill meter.
-  const [modelContextWindows, setModelContextWindows] = useState<Record<string, number>>({});
-  // Settings: show the composer's context-window fill bar. OFF by default (owner ask),
-  // so an older backend without the field also shows the session total.
-  const [contextBar, setContextBar] = useState(false);
   // Per-session token usage (OPE-42): rebuilt from the transcript on session load,
   // accumulated live from assistant_message events, reset with the transcript.
   const [usage, setUsage] = useState<SessionUsage>(emptyUsage());
-  const [surfaces, setSurfaces] = useState<SurfaceVisibility>({ cowork: true, chat: false, code: false });
   const [mode, setMode] = useState("interactive");
   const [connected, setConnected] = useState(false);
   const [running, setRunning] = useState(false);
@@ -204,113 +185,6 @@ export function App() {
   // to, driving the banner + "Back to runs". Best-effort — a run session without context still
   // shows a generic banner (detected by its __run__ id).
   const [runContext, setRunContext] = useState<{ id: string; title: string } | null>(null);
-  // Which automation the Automations surface opens on (set by the banner's Back link
-  // or a sidebar Scheduled-band click). Cleared on leaving the surface: a remembered
-  // id going stale (e.g. the automation was deleted) reopened a dead detail —
-  // "Loading…" forever (owner-hit 2026-07-20). Nav re-entry should land on the list.
-  const [scheduledOpenId, setScheduledOpenId] = useState<string | null>(null);
-  const [gateCreate, setGateCreate] = useState(false);
-  // Which Settings section the full-page Settings surface opens on (§ Settings-as-page).
-  const [settingsTab, setSettingsTab] = useState<
-    "appearance" | "models" | "skills" | "voice" | "personas"
-  >("appearance");
-  const openSettings = (
-    tab: "appearance" | "models" | "skills" | "voice" | "personas" = "appearance",
-  ) => {
-    setSettingsTab(tab);
-    setSurface("settings");
-  };
-  // Whether the default model's provider is actually configured (any provider). Drives the
-  // composer's "No model connected" chip. Default true so we don't flash the chip before settings
-  // load; corrected by loadSettings.
-  const [modelReady, setModelReady] = useState(true);
-  const [surface, setSurface] = useState<
-    "session" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings"
-  >("session");
-  // A remembered Scheduled-detail target must not outlive the surface (see the
-  // scheduledOpenId comment above): nav re-entry lands on the list, never a
-  // possibly-deleted automation's dead detail.
-  useEffect(() => {
-    if (surface !== "scheduled") setScheduledOpenId(null);
-  }, [surface]);
-  // The persona whose detail page is showing (surface === "persona"); empty falls back to the
-  // active session's persona. Phase 5 wires the grouped-nav gear + "Manage personas…" entry points.
-  const [personaViewId, setPersonaViewId] = useState<string>("");
-  // Where the persona page returns on "back": the active session, or Settings ▸ Personas when it
-  // was opened from there (persona config now lives in Settings).
-  const [personaViewReturn, setPersonaViewReturn] = useState<"session" | "settings">("session");
-  const openPersona = (id: string, from: "session" | "settings" = "session") => {
-    setPersonaViewReturn(from);
-    setPersonaViewId(id);
-    setSurface("persona");
-  };
-  const [browserRefreshKey, setBrowserRefreshKey] = useState(0);
-  const [railHidden, setRailHidden] = useState(false);
-  // Left-nav collapse (⌘B): when collapsed the sidebar leaves the grid so content reclaims the
-  // width; hovering the left edge peeks it back as a floating overlay. Persisted per-device.
-  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
-    try { return localStorage.getItem(NAV_COLLAPSED_KEY) === "1"; } catch { return false; }
-  });
-  const [navPeek, setNavPeek] = useState(false);
-  // While an artifact preview is open we auto-collapse the nav (#3). Remember the pre-preview
-  // collapse state so we can restore it on close — unless the user re-opened the nav meanwhile.
-  const navBeforePreview = useRef<boolean | null>(null);
-  const setNavCollapsedPersist = useCallback((v: boolean) => {
-    setNavCollapsed(v);
-    try { localStorage.setItem(NAV_COLLAPSED_KEY, v ? "1" : "0"); } catch { /* best effort */ }
-  }, []);
-  const toggleNav = useCallback(() => {
-    setNavPeek(false);
-    navBeforePreview.current = null; // a manual toggle takes control from the artifact auto-collapse
-    setNavCollapsedPersist(!navCollapsed);
-  }, [navCollapsed, setNavCollapsedPersist]);
-  // #3: collapse the nav while a full artifact preview is open, restore it on close (unless the
-  // user manually toggled meanwhile). The collapse is transient — it never overwrites the pref.
-  const onArtifactPreview = useCallback((open: boolean) => {
-    if (open) {
-      if (navBeforePreview.current === null) navBeforePreview.current = navCollapsed;
-      setNavPeek(false);
-      setNavCollapsed(true);
-    } else if (navBeforePreview.current !== null) {
-      setNavCollapsed(navBeforePreview.current);
-      navBeforePreview.current = null;
-    }
-  }, [navCollapsed]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        toggleNav();
-      }
-      // ⌘, — the platform Settings shortcut (advertised in the account menu, §26).
-      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
-        e.preventDefault();
-        setSurface("settings");
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggleNav]);
-  // Count of files this Cowork conversation has produced — surfaces an "Artifacts (N)" button in
-  // the topbar when the side panel is hidden, so produced files are never buried.
-  const [artifactCount, setArtifactCount] = useState(0);
-  // §32 deep link into the rail's Access section (the former Session-settings drawer): bumping
-  // the key expands the section and scrolls it into view. Callers also un-hide the rail.
-  const [accessKey, setAccessKey] = useState(0);
-  const openAccess = () => {
-    setRailHidden(false);
-    setAccessKey((k) => k + 1);
-  };
-  // §34 (UX-016): clicking an artifact chip in the transcript must land somewhere visible —
-  // RightRail opens the viewer; this just makes sure the rail isn't hidden.
-  useEffect(() => {
-    const show = () => setRailHidden(false);
-    window.addEventListener("ocw-open-artifact", show);
-    return () => window.removeEventListener("ocw-open-artifact", show);
-  }, []);
-  // The command-palette search, openable from the collapsed-sidebar topbar cluster (§22). The
-  // expanded sidebar owns its own instance; this one exists so search never disappears with it.
-  const [searchOpen, setSearchOpen] = useState(false);
   // A pending composer prefill (text + attachments) pushed from the session start panel.
   const [composerPrefill, setComposerPrefill] = useState<{ text: string; attachments?: Attachment[]; nonce: number }>();
 
@@ -505,18 +379,6 @@ export function App() {
     return () => clearTimeout(t);
   }, [uiReady, booting]);
 
-  const loadSettings = () =>
-    getSettings()
-      .then((s) => {
-        setModels(s.models || []);
-        setModelLabels(s.model_labels || {});
-        setModelContextWindows(s.model_context_windows || {});
-        setContextBar(s.context_bar === true);
-        setModelReady(s.model_ready);
-        if (s.surfaces) setSurfaces(s.surfaces);
-      })
-      .catch(() => {});
-
   // Open Settings → Configure Models (from the composer's "No model connected" chip).
   const openModelSetup = () => openSettings("models");
 
@@ -524,12 +386,12 @@ export function App() {
   // do this on close).
   useEffect(() => {
     if (surface !== "settings") loadSettings();
-  }, [surface]);
+  }, [surface, loadSettings]);
 
   useEffect(() => {
     refreshSessions();
     loadSettings(); // selectable models + which session surfaces are visible
-  }, [refreshSessions]);
+  }, [refreshSessions, loadSettings]);
 
   // Poll the session list so the attention/liveness badges stay live and sessions created
   // out-of-band (unattended work, messaging, automations) appear without a manual refresh.
@@ -1187,7 +1049,7 @@ export function App() {
         {overlay && (
           <div className="titlebar-drag" data-tauri-drag-region>
             <span className="titlebar-brand brand-wordmark">
-              <Icon name="logo" size={13} className="mark" /> OpenWorker<span className="beta-tag">BETA</span>
+              <Icon name="logo" size={13} className="mark" /> {t("session:title")}<span className="beta-tag">{t("session:beta")}</span>
             </span>
           </div>
         )}
@@ -1196,14 +1058,14 @@ export function App() {
             <span /><span /><span />
           </div>
         )}
-        {/* The real OpenWorker mark (6-point star, same as the app/tray icon) — the old
+        {/* The real WeruBWorker mark (6-point star, same as the app/tray icon) — the old
             ✦ text glyph was a 4-point sparkle that read as another product's logo. */}
         <div className="boot-mark">
           <Icon name="logo" size={38} />
         </div>
         <div className="boot-text">
-          {resumedExisting ? "Restoring your session…" : "Starting OpenWorker…"}
-          <span className="beta-tag">BETA</span>
+          {resumedExisting ? t("session:restoringSession") : t("session:startingUp")}
+          <span className="beta-tag">{t("session:beta")}</span>
         </div>
       </div>
     );
@@ -1235,7 +1097,7 @@ export function App() {
         >
           <div className="flex items-center gap-2 text-[12.5px] font-semibold">
             <span className="w-[7px] h-[7px] rounded-full bg-faint toast-pulse" />
-            Automation started
+            {t("session:automationStarted")}
           </div>
           <div className="text-[12.5px] text-muted mt-0.5 ml-[15px] truncate">
             {runToast.title} · {runToast.time} run
@@ -1249,7 +1111,7 @@ export function App() {
                 setRunToast(null);
               }}
             >
-              View run ›
+              {t("session:viewRun")}
             </button>
             <button
               className="text-[12px] text-faint px-0.5"
@@ -1281,8 +1143,8 @@ export function App() {
           className="nav-reveal-btn"
           onClick={toggleNav}
           onMouseEnter={() => setNavPeek(true)}
-          title="Show sidebar (⌘B)"
-          aria-label="Show sidebar"
+          title={t("session:showSidebarShortcut")}
+          aria-label={t("session:showSidebar")}
         >
           <Icon name="sidebar" size={16} />
         </button>
@@ -1308,6 +1170,7 @@ export function App() {
           }}
         />
       )}
+      <ErrorBoundary>
       <Sidebar
         agent={agent}
         workspace={workspace || ""}
@@ -1335,15 +1198,28 @@ export function App() {
         }}
         onOpenIntegrations={() => setSurface("integrations")}
         onOpenAudit={() => setSurface("audit")}
+        onOpenAbout={() => setSurface("about")}
         onOpenInbox={() => setSurface("inbox")}
+        onOpenOps={() => setSurface("ops")}
+        onOpenDev={() => setSurface("dev")}
+        onOpenDatabase={() => setSurface("database")}
+        onOpenServices={() => setSurface("services")}
+        onOpenWiki={() => setSurface("wiki")}
+        opsActive={surface === "ops"}
+        devActive={surface === "dev"}
+        databaseActive={surface === "database"}
+        servicesActive={surface === "services"}
+        wikiActive={surface === "wiki"}
         scheduledActive={surface === "scheduled"}
         integrationsActive={surface === "integrations"}
         auditActive={surface === "audit"}
+        aboutActive={surface === "about"}
         inboxActive={surface === "inbox"}
         collapsed={navCollapsed}
         onCollapse={toggleNav}
         onPeekLeave={() => setNavPeek(false)}
       />
+      </ErrorBoundary>
       {surface === "scheduled" ? (
         <ScheduledView
           onOpenRun={openRunSession}
@@ -1355,7 +1231,7 @@ export function App() {
       ) : surface === "settings" ? (
         <SettingsView
           key={settingsTab}
-          initialTab={settingsTab}
+          initialTab={settingsTab as any}
           onOpenPersona={(id) => openPersona(id, "settings")}
           onCreateSkill={(description) => {
             // The Skills doorway (SKILLS-SPEC §5.2): creation is a conversation. Fresh
@@ -1373,6 +1249,18 @@ export function App() {
         <AuditView />
       ) : surface === "inbox" ? (
         <InboxView onOpenSession={openSessionFromInbox} />
+      ) : surface === "about" ? (
+        <AboutView />
+      ) : surface === "ops" ? (
+        <OpsView />
+      ) : surface === "dev" ? (
+        <DevView />
+      ) : surface === "database" ? (
+        <DatabaseView />
+      ) : surface === "services" ? (
+        <ServiceConfigView />
+      ) : surface === "wiki" ? (
+        <WikiView />
       ) : surface === "persona" ? (
         <PersonaView
           personaId={personaViewId || agent}
@@ -1382,6 +1270,7 @@ export function App() {
           onOpenIntegrations={() => setSurface("integrations")}
         />
       ) : (
+      <ErrorBoundary>
       <div className={"main" + (surface === "session" && agent !== "chat" && !railHidden ? " rail-open" : "")}>
         <div className="main-topbar">
           {/* Left: the contextual cluster — [sidebar] [+ new session] [search] — rendered ONLY
@@ -1397,16 +1286,16 @@ export function App() {
                 <button
                   className="topbar-icon-btn"
                   onClick={toggleNav}
-                  aria-label="Show sidebar"
-                  title="Show sidebar (⌘B)"
+                  aria-label={t("session:showSidebar")}
+                  title={t("session:showSidebarShortcut")}
                 >
                   <Icon name="sidebar" size={16} />
                 </button>
                 <button
                   className="topbar-icon-btn"
                   onClick={() => startNewSession()}
-                  aria-label="New session"
-                  title="New session"
+                  aria-label={t("session:newSession")}
+                  title={t("session:newSession")}
                 >
                   <Icon name="plus" size={16} />
                 </button>
@@ -1517,12 +1406,16 @@ export function App() {
                   <div className="hero">
                     <h1 className="greeting">
                       <span className="mark">✦</span>
-                      {agent === "chat" ? "How can I help?" : "Let's build something."}
+                      {agent === "chat" ? "How can I help?" : t("session:letsBuild")}
                     </h1>
                     {needsWorkspace(agent) && (
                       <div className="suggestions">
-                        <div className="suggest-head">Try a task</div>
-                        {SUGGESTIONS.map((s, i) => (
+                        <div className="suggest-head">{t("session:tryTask")}</div>
+                        {[
+                          { ico: "\u2699", text: t("session:suggestions.runTests") },
+                          { ico: "\u2726", text: t("session:suggestions.readProject") },
+                          { ico: "\u21BB", text: t("session:suggestions.fixBuild") },
+                        ].map((s, i) => (
                           <div className="suggest" key={i} onClick={() => workspace && send(s.text)}>
                             <span className="ico">{s.ico}</span>
                             {s.text}
@@ -1584,7 +1477,7 @@ export function App() {
                   onClick={followLatest}
                 >
                   <Icon name="chevronDown" size={13} />
-                  Jump to latest
+                  {t("session:jumpToLatest")}
                 </button>
               </div>
             )}
@@ -1675,6 +1568,7 @@ export function App() {
           />
         </div>
       </div>
+      </ErrorBoundary>
       )}
 
       {/* Search from the collapsed-sidebar topbar cluster (the sidebar's own instance is
@@ -1725,11 +1619,12 @@ function lastItemIsAssistant(items: Item[]): boolean {
 }
 
 function WaitingForAgent({ label }: { label?: string }) {
+  const { t } = useTranslation(["session"]);
   return (
     <div className="waiting-transcript">
       <div className="waiting-row" aria-live="polite">
         <span className="waiting-spinner" />
-        <span>{label || "Waiting for agent..."}</span>
+        <span>{label || t("session:waitingForAgent")}</span>
       </div>
     </div>
   );

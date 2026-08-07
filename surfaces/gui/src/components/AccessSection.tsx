@@ -10,6 +10,7 @@
 // to expand it and scroll it into view.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   CLOUD_CHANGED,
   getCloudStatus,
@@ -69,6 +70,7 @@ export function AccessSection({
   openKey?: number;
   onOpenIntegrations?: () => void;
 }) {
+  const { t } = useTranslation(["session"]);
   const [open, setOpen] = useState(false);
   const [conns, setConns] = useState<SessionConnections | null>(null);
   const [byName, setByName] = useState<ConnectorMap>({});
@@ -212,7 +214,7 @@ export function AccessSection({
   const names = live.map((c) => labelFor(c.connector, byName));
   const sourcesPart =
     names.length === 0
-      ? "no sources"
+      ? t("session:access.noSources")
       : names.length <= 2
         ? names.join(", ")
         : `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
@@ -228,7 +230,7 @@ export function AccessSection({
       <div className="rail-section-head">
         <button className="rail-section-toggle" onClick={() => setOpen((v) => !v)} data-testid="access-toggle">
           <Icon name={open ? "chevronDown" : "chevronRight"} size={14} className="rail-chev" />
-          <span>Access</span>
+          <span>{t("session:access.title")}</span>
           <span
             className="ml-auto min-w-0 truncate text-[11px] font-normal text-faint"
             data-testid="access-summary"
@@ -282,10 +284,10 @@ export function AccessSection({
             <div className="space-y-4">
               {/* Sources — each toggle is a per-session override (mute for THIS session only). */}
               <div>
-                <div className={`${SEC_H} mb-1.5`}>Sources</div>
+                <div className={`${SEC_H} mb-1.5`}>{t("session:access.sources")}</div>
                 {connected.length === 0 && (
                   <div className="text-[12px] text-faint py-0.5">
-                    No connectors enabled for this session.
+                    {t("session:access.noConnectors")}
                   </div>
                 )}
                 <div className="space-y-1">
@@ -313,14 +315,14 @@ export function AccessSection({
                       <Toggle
                         checked={c.enabled}
                         onChange={(next) => toggleSession(c.connector, next)}
-                        title="Enabled for this session — tap to mute here"
+                        title={t("session:access.enabledForSession")}
                       />
                     </div>
                   ))}
                 </div>
                 {connected.length > 0 && (
                   <p className="text-[10.5px] text-faint mt-1 leading-snug">
-                    Off mutes it for <b>this session only</b> — the connector stays connected.
+                    <span dangerouslySetInnerHTML={{ __html: t("session:access.offMutes") }} />
                   </p>
                 )}
                 {/* §32 addendum (owner ask 2026-07-13; FB-012): the catalog's long tail,
@@ -330,7 +332,7 @@ export function AccessSection({
                   <div className="mt-1.5">
                     <input
                       className="w-full px-2.5 py-1.5 rounded-lg border border-line bg-panel text-[12.5px] outline-none focus:border-accent"
-                      placeholder="Search connectors…"
+                      placeholder={t("session:access.searchConnectors")}
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       onKeyDown={(e) => {
@@ -346,7 +348,7 @@ export function AccessSection({
                       // Also covers a failed/empty catalog fetch: an open picker must never
                       // be silently blank — point at the Connectors page either way.
                       <div className="text-[11.5px] text-faint mt-1.5 px-0.5">
-                        No match — see all on the Connectors page below.
+                        {t("session:access.noMatch")}
                       </div>
                     )}
                     <div className="mt-1 max-h-64 overflow-y-auto">
@@ -380,7 +382,7 @@ export function AccessSection({
                     onClick={() => setAdding(true)}
                     data-testid="access-add-source"
                   >
-                    + Add a source…
+                    {t("session:access.addSource")}
                   </button>
                 )}
                 {/* Lives with its list (tester ask 2026-07-26): each group's manage link sits
@@ -389,13 +391,13 @@ export function AccessSection({
                   className="mt-1.5 block text-[12px] text-accent font-medium hover:underline text-left"
                   onClick={() => onOpenIntegrations?.()}
                 >
-                  Manage all connectors (global) →
+                  {t("session:access.manageAll")}
                 </button>
               </div>
 
               {recommended.length > 0 && (
                 <div>
-                  <div className={`${SEC_H} mb-1.5`}>Recommended</div>
+                  <div className={`${SEC_H} mb-1.5`}>{t("session:access.recommended")}</div>
                   <div className="space-y-1">
                     {recommended.map((r) => (
                       <div className="flex items-center gap-2 py-1" key={r.connector}>
@@ -431,7 +433,7 @@ export function AccessSection({
                   a quiet "+" link, structurally identical to Sources (owner ask 2026-07-13:
                   the old drawer's card wrapper read too heavy in the rail). */}
               <div data-testid="drawer-directories">
-                <div className={`${SEC_H} mb-1.5`}>Folders</div>
+                <div className={`${SEC_H} mb-1.5`}>{t("session:access.folders")}</div>
                 <div className="-mx-1.5">
                   {roots.map((r) => (
                     <RootRow
@@ -459,7 +461,7 @@ export function AccessSection({
                     className="mt-1 text-[12px] text-accent hover:underline text-left"
                     onClick={() => setAddingFolder(true)}
                   >
-                    + Give access to a folder…
+                    {t("session:access.addFolder")}
                   </button>
                 )}
                 {rootsError && <div className="roots-err">{rootsError}</div>}
@@ -486,6 +488,7 @@ function ConnectInline({
   onDone: () => void;
   onBack: () => void;
 }) {
+  const { t } = useTranslation(["session"]);
   useEffect(() => {
     const t = setInterval(async () => {
       try {
@@ -505,7 +508,7 @@ function ConnectInline({
         onClick={onBack}
         aria-label="Back to sources"
       >
-        <Icon name="arrowLeft" size={13} /> Connect {c.title}
+        <Icon name="arrowLeft" size={13} /> {t("session:access.connectTitle", { title: c.title })}
       </button>
       {c.blurb && <p className="text-[12px] text-muted mb-1 leading-relaxed">{c.blurb}</p>}
       <div className="-mx-2">
@@ -514,8 +517,7 @@ function ConnectInline({
       {/* Scope semantics, stated once (owner ask 2026-07-13): connecting is account-level,
           the toggle above is what scopes it to a session. */}
       <p className="text-[10.5px] text-faint mt-2 leading-snug">
-        Connecting makes {c.title} available to all your coworkers — the toggle in this list
-        controls just this session.
+        {t("session:access.connectingMakes", { title: c.title })}
       </p>
     </div>
   );
@@ -544,19 +546,20 @@ function ChannelsInline({
   onRemove: (channel: string) => void;
   onBack: () => void;
 }) {
+  const { t } = useTranslation(["session"]);
   return (
     <div>
       <button
         className="inline-flex items-center gap-1 text-[12px] text-faint hover:text-ink mb-2"
         onClick={onBack}
-        aria-label="Back to sources"
+        aria-label={t("session:access.backToSources")}
       >
-        <Icon name="arrowLeft" size={13} /> {label} channels
+        <Icon name="arrowLeft" size={13} /> {label} {t("session:access.channels")}
       </button>
-      <div className={`${SEC_H} mb-1.5`}>Subscribed channels · {channels.length}</div>
+      <div className={`${SEC_H} mb-1.5`}>{t("session:access.subscribedChannels")} · {channels.length}</div>
       {channels.length === 0 ? (
         <div className="text-[12px] text-faint py-0.5">
-          Not listening to any {label} channel yet.
+          {t("session:access.notListening", { label })}
         </div>
       ) : (
         <div className="space-y-1">
@@ -576,7 +579,7 @@ function ChannelsInline({
               )}
               <button
                 className="w-5 h-5 grid place-items-center text-faint hover:text-danger shrink-0"
-                title="Stop listening"
+                title={t("session:access.stopListening")}
                 onClick={() => onRemove(s.channel)}
               >
                 ×
@@ -585,7 +588,7 @@ function ChannelsInline({
           ))}
         </div>
       )}
-      <div className={`${SEC_H} mt-3 mb-1.5`}>Add a channel</div>
+      <div className={`${SEC_H} mt-3 mb-1.5`}>{t("session:access.addChannel")}</div>
       <div className="flex items-center gap-1.5">
         <ChannelPicker value={draft} onChange={onDraft} recent={recent} onSubmit={onAdd} />
         <button className={BTN_ACCENT} disabled={!draft.trim()} onClick={onAdd}>
@@ -598,8 +601,7 @@ function ChannelsInline({
         </p>
       )}
       <p className="text-[10.5px] text-faint mt-1.5 leading-snug">
-        The agent receives messages posted to these channels. Removing one stops this session
-        from listening — the connector stays connected.
+        {t("session:access.channelDesc")}
       </p>
     </div>
   );

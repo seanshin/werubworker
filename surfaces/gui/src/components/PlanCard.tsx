@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Item } from "../types";
 import { Icon } from "./Icon";
 import { Markdown } from "./Markdown";
@@ -15,6 +16,7 @@ export function PlanCard({
   item: PlanItem;
   onRespond: (approved: boolean, mode?: string, feedback?: string) => void;
 }) {
+  const { t } = useTranslation(["session", "common"]);
   const [rejecting, setRejecting] = useState(false);
   const [feedback, setFeedback] = useState("");
 
@@ -22,7 +24,7 @@ export function PlanCard({
     <div className="dirreq-card plan-card">
       <div className="dirreq-head">
         <Icon name="sparkle" size={16} className="ico" />
-        <span>The agent proposed a plan</span>
+        <span>{t("session:plan.agentProposed")}</span>
       </div>
       <div className="plan-body">
         <Markdown text={item.plan} />
@@ -31,7 +33,7 @@ export function PlanCard({
         <div className="dirreq-actions">
           <input
             className="dirreq-path"
-            placeholder="What should change about the plan?"
+            placeholder={t("session:plan.whatShouldChange")}
             value={feedback}
             autoFocus
             onChange={(e) => setFeedback(e.target.value)}
@@ -40,27 +42,27 @@ export function PlanCard({
             }}
           />
           <button className="btn" onClick={() => setRejecting(false)}>
-            Back
+            {t("common:button.back")}
           </button>
           <button
             className="btn primary"
             disabled={!feedback.trim()}
             onClick={() => onRespond(false, undefined, feedback.trim())}
           >
-            Send feedback
+            {t("session:plan.sendFeedback")}
           </button>
         </div>
       ) : (
         <div className="dirreq-actions">
           <button className="btn" onClick={() => setRejecting(true)}>
-            Request changes
+            {t("session:plan.requestChanges")}
           </button>
           <span className="spacer" />
           <button className="btn" onClick={() => onRespond(true, "interactive")}>
-            Approve — ask per step
+            {t("session:plan.approvePerStep")}
           </button>
           <button className="btn primary" onClick={() => onRespond(true, "auto")}>
-            Approve & run
+            {t("session:plan.approveAndRun")}
           </button>
         </div>
       )}

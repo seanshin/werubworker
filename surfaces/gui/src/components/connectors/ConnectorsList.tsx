@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { type CloudStatus, type Connector, type SlackStatus } from "../../api";
 import { ConnectorBadge } from "../../connectors/ConnectorIcon";
 import { AddConnectionModal } from "./AddConnectionModal";
@@ -23,6 +24,7 @@ export function ConnectorsList({
   onOpen: (name: string) => void;
   onChanged: () => void;
 }) {
+  const { t } = useTranslation(["connectors"]);
   const [filter, setFilter] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export function ConnectorsList({
     <div>
       <div className="flex items-center justify-end mb-4">
         <input
-          placeholder="Search"
+          placeholder={t("connectors:list.search")}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="w-44 px-3.5 py-1.5 rounded-full border border-line bg-panel text-[13px] outline-none focus:border-accent"
@@ -49,7 +51,7 @@ export function ConnectorsList({
           sign-in home, and the connect modals keep their inline sign-in panes. */}
       {connected.length > 0 && (
         <>
-          <div className={GRP_H + " !mt-0"}>Connected · {connected.length}</div>
+          <div className={GRP_H + " !mt-0"}>{t("connectors:list.connected")} · {connected.length}</div>
           <div className={GRP}>
             {connected.map((c) => (
               <button
@@ -61,9 +63,9 @@ export function ConnectorsList({
                 <ConnectorBadge connector={c} size={34} title={c.title} />
                 <span className="min-w-0 flex-1">
                   <span className="font-medium text-[13.5px]">{c.title}</span>
-                  <span className="block text-[12px] text-muted">{statusLine(c)}</span>
+                  <span className="block text-[12px] text-muted">{statusLine(c, t)}</span>
                 </span>
-                {healthChip(c, slack)}
+                {healthChip(c, slack, t)}
                 <span className="text-faint text-[15px] shrink-0">›</span>
               </button>
             ))}
@@ -71,7 +73,7 @@ export function ConnectorsList({
         </>
       )}
 
-      <div className={GRP_H}>Available</div>
+      <div className={GRP_H}>{t("connectors:list.available")}</div>
       <div className={GRP}>
         {shown.map((c) => (
           /* The row navigates to the pre-connect detail page (§38); the pill
@@ -95,19 +97,19 @@ export function ConnectorsList({
                 setConnecting(c.name);
               }}
             >
-              Connect
+              {t("connectors:list.connect")}
             </span>
           </button>
         ))}
         {shown.length === 0 && (
-          <div className={ROW + " text-[12.5px] text-muted"}>Nothing matches.</div>
+          <div className={ROW + " text-[12.5px] text-muted"}>{t("connectors:list.nothingMatches")}</div>
         )}
       </div>
       {!showAll && !q && available.length > AVAILABLE_FOLD && (
         <div className={FOOT}>
-          {available.length - AVAILABLE_FOLD} more ·{" "}
+          {t("connectors:list.more", { count: available.length - AVAILABLE_FOLD })} ·{" "}
           <button className="text-muted hover:text-ink" onClick={() => setShowAll(true)}>
-            show all
+            {t("connectors:list.showAll")}
           </button>
         </div>
       )}
@@ -124,31 +126,31 @@ export function ConnectorsList({
   );
 }
 
-function statusLine(c: Connector): string {
+function statusLine(c: Connector, t: (key: string, opts?: Record<string, unknown>) => string): string {
   if (c.name === "slack" && c.mode === "relay") {
     const n = c.workspaces?.length ?? 0;
-    return `${n} workspace${n === 1 ? "" : "s"} · relay`;
+    return `${t("connectors:list.workspaces", { count: n })} · ${t("connectors:list.relay")}`;
   }
-  if ((c.accounts?.length ?? 0) > 1) return `${c.accounts!.length} accounts`;
-  if ((c.portals?.length ?? 0) > 1) return `${c.portals!.length} portals`;
-  if (c.auth === "none") return "Built in";
-  return c.account || "Connected";
+  if ((c.accounts?.length ?? 0) > 1) return t("connectors:list.accountsCount", { count: c.accounts!.length });
+  if ((c.portals?.length ?? 0) > 1) return t("connectors:list.portalsCount", { count: c.portals!.length });
+  if (c.auth === "none") return t("connectors:list.builtIn");
+  return c.account || t("connectors:list.connected_status");
 }
 
-function healthChip(c: Connector, slack: SlackStatus | null) {
+function healthChip(c: Connector, slack: SlackStatus | null, t: (key: string) => string) {
   // Slack relay gets a LIVE chip from /v1/connectors/slack/status — problems
   // surface in the list, never one click deep. Named honestly per layer; we
   // never claim "Slack↔cloud down" (the desktop can't see that leg).
   if (c.name === "slack" && c.mode === "relay" && slack) {
-    if (!slack.signed_in) return <span className={CHIP_WARN}>● Sign-in needed</span>;
-    if (slack.relay.state === "offline") return <span className={CHIP_OFF}>● Offline</span>;
+    if (!slack.signed_in) return <span className={CHIP_WARN}>{t("connectors:list.signInNeeded")}</span>;
+    if (slack.relay.state === "offline") return <span className={CHIP_OFF}>{t("connectors:list.offline")}</span>;
     if (slack.relay.state === "reconnecting")
-      return <span className={CHIP_WARN}>● Reconnecting</span>;
-    if (Object.values(slack.teams).some((t) => !t.token_ok))
-      return <span className={CHIP_WARN}>⚠ Token</span>;
-    return <span className={CHIP_OK}>● Live</span>;
+      return <span className={CHIP_WARN}>{t("connectors:list.reconnecting")}</span>;
+    if (Object.values(slack.teams).some((tk) => !tk.token_ok))
+      return <span className={CHIP_WARN}>{t("connectors:list.token")}</span>;
+    return <span className={CHIP_OK}>{t("connectors:list.live")}</span>;
   }
-  if (c.two_way && c.connected) return <span className={CHIP_OK}>● Live</span>;
-  return <span className={CHIP_OK}>● Ready</span>;
+  if (c.two_way && c.connected) return <span className={CHIP_OK}>{t("connectors:list.live")}</span>;
+  return <span className={CHIP_OK}>{t("connectors:list.ready")}</span>;
 }
 

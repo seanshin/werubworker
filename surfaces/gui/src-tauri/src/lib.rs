@@ -1,7 +1,7 @@
-//! OpenWorker desktop shell.
+//! WeruBWorker desktop shell.
 //!
 //! Tauri is a thin native window over the existing React SPA. It:
-//!   1. picks a free localhost port and starts the Python `openworker-server` as a managed
+//!   1. picks a free localhost port and starts the Python `werubworker-server` as a managed
 //!      sidecar on that port (so it never clashes with a hand-run server on 8765);
 //!   2. injects the sidecar HTTP/WS addresses and per-launch authentication token before the
 //!      SPA loads (single codebase — the browser build still hits 8765);
@@ -52,7 +52,7 @@ fn launch_token() -> String {
 ///   2. The bundled onedir sidecar shipped via Tauri `resources` (production): the
 ///      `sidecar/` folder lands in Contents/Resources on macOS and in the install dir
 ///      (next to the app exe) on Windows.
-///   3. Legacy onefile slot: `openworker-server[.exe]` next to the app binary (pre-onedir
+///   3. Legacy onefile slot: `werubworker-server[.exe]` next to the app binary (pre-onedir
 ///      builds used Tauri externalBin).
 ///   4. Dev fallback: the repo venv, relative to this crate (`src-tauri` → `platform/.venv`;
 ///      `bin/` on POSIX, `Scripts\` on Windows).
@@ -61,9 +61,9 @@ fn server_bin() -> PathBuf {
         return PathBuf::from(p);
     }
     let exe_name = if cfg!(windows) {
-        "openworker-server.exe"
+        "werubworker-server.exe"
     } else {
-        "openworker-server"
+        "werubworker-server"
     };
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -83,42 +83,46 @@ fn server_bin() -> PathBuf {
     }
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     if cfg!(windows) {
-        p.push("../../../.venv/Scripts/openworker-server.exe");
+        p.push("../../../.venv/Scripts/werubworker-server.exe");
     } else {
-        p.push("../../../.venv/bin/openworker-server");
+        p.push("../../../.venv/bin/werubworker-server");
     }
     p
 }
 
 /// Mirror of `coworker.secrets.state_dir()` so the shell and server agree on `desktop.json`.
-/// Windows: `%APPDATA%\coworker`; POSIX: `~/.config/coworker`. `COWORKER_STATE_DIR` overrides.
+/// Windows: `%APPDATA%\werubworker`; POSIX: `~/.config/werubworker`.
+/// `WERUBWORKER_STATE_DIR` or `COWORKER_STATE_DIR` overrides.
 fn state_dir() -> PathBuf {
+    if let Ok(d) = std::env::var("WERUBWORKER_STATE_DIR") {
+        return PathBuf::from(d);
+    }
     if let Ok(d) = std::env::var("COWORKER_STATE_DIR") {
         return PathBuf::from(d);
     }
     #[cfg(windows)]
     {
         if let Ok(appdata) = std::env::var("APPDATA") {
-            return PathBuf::from(appdata).join("coworker");
+            return PathBuf::from(appdata).join("werubworker");
         }
     }
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    PathBuf::from(home).join(".config").join("coworker")
+    PathBuf::from(home).join(".config").join("werubworker")
 }
 
 fn desktop_prefs_path() -> PathBuf {
     state_dir().join("desktop.json")
 }
 
-/// The sidecar's log file: `<state_dir>/logs/openworker-server.log`, fresh per
+/// The sidecar's log file: `<state_dir>/logs/werubworker-server.log`, fresh per
 /// launch with the previous run kept as `.old`. None (→ /dev/null) only if the
 /// directory can't be created — logging must never block startup.
 fn server_log_file() -> Option<std::fs::File> {
     let dir = state_dir().join("logs");
     std::fs::create_dir_all(&dir).ok()?;
-    let path = dir.join("openworker-server.log");
+    let path = dir.join("werubworker-server.log");
     if path.exists() {
-        let _ = std::fs::rename(&path, dir.join("openworker-server.log.old"));
+        let _ = std::fs::rename(&path, dir.join("werubworker-server.log.old"));
     }
     std::fs::File::create(&path).ok()
 }
@@ -487,7 +491,7 @@ fn show_main(app: &tauri::AppHandle) {
 // else — no global plugin JS): check, background pre-download, install. Update
 // artifacts are minisign-verified against the pubkey in tauri.conf.json before
 // anything is installed; the manifest lives at the endpoints configured there
-// (download.openworker.com → GitHub Releases).
+// (download.werubworker.com → GitHub Releases).
 
 #[derive(serde::Serialize)]
 struct UpdateInfo {
@@ -573,7 +577,7 @@ async fn install_update(
     }
     // Windows never reaches here (the NSIS installer takes over and relaunches).
     // macOS: the .app was swapped in place — restart into the new version. The tray
-    // Exit path's sidecar kill runs via RunEvent, so no orphaned openworker-server.
+    // Exit path's sidecar kill runs via RunEvent, so no orphaned werubworker-server.
     app.restart();
 }
 
@@ -592,7 +596,7 @@ pub fn run() {
         // MUST be the first plugin: when a second launch happens (e.g. the user relaunches
         // while the window is closed-to-tray), this fires in the ALREADY-running instance to
         // surface its healthy window, and the second process exits before it can spawn a
-        // duplicate sidecar — which previously left a window stuck on "Starting coworker…".
+        // duplicate sidecar — which previously left a window stuck on "Starting WeruBWorker…".
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             show_main(app);
         }))
@@ -690,7 +694,7 @@ pub fn run() {
             //    Overlay title bar (macOS): traffic lights float over the edge-to-edge UI.
             let mut builder =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                    .title("OpenWorker")
+                    .title("WeruBWorker")
                     .inner_size(1360.0, 900.0)
                     .min_inner_size(980.0, 640.0)
                     // Let the WEBVIEW receive OS file drags: Tauri's own drag-drop handler
@@ -722,7 +726,7 @@ pub fn run() {
             });
 
             // 3. System tray: Open / Settings / Quit.
-            let open_i = MenuItem::with_id(app, "open", "Open OpenWorker", true, None::<&str>)?;
+            let open_i = MenuItem::with_id(app, "open", "Open WeruBWorker", true, None::<&str>)?;
             let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open_i, &settings_i, &quit_i])?;
@@ -731,7 +735,7 @@ pub fn run() {
             // it for light/dark automatically — not the full-color app icon.
             let tray_icon = tauri::image::Image::new(include_bytes!("../icons/tray.rgba"), 44, 44);
             TrayIconBuilder::new()
-                .tooltip("OpenWorker")
+                .tooltip("WeruBWorker")
                 .icon(tray_icon)
                 .icon_as_template(true)
                 .menu(&menu)
@@ -753,7 +757,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building the OpenWorker desktop app")
+        .expect("error while building the WeruBWorker desktop app")
         .run(|app, event| {
             // Also on Exit: belt-and-suspenders in case a quit path reaches teardown without
             // a preceding ExitRequested (observed with macOS Cmd+Q under the tray setup).

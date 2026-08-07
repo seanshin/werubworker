@@ -161,6 +161,13 @@ class OpenAIProvider(ProviderClient):
             kwargs: dict[str, Any] = {"api_key": key}
             if self._base_url:
                 kwargs["base_url"] = self._base_url
+                # Custom endpoints behind Cloudflare (or similar WAFs) often block
+                # the default "python-httpx/…" user-agent. The SDK's default_headers
+                # adds an extra header that Cloudflare sees alongside the httpx UA,
+                # which is enough to pass bot-detection.
+                kwargs["default_headers"] = {
+                    "User-Agent": "OpenWorker/0.1",
+                }
             self._client = OpenAI(**kwargs)
         return self._client
 

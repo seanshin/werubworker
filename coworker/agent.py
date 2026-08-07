@@ -167,6 +167,8 @@ def build_engine(
     connector_filter: Optional[set[str]] = None,
     # A set (static snapshot) or a zero-arg callable (live, re-evaluated per load_skill).
     skill_filter: Optional[set[str] | Callable[[], set[str]]] = None,
+    wiki_store: Optional[Any] = None,
+    vault: Optional[Any] = None,
 ) -> TurnEngine:
     ws = Path(workspace).expanduser().resolve() if workspace else None
     if agent.needs_workspace and ws is None:
@@ -189,7 +191,8 @@ def build_engine(
     )
     todo = TodoList()
     context = AgentContext(
-        workspace=ws, executor=executor, todo=todo, roots=root_list or None
+        workspace=ws, executor=executor, todo=todo, roots=root_list or None,
+        secrets=secrets, wiki_store=wiki_store, vault=vault,
     )
 
     registry = ToolRegistry()

@@ -1,0 +1,87 @@
+{
+  "button": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "retry": "Retry",
+    "close": "Close",
+    "confirm": "Confirm",
+    "add": "Add",
+    "edit": "Edit",
+    "remove": "Remove",
+    "copy": "Copy",
+    "done": "Done",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip",
+    "clear": "Clear",
+    "refresh": "Refresh",
+    "open": "Open",
+    "send": "Send",
+    "stop": "⏹ Stop",
+    "install": "Install",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "signIn": "Sign in",
+    "signOut": "Sign out"
+  },
+  "status": {
+    "loading": "Loading…",
+    "connecting": "Connecting…",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "notSetUp": "Not set up",
+    "running": "Running",
+    "idle": "Idle",
+    "working": "Working now",
+    "sleeping": "Sleeping (will wake itself)",
+    "error": "Error",
+    "copied": "Copied"
+  },
+  "label": {
+    "search": "Search",
+    "settings": "Settings",
+    "automations": "Automations",
+    "inbox": "Inbox",
+    "connectors": "Connectors",
+    "activity": "Activity",
+    "recent": "Recent",
+    "projects": "Projects",
+    "archived": "Archived",
+    "default": "default",
+    "on": "On",
+    "off": "Off",
+    "about": "About",
+    "servers": "Servers",
+    "development": "Development",
+    "database": "Database",
+    "serviceConfig": "Service Config",
+    "serviceWiki": "Service Wiki"
+  },
+  "empty": {
+    "noConversations": "No conversations yet",
+    "noMatching": "No matching conversations",
+    "noProjects": "No projects yet — start one with the + above",
+    "noProjectConversations": "No conversations in this project yet"
+  },
+  "confirm": {
+    "deleteTitle": "Delete this conversation?",
+    "deleteMessage": "This cannot be undone."
+  },
+  "error": {
+    "somethingWrong": "Something went wrong.",
+    "tryAgain": "Try again",
+    "pageNotFound": "Page not found.",
+    "couldNotSave": "Could not save workspace trust."
+  },
+  "misc": {
+    "tasks": "Tasks",
+    "keySet": "Key set",
+    "via": "via {{label}}",
+    "justNow": "just now",
+    "mAgo": "{{count}}m ago",
+    "hAgo": "{{count}}h ago",
+    "dAgo": "{{count}}d ago",
+    "markdownContent": "Markdown content..."
+  }
+}

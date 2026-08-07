@@ -18,6 +18,12 @@ const apiToken = (): string =>
   (import.meta as any).env?.VITE_COWORKER_API_TOKEN ||
   (typeof __COWORKER_DEV_TOKEN__ === "string" ? __COWORKER_DEV_TOKEN__ : "");
 
+// Module-level auth token — set by AuthContext after login/setup, read by every request.
+let _authToken: string | null = null;
+export function setAuthToken(token: string | null) {
+  _authToken = token;
+}
+
 // All local REST calls pass through this module, so a module-local wrapper applies launch
 // authentication without asking every endpoint helper to remember the security header.
 const fetch = (
@@ -26,14 +32,15 @@ const fetch = (
 ): Promise<Response> => {
   const headers = new Headers(init.headers);
   const token = apiToken();
-  if (token) headers.set("X-OpenWorker-Token", token);
+  if (token) headers.set("X-WeruBWorker-Token", token);
+  if (_authToken) headers.set("x-werub-auth", _authToken);
   return globalThis.fetch(input, { ...init, headers });
 };
 
 const openWebSocket = (url: string): WebSocket => {
   const token = apiToken();
   return token
-    ? new WebSocket(url, ["openworker", token])
+    ? new WebSocket(url, ["werubworker", token])
     : new WebSocket(url);
 };
 
@@ -469,7 +476,7 @@ export interface Connector {
   installations?: GithubInstallation[]; // GitHub only: App installations (managed relay)
 }
 
-// --- OpenWorker Cloud (optional sign-in; manual token paste always works) ---
+// --- WeruBWorker Cloud (optional sign-in; manual token paste always works) ---
 
 export interface CloudStatus {
   signed_in: boolean;
@@ -1720,7 +1727,7 @@ export interface SlackMember {
 }
 
 // One channel from the workspace roster. Private channels appear only where the
-// bot is a member (Slack API constraint); is_member=false → "invite @OpenWorker" hint.
+// bot is a member (Slack API constraint); is_member=false → "invite @WeruBWorker" hint.
 export interface SlackChannelEntry {
   id: string;
   name: string;
@@ -1940,6 +1947,131 @@ export interface SlackStatus {
 
 export async function getSlackStatus(): Promise<SlackStatus> {
   const res = await fetch(`${httpBase()}/v1/connectors/slack/status`);
+  return res.json();
+}
+
+// -- local master password auth -----------------------------------------------
+export interface AuthStatus {
+  configured: boolean;
+  locked: boolean;
+  lock_timeout: number;
+}
+
+export async function getAuthStatus(): Promise<AuthStatus> {
+  const res = await fetch(`${httpBase()}/v1/auth/status`);
+  return res.json();
+}
+
+export async function authSetup(
+  password: string,
+): Promise<{ ok: boolean; token?: string; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/auth/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  return res.json();
+}
+
+export async function authLogin(
+  password: string,
+): Promise<{ ok: boolean; token?: string; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  return res.json();
+}
+
+export async function authLogout(): Promise<{ ok: boolean }> {
+  const res = await fetch(`${httpBase()}/v1/auth/logout`, { method: "POST" });
+  return res.json();
+}
+
+export async function authChangePassword(
+  oldPassword: string,
+  newPassword: string,
+): Promise<{ ok: boolean; token?: string; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/auth/change-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+  });
+  return res.json();
+}
+
+// -- Wiki (service documentation + credential management) ---------------------
+
+export interface WikiPage {
+  id: string;
+  name: string;
+  category: string;
+  tags: string[];
+  linked_service?: string;
+  content: string;
+  credentials: {
+    key: string;
+    label: string;
+    value?: string;
+    expires?: string;
+    rotate_days?: number;
+  }[];
+  updated_at?: string;
+}
+
+export async function getWikiPages(query?: string, category?: string): Promise<WikiPage[]> {
+  const q = new URLSearchParams();
+  if (query) q.set("q", query);
+  if (category) q.set("category", category);
+  const qs = q.toString();
+  const res = await fetch(`${httpBase()}/v1/wiki${qs ? "?" + qs : ""}`);
+  return (await res.json()).pages ?? [];
+}
+
+export async function getWikiPage(id: string): Promise<WikiPage> {
+  const res = await fetch(`${httpBase()}/v1/wiki/${encodeURIComponent(id)}`);
+  return res.json();
+}
+
+export async function createWikiPage(data: any): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/wiki`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateWikiPage(id: string, data: any): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/wiki/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteWikiPage(id: string): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/wiki/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return res.json();
+}
+
+export async function getWikiCategories(): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/wiki/categories`);
+  return res.json();
+}
+
+export async function getWikiAlerts(): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/wiki/alerts`);
+  return res.json();
+}
+
+export async function revealWikiCredential(pageId: string, key: string): Promise<{ value: string }> {
+  const res = await fetch(
+    `${httpBase()}/v1/wiki/${encodeURIComponent(pageId)}/credentials/${encodeURIComponent(key)}/reveal`,
+    { method: "POST" },
+  );
   return res.json();
 }
 

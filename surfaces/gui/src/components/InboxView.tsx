@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   getConnectors,
   getInbox,
@@ -23,10 +24,10 @@ const ICON_FOR: Record<string, "diamond" | "chat" | "code"> = {
   code: "code",
 };
 
-const KIND_TABS: { key: string; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "approval", label: "Approvals" },
-  { key: "question", label: "Questions" },
+const KIND_TABS: { key: string; labelKey: string }[] = [
+  { key: "all", labelKey: "session:inbox.all" },
+  { key: "approval", labelKey: "session:inbox.approvalsFilter" },
+  { key: "question", labelKey: "session:inbox.questionsFilter" },
 ];
 
 const CHIP = (active: boolean) =>
@@ -35,31 +36,23 @@ const CHIP = (active: boolean) =>
     ? "border-accent text-accent bg-accentSoft"
     : "border-line text-muted hover:border-lineStrong");
 
-// Page-level tabs (§28): underline style, one visual level ABOVE the filter chips.
+// Page-level tabs: underline style, one visual level ABOVE the filter chips.
 const TAB = (active: boolean) =>
   "pb-2 -mb-px text-[13px] border-b-2 flex items-center gap-1.5 " +
   (active
     ? "text-ink font-medium border-accent"
     : "text-muted border-transparent hover:text-ink");
 
-// The Inbox: pending approvals / questions / notifications from across sessions, including
-// unattended ones. Resolving here releases any agent suspended on the item. Each item links back
-// to its originating session so you can see the context before answering. Items whose session
-// was deleted are closed server-side (an orphaned prompt can never be answered), so everything
-// listed here is actionable. Filters: by kind and by persona (owner ask, 2026-07-03).
-// Two page tabs (§28): Pending (the queue) and Configure (the former Connectors ▸ Messaging
-// routing page — mirror channel, DM route, subscriptions, Unrouted). Pending's routing status
-// is read-only and links to Configure; the old inline editor was the mirror setting's SECOND
-// editor and is gone.
 export function InboxView({
   onOpenSession,
 }: {
   onOpenSession: (sessionId: string, workspace: string, agent: string) => void;
 }) {
+  const { t } = useTranslation(["session"]);
   const [tab, setTab] = useState<"pending" | "configure">("pending");
   const [items, setItems] = useState<InboxItem[]>([]);
   const [personas, setPersonas] = useState<Persona[] | null>(null);
-  const [routing, setRouting] = useState<string | null>(null); // e.g. "slack:C0123" or null
+  const [routing, setRouting] = useState<string | null>(null);
   const [slackConnected, setSlackConnected] = useState(false);
   const [recent, setRecent] = useState<RecentChannel[]>([]);
   const [unroutedCount, setUnroutedCount] = useState(0);
@@ -85,11 +78,11 @@ export function InboxView({
       .then((cs) => setSlackConnected(!!cs.find((c) => c.name === "slack" && c.connected)))
       .catch(() => {});
     getRecentChannels().then(setRecent).catch(() => setRecent([]));
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       load();
-      loadRouting(); // edits happen on the Configure tab; keep Pending's status line honest
+      loadRouting();
     }, 4000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, []);
 
   const resolve = async (id: string, resolution: string) => {
@@ -97,7 +90,6 @@ export function InboxView({
     load();
   };
 
-  // Personas that actually have pending items drive the filter chips (no empty chips).
   const personasWithItems = useMemo(() => {
     const ids = [...new Set(items.map((i) => i.session_agent).filter(Boolean))] as string[];
     return ids.map((id) => ({
@@ -112,26 +104,19 @@ export function InboxView({
       (personaFilter === "all" || it.session_agent === personaFilter),
   );
 
-  // The originating-session chip: persona icon + session title, clickable to open that session.
   const sessionChip = (it: InboxItem) => {
     const exists = it.session_exists !== false;
-    const p = personas?.find((x) => x.id === it.session_agent);
-    const label = it.session_title || it.session_id;
-    const icon = (p && ICON_FOR[p.icon]) || "diamond";
-    const cls = `ico-${p?.icon || "cowork"}`;
+    const persona = personas?.find((x) => x.id === it.session_agent);
+    const chipLabel = it.session_title || it.session_id;
+    const iconKey = persona ? ICON_FOR[persona.icon] : undefined;
+    const chipIcon = iconKey || "diamond";
+    const chipCls = "inbox-chip-ico ico-" + (persona?.icon || "cowork");
+    const chipTitle = exists ? chipLabel : t("session:inbox.sessionUnavailable");
     return (
-      <button
-        className="inbox-session-chip"
-        title={exists ? `Open “${label}”` : "Session unavailable"}
-        disabled={!exists}
-        onClick={() =>
-          exists && onOpenSession(it.session_id, it.session_workspace || "", it.session_agent || "cowork")
-        }
-      >
-        <span className={"inbox-chip-ico " + cls}>
-          <Icon name={icon} size={11} />
-        </span>
-        <span className="inbox-chip-label">{label}</span>
+      <button className="inbox-session-chip" title={chipTitle} disabled={!exists}
+        onClick={() => exists && onOpenSession(it.session_id, it.session_workspace || "", it.session_agent || "cowork")}>
+        <span className={chipCls}><Icon name={chipIcon} size={11} /></span>
+        <span className="inbox-chip-label">{chipLabel}</span>
         {exists && <Icon name="chevronRight" size={13} className="inbox-chip-go" />}
       </button>
     );
@@ -145,8 +130,8 @@ export function InboxView({
       <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
         <div className="max-w-4xl mx-auto px-7 py-6">
           <PanelHead
-            title="Inbox"
-            sub="Approvals, questions, and notifications from your coworkers — including sessions running unattended."
+            title={t("session:inbox.title")}
+            sub={t("session:inbox.sub")}
           />
 
           <div className="flex gap-5 border-b border-line mb-4">
@@ -155,13 +140,11 @@ export function InboxView({
               data-testid="inbox-tab-pending"
               onClick={() => {
                 setTab("pending");
-                // Configure-tab edits change the mirror target — re-read so the status line
-                // is honest the moment the user lands back on Pending, not a poll later.
                 loadRouting();
                 load();
               }}
             >
-              Pending
+              {t("session:inbox.pending")}
               {items.length > 0 && (
                 <span className="text-[11px] px-1.5 rounded-full bg-accentSoft text-accent leading-4">
                   {items.length}
@@ -173,10 +156,10 @@ export function InboxView({
               data-testid="inbox-tab-configure"
               onClick={() => setTab("configure")}
             >
-              Configure
+              {t("session:inbox.configureTab")}
               {unroutedCount > 0 && (
                 <span className="text-[11px] px-1.5 rounded-full bg-warnSoft text-warnInk leading-4">
-                  ⚠ {unroutedCount}
+                  {unroutedCount}
                 </span>
               )}
             </button>
@@ -189,18 +172,17 @@ export function InboxView({
               <div className="text-[12px] text-faint -mt-1 mb-4" data-testid="inbox-routing">
                 {routing ? (
                   <span>
-                    Also delivered to{" "}
+                    {t("session:inbox.alsoDelivered")}{" "}
                     <span className="text-muted" title={routing}>
                       {routingLabel}
-                    </span>{" "}
-                    — replies there resolve items here.{" "}
+                    </span>
+                    {t("session:inbox.repliesResolve")}
                   </span>
                 ) : slackConnected ? (
-                  <span>Delivered here only. </span>
+                  <span>{t("session:inbox.deliveredHereOnly")}</span>
                 ) : (
                   <span>
-                    Delivered here only. Connect Slack (Connectors page) to also get these in a
-                    channel — more platforms later.{" "}
+                    {t("session:inbox.connectSlackHint")}
                   </span>
                 )}
                 <button
@@ -208,14 +190,14 @@ export function InboxView({
                   data-testid="inbox-route-configure"
                   onClick={() => setTab("configure")}
                 >
-                  Configure ›
+                  {t("session:inbox.configureLink")}
                 </button>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap mb-4" data-testid="inbox-filters">
-                {KIND_TABS.map((t) => (
-                  <button key={t.key} className={CHIP(kind === t.key)} onClick={() => setKind(t.key)}>
-                    {t.label}
+                {KIND_TABS.map((kt) => (
+                  <button key={kt.key} className={CHIP(kind === kt.key)} onClick={() => setKind(kt.key)}>
+                    {t(kt.labelKey)}
                   </button>
                 ))}
                 {personasWithItems.length > 1 && (
@@ -225,7 +207,7 @@ export function InboxView({
                       className={CHIP(personaFilter === "all")}
                       onClick={() => setPersonaFilter("all")}
                     >
-                      All coworkers
+                      {t("session:inbox.allCoworkers")}
                     </button>
                     {personasWithItems.map((p) => (
                       <button
@@ -242,7 +224,7 @@ export function InboxView({
 
               {visible.length === 0 ? (
                 <div className="manage-empty">
-                  {items.length === 0 ? "Nothing pending." : "Nothing pending for this filter."}
+                  {items.length === 0 ? t("session:inbox.nothingPending") : t("session:inbox.nothingFilter")}
                 </div>
               ) : null}
 

@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 from ..agent import build_engine
 from ..agents import get_agent
+from ..auth import LocalAuth
 from ..connections import (
     PersonaConnectionStore,
     SessionConnectionStore,
@@ -81,6 +82,8 @@ from ..providers import (
     verify_provider_key,
 )
 from ..secrets import SecretStore, state_dir
+from ..wiki.store import WikiStore
+from ..wiki.vault import Vault
 from ..sessions import SessionRecord
 from ..skills import (
     SessionSkillStore,
@@ -88,6 +91,12 @@ from ..skills import (
     SkillStore,
     effective_skills,
 )
+from .automation_mixin import AutomationMixin, _epoch, _last_assistant_text, _recent_files
+from .connector_mixin import ConnectorsMixin
+from .inbox_mixin import InboxMixin
+from .provider_mixin import ProviderMixin
+from .settings_mixin import SettingsMixin
+from .skills_mixin import SkillsMixin
 
 _SCOPES = {s.value for s in Scope}
 
@@ -110,7 +119,7 @@ def _approval_body(request) -> str:
     return "\n".join(p for p in (reason, preview) if p)
 
 
-class SessionManager:
+class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMixin, InboxMixin, SkillsMixin):
     def __init__(
         self,
         *,
@@ -165,6 +174,7 @@ class SessionManager:
         self._mcp_errors: dict[str, str] = {}
         self.gateway: Optional[Gateway] = None
         self._data_base = base
+        self.auth = LocalAuth(base)
         # Desktop/UI prefs (default model, onboarding state) — not secrets; a plain JSON file.
         self._prefs = self._load_prefs()
         if self._prefs.get("default_model"):
@@ -235,6 +245,10 @@ class SessionManager:
         # tools — one resolver feeds the catalog injection, the rail, and the composer popup.
         self.skill_store = SkillStore()
         self.session_skills = SessionSkillStore(base / "session_skills.json")
+        # Wiki & credentials vault (WIKI module): SQLite-backed service wiki +
+        # optional encrypted vault for credential values.
+        self.wiki_store = WikiStore(base)
+        self.vault = Vault(base)
         # Dead-letter: inbound messages with no destination + background-turn failures, so neither
         # vanishes silently (a debugging/visibility surface, not a redelivery queue).
         self.unrouted = UnroutedStore(base / "unrouted.json")
@@ -345,7 +359,7 @@ class SessionManager:
             out.append({"path": path, "name": p.name, "exists": p.is_dir()})
         return out
 
-    DEFAULT_SCRATCH_BASE = "~/OpenWorker"
+    DEFAULT_SCRATCH_BASE = "~/WeruBWorker"
 
     def scratch_base(self) -> Path:
         """Common area for per-conversation scratch directories. Configurable via prefs."""
@@ -444,6 +458,8 @@ class SessionManager:
             messages=messages,
             extra_tools=extra_tools,
             secrets=self.secrets,
+            wiki_store=self.wiki_store,
+            vault=self.vault,
             task_store=self.task_store,
             wake_store=self.wakes,
             session_id=session_id,
@@ -742,116 +758,6 @@ class SessionManager:
             "attention": sum(1 for r in recommended if not r["connected"]),
         }
 
-    def inbox_question_asker(self, session_id: str, agent: str):
-        """The Unattended `ask_user` handler: turn the agent's question into an Inbox item and
-        suspend until a human answers it (from the Inbox, or inline when they open the session).
-        Also the default for background/self-wake runs (no live socket). Mirrors to a bound channel
-        like the approver does."""
-
-        async def ask(
-            args: dict[str, Any], tool_call_id: Optional[str] = None
-        ) -> dict[str, Any]:
-            question = str(args.get("question", "")).strip()
-            if not question:
-                return {"answer": "", "error": "no question"}
-            inbox_name = self.inbox_routing.route_for(session_id, agent)
-            item = self.inbox.add_question(
-                session_id,
-                title=question,
-                inbox=inbox_name,
-                options=list(args.get("options") or []),
-                allow_text=bool(args.get("allow_text", True)),
-                multi=bool(args.get("multi", False)),
-                tool_call_id=tool_call_id,
-            )
-            if (
-                item.state != "pending"
-            ):  # durable resume re-raised an already-answered prompt
-                return {"answer": item.resolution or ""}
-            self.persist_session(session_id)  # the pending tool call is now on disk
-            await self.mirror_inbox_item(item)
-            answer = await self.inbox.wait(item.id)
-            return {"answer": answer}
-
-        return ask
-
-    def inbox_approver(self, session_id: str, agent: str):
-        """Inbox-based approver — the default for no-socket runs (background, self-wake, durable
-        resume). On resume the item already exists + is resolved, so wait returns at once.
-        """
-
-        async def approve(request):
-            item = self.inbox.add_approval(
-                session_id,
-                f"Run `{request.tool_name}`?",
-                body=_approval_body(request),
-                inbox=self.inbox_routing.route_for(session_id, agent),
-                tool_call_id=getattr(request, "tool_call_id", None),
-                data=self.approval_prompt_data(session_id, request),
-            )
-            if item.state == "pending":
-                self.persist_session(session_id)
-                await self.mirror_inbox_item(item)
-            resolution = await self.inbox.wait(item.id)
-            return self.approval_outcome(resolution, request, session_id)
-
-        return approve
-
-    def inbox_directory_requester(self, session_id: str, agent: str):
-        async def request(args, tool_call_id=None):
-            item = self.inbox.add_directory(
-                session_id,
-                "Grant access to a folder?",
-                body=str(args.get("reason", "")),
-                inbox=self.inbox_routing.route_for(session_id, agent),
-                data={
-                    "path": str(args.get("path", "")),
-                    "writable": bool(args.get("writable", False)),
-                },
-                tool_call_id=tool_call_id,
-            )
-            if item.state == "pending":
-                self.persist_session(session_id)
-                await self.mirror_inbox_item(item)
-            resp = _parse_inbox_json(await self.inbox.wait(item.id))
-            if not resp.get("granted"):
-                return {"granted": False, "reason": "the user declined the request"}
-            path = (resp.get("path") or args.get("path") or "").strip()
-            if not path:
-                return {"granted": False, "error": "no directory was provided"}
-            writable = bool(resp.get("writable", args.get("writable", False)))
-            res = self.add_root(session_id, path, writable)
-            if not res.get("ok"):
-                return {
-                    "granted": False,
-                    "error": res.get("error", "could not grant access"),
-                }
-            return {"granted": True, "path": path, "writable": writable}
-
-        return request
-
-    def inbox_plan_approver(self, session_id: str, agent: str):
-        async def approve(args, tool_call_id=None):
-            item = self.inbox.add_plan(
-                session_id,
-                "Approve the plan?",
-                body=str(args.get("plan", "")),
-                inbox=self.inbox_routing.route_for(session_id, agent),
-                tool_call_id=tool_call_id,
-            )
-            if item.state == "pending":
-                self.persist_session(session_id)
-                await self.mirror_inbox_item(item)
-            resp = _parse_inbox_json(await self.inbox.wait(item.id))
-            if not resp.get("approved"):
-                return {
-                    "approved": False,
-                    "feedback": resp.get("feedback") or "the user rejected the plan",
-                }
-            return {"approved": True, "mode": resp.get("mode") or "interactive"}
-
-        return approve
-
     def persist_session(self, session_id: str) -> None:
         """Save the cached engine's thread (so a prompt's pending tool call survives a crash)."""
         engine = self._engines.get(session_id)
@@ -1136,95 +1042,6 @@ class SessionManager:
         await self.mcp.aclose()
         return {"ok": True}
 
-    # -- connectors -------------------------------------------------------------
-    def list_connectors(self) -> list[dict[str, Any]]:
-        # Enrich two-way connectors with the live gateway's recently-seen senders, so the Connectors
-        # tab can manage the allow-list inline (each recent sender flagged authorized or not).
-        connectors = connector_list(self.secrets)
-        for c in connectors:
-            if not (c.get("two_way") and c.get("connected")):
-                continue
-            allowed = set(c.get("allowed_users") or [])
-            # Per-workspace allow-lists (managed relay) — a sender is judged against
-            # ITS workspace's list; the flat list only governs team-less (socket) events.
-            team_allowed = {
-                w["team_id"]: set(w.get("allowed_users") or [])
-                for w in (c.get("workspaces") or [])
-            }
-            recent = self.gateway.recent_senders(c["name"]) if self.gateway else []
-            for r in recent:
-                team = r.get("team_id")
-                pool = team_allowed.get(team, set()) if team else allowed
-                r["authorized"] = r.get("user_id") in pool
-                # Backfill from the people directory (an event may predate name scopes).
-                r["user_name"] = r.get("user_name") or self._people.get(
-                    f"{c['name']}:{r.get('user_id')}"
-                )
-            c["recent"] = recent
-            # Parked unauthorized messages (§19) — the connector page resolves them inline.
-            c["unauthorized"] = self.parked.list(c["name"])
-            # Allow-list display names from the people directory (ids stay the source of truth).
-            c["allowed_user_names"] = {
-                u: self._people.get(f"{c['name']}:{u}")
-                for u in (c.get("allowed_users") or [])
-            }
-            c["approval_owner_names"] = {
-                u: self._people.get(f"{c['name']}:{u}")
-                for u in (c.get("approval_owner_ids") or [])
-            }
-            for w in c.get("workspaces") or []:
-                w["allowed_user_names"] = {
-                    u: self._people.get(f"{c['name']}:{u}")
-                    for u in (w.get("allowed_users") or [])
-                }
-                w["approval_owner_names"] = {
-                    u: self._people.get(f"{c['name']}:{u}")
-                    for u in (w.get("approval_owner_ids") or [])
-                }
-        return connectors
-
-    def connect_connector(
-        self, name: str, fields: dict[str, Any], *, acknowledged: bool = False
-    ) -> dict[str, Any]:
-        # validates the token by a live API call (sync httpx) — run off the event loop
-        return connect_connector(self.secrets, name, fields, acknowledged=acknowledged)
-
-    def set_experimental_connectors(self, value: bool) -> dict[str, Any]:
-        return set_experimental_enabled(self.secrets, value)
-
-    def disconnect_connector(self, name: str) -> dict[str, Any]:
-        # MCP-backed profile: drop the live server connection before the tokens go.
-        conn = self.mcp._conns.get(name)
-        if conn is not None:
-            conn.shutdown.set()
-        return disconnect_connector(self.secrets, name)
-
-    def update_connector_tools(
-        self, name: str, enabled: dict[str, Any]
-    ) -> dict[str, Any]:
-        return update_connector_tools(self.secrets, name, enabled)
-
-    def list_audit(
-        self,
-        *,
-        limit: int = 100,
-        session_id: Optional[str] = None,
-        connector: Optional[str] = None,
-        tool: Optional[str] = None,
-    ) -> list[dict[str, Any]]:
-        return self.audit_store.list(
-            limit=limit, session_id=session_id, connector=connector, tool=tool
-        )
-
-    def browser_state(self) -> dict[str, Any]:
-        return browser_state()
-
-    def browser_screenshot(self) -> dict[str, Any]:
-        return browser_take_screenshot()
-
-    def browser_close(self) -> dict[str, Any]:
-        return browser_close_session()
-
     def list_artifacts(self, session_id: str) -> list[dict[str, Any]]:
         record = self.session_store.load(session_id)
         workspace = record.workspace if record else self.default_workspace
@@ -1431,65 +1248,6 @@ class SessionManager:
             return {"ok": False, "error": str(exc)}
         return {"ok": True}
 
-    # -- web search -------------------------------------------------------------
-    def get_web_search(self) -> dict[str, Any]:
-        from ..config import load_config
-        from ..web import provider_names
-
-        profile = self.secrets.get("web_search:default") or {}
-        provider = (
-            profile.get("provider") or load_config().web_search_provider or "duckduckgo"
-        )
-        return {
-            "provider": provider,
-            "has_key": bool(profile.get("api_key")),
-            "providers": provider_names(),
-        }
-
-    def set_web_search(
-        self, provider: str, api_key: Optional[str] = None
-    ) -> dict[str, Any]:
-        from ..web import provider_names
-
-        if provider not in provider_names():
-            return {"ok": False, "error": f"unknown provider: {provider}"}
-        profile: dict[str, Any] = {"provider": provider}
-        if api_key:
-            profile["api_key"] = api_key
-        self.secrets.put("web_search:default", profile)
-        return {"ok": True, "provider": provider}
-
-    # -- model providers (OpenAI, Ollama, …) ------------------------------------
-    def get_providers(self) -> list[dict[str, Any]]:
-        """Descriptor + per-provider status for the Settings UI. Never returns secret values;
-        non-secret field values (e.g. the Ollama base URL) ARE returned so the form can prefill.
-        """
-        out: list[dict[str, Any]] = []
-        for d in provider_descriptors():
-            profile = self.secrets.get(f"provider:{d.name}") or {}
-            configured = descriptor_configured(d, profile)
-            values = {
-                f.key: profile.get(f.key)
-                for f in d.fields
-                if not f.secret and profile.get(f.key)
-            }
-            out.append(
-                {
-                    **d.to_dict(),
-                    "configured": configured,
-                    "values": values,
-                    "suggested_models": self._suggested_models(d.name),
-                    # Key hygiene for the Settings pane: when the key was saved (date, stamped
-                    # by set_provider) and when the provider last served a completion (epoch,
-                    # stamped by the router's on_use hook). Absent for env-only config.
-                    "key_set_at": profile.get("key_set_at"),
-                    "last_used_at": (self._prefs.get("provider_last_used") or {}).get(
-                        d.name
-                    ),
-                }
-            )
-        return out
-
     def pick_native_folder(self) -> dict[str, Any]:
         """Open the OS folder picker FROM THE SIDECAR — the browser GUI can't obtain absolute
         paths from web file dialogs, but the sidecar is local and can (the desktop shell uses
@@ -1528,744 +1286,6 @@ class SessionManager:
         if out.returncode != 0 or not path:
             return {"ok": False, "canceled": True}
         return {"ok": True, "path": path}
-
-    def _note_provider_use(self, name: str) -> None:
-        """Router on_use hook: remember when a provider last served a completion. Persisted
-        THROTTLED (once per provider per minute) — this fires on every model call, from engine
-        threads, and prefs.json isn't a place for a write-per-token-of-work."""
-        import time
-
-        now = time.time()
-        used = self._prefs.setdefault("provider_last_used", {})
-        if now - float(used.get(name) or 0) < 60:
-            return
-        used[name] = now
-        try:
-            self._save_prefs()
-        except OSError:
-            pass
-
-    # Suggestions for the OpenAI-compatible vendor providers (checked against vendor docs
-    # 2026-07-04; refresh alongside `recommended_model` in providers/registry.py).
-    COMPAT_MODELS = {
-        "zai": ["glm-5.2", "glm-4.6"],
-        "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro"],
-        "kimi": ["kimi-k2.6", "kimi-k2.5"],
-        "minimax": ["MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M3"],
-        "qwen": ["qwen3-max", "qwen3-coder-plus", "qwen-plus"],
-        "xai": ["grok-4.3", "grok-4"],
-        "mistral": ["mistral-large-latest", "mistral-small-latest"],
-    }
-
-    def _suggested_models(self, name: str) -> list[str]:
-        """Bare model-name suggestions for the 'add model' form (datalist), per provider.
-        Ollama → live `/api/tags` (best-effort); everyone else → the curated matrix,
-        topped up with the compat-vendor extras the matrix doesn't vouch for."""
-        if name == "ollama":
-            return [m.split(":", 1)[-1] for m in self._ollama_models()]
-        from ..providers.matrix import models_for_provider
-
-        return list(
-            dict.fromkeys(
-                [*models_for_provider(name), *self.COMPAT_MODELS.get(name, [])]
-            )
-        )
-
-    def set_provider(
-        self, name: str, fields: Optional[dict[str, Any]]
-    ) -> dict[str, Any]:
-        """Store a provider's config in its `provider:<name>` SecretStore profile and rebuild
-        its cached client. Merges provided fields into any existing profile."""
-        d = get_descriptor(name)
-        if d is None:
-            return {"ok": False, "error": f"unknown provider: {name}"}
-        fields = fields or {}
-        profile = dict(self.secrets.get(f"provider:{name}") or {})
-        for f in d.fields:
-            if f.key not in fields:
-                continue
-            val = fields.get(f.key)
-            if isinstance(val, str):
-                val = val.strip()
-            if val:
-                profile[f.key] = val
-            elif not f.required:
-                profile.pop(f.key, None)
-        missing = [f.label for f in d.fields if f.required and not profile.get(f.key)]
-        if missing:
-            return {"ok": False, "error": "missing: " + ", ".join(missing)}
-        # A (re)pasted key stamps its save date — Settings shows "key added <date>" so stale
-        # keys are visible. Endpoint-only saves keep the original stamp.
-        if isinstance(fields.get("api_key"), str) and fields["api_key"].strip():
-            from datetime import date
-
-            profile["key_set_at"] = date.today().isoformat()
-        self.secrets.put(f"provider:{name}", profile)
-        self._refresh_provider(name)
-        # Convenience: if the provider recommends a model and it's actually available, add it to
-        # the curated list so it shows up in the composer right after configuring the provider.
-        rec = d.recommended_model
-        added: Optional[str] = None
-        if rec and rec in self._suggested_models(name):
-            # OpenAI models stay bare (the router's default); others carry their prefix.
-            added = rec if name == "openai" else f"{name}:{rec}"
-            self.add_model(added)
-        # First working provider wins the default: if the current default model belongs to a
-        # provider with no usable config (the fresh-install gpt-5.6-sol case), switch the default to
-        # this provider's model. A default that already works is never stolen.
-        if added and not self._provider_configured(self._model_provider(self.model)):
-            self.set_default_model(added)
-        return {"ok": True, "provider": name, "recommended_model": rec}
-
-    def remove_provider(self, name: str) -> dict[str, Any]:
-        """Forget a provider's stored config (Settings ▸ Models "Remove key"). The whole
-        `provider:<name>` profile goes — key, endpoint, key_set_at — so the provider reads
-        as never configured. Curated models stay; they just gray out until a new key."""
-        d = get_descriptor(name)
-        if d is None:
-            return {"ok": False, "error": f"unknown provider: {name}"}
-        self.secrets.delete(f"provider:{name}")
-        self._refresh_provider(name)
-        return {"ok": True, "provider": name}
-
-    def verify_provider(
-        self, name: str, fields: Optional[dict[str, Any]]
-    ) -> dict[str, Any]:
-        """Test a provider's credentials with a live read-only call, WITHOUT persisting them, so
-        onboarding can offer a "Test" button. Falls back to stored/env values when the form left
-        a field blank (e.g. testing an already-configured provider)."""
-        import os
-
-        d = get_descriptor(name)
-        if d is None:
-            return {"ok": False, "error": f"unknown provider: {name}"}
-        fields = fields or {}
-        profile = self.secrets.get(f"provider:{name}") or {}
-        merged = {}
-        for f in d.fields:
-            val = fields.get(f.key) or profile.get(f.key) or ""
-            if isinstance(val, str):
-                val = val.strip()
-            if val:
-                merged[f.key] = val
-        api_key = merged.get("api_key", "")
-        if not api_key and d.env_key:
-            api_key = os.environ.get(d.env_key, "").strip()
-        has_key_field = any(f.key == "api_key" for f in d.fields)
-        if d.needs_key and has_key_field and not api_key:
-            return {"ok": False, "error": "Enter an API key to test."}
-        if d.needs_key and not has_key_field:
-            # Multi-field cloud providers (Bedrock): required fields must be present;
-            # actual credentials may be ambient (~/.aws, env) and are checked by the call.
-            missing = [f.label for f in d.fields if f.required and not merged.get(f.key)]
-            if missing:
-                return {"ok": False, "error": "missing: " + ", ".join(missing)}
-        return verify_provider_key(
-            name, api_key=api_key, base_url=merged.get("base_url", ""), fields=merged
-        )
-
-    def _model_provider(self, model: str) -> str:
-        """The provider a model string routes to (known `prefix:` or the OpenAI default)."""
-        if ":" in (model or ""):
-            prefix = model.split(":", 1)[0]
-            if get_descriptor(prefix) is not None:
-                return prefix
-        return "openai"
-
-    def _provider_configured(self, name: str) -> bool:
-        d = get_descriptor(name)
-        if d is None:
-            return False
-        return descriptor_configured(d, self.secrets.get(f"provider:{name}") or {})
-
-    # -- settings / prefs (model API key, default model, onboarding) -------------
-    def _prefs_path(self) -> Path:
-        return self._data_base / "prefs.json"
-
-    def _load_prefs(self) -> dict[str, Any]:
-        try:
-            return json.loads(self._prefs_path().read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {}
-
-    def _save_prefs(self) -> None:
-        self._prefs_path().write_text(
-            json.dumps(self._prefs, indent=2), encoding="utf-8"
-        )
-
-    # -- direct-message routing -------------------------------------------------
-    def dm_session(self) -> Optional[str]:
-        """The session a DM to the bot is routed to (user-designated). None → DMs are parked."""
-        sid = self._prefs.get("dm_session")
-        return sid or None
-
-    def set_dm_session(self, session_id: Optional[str]) -> dict[str, Any]:
-        """Designate (or clear, with a falsy id) the session that handles incoming DMs."""
-        sid = (session_id or "").strip()
-        if sid:
-            self._prefs["dm_session"] = sid
-        else:
-            self._prefs.pop("dm_session", None)
-        self._save_prefs()
-        return {"ok": True, "dm_session": self.dm_session()}
-
-    def _ollama_alive(self) -> bool:
-        """Best-effort local-Ollama liveness, cached 30s (get_settings runs on every GUI
-        fetch — no 2s probe inline). Keyless is not the same as PRESENT: `ollama:*` picker
-        entries render only when an Ollama actually answers, so a machine with no Ollama
-        never shows phantom local models (e.g. a stray pasted string saved as a model id,
-        caught 2026-07-21)."""
-        import time
-
-        now = time.monotonic()
-        cached = getattr(self, "_ollama_alive_cache", None)
-        if cached and now - cached[0] < 30:
-            return cached[1]
-        profile = self.secrets.get("provider:ollama") or {}
-        base = (profile.get("base_url") or "http://localhost:11434").strip().rstrip("/")
-        if base.endswith("/v1"):
-            base = base[: -len("/v1")]
-        try:
-            import httpx
-
-            alive = httpx.get(base + "/api/tags", timeout=0.8).status_code == 200
-        except Exception:
-            alive = False
-        self._ollama_alive_cache = (now, alive)
-        return alive
-
-    def _ollama_models(self) -> list[str]:
-        """Live list of models pulled into the configured Ollama server (via its native
-        `/api/tags`), as `ollama:<name>` so they're directly selectable. Empty if Ollama isn't
-        configured or unreachable — best-effort, never raises."""
-        profile = self.secrets.get("provider:ollama")
-        if not profile:
-            return []
-        base = (profile.get("base_url") or "http://localhost:11434").strip().rstrip("/")
-        if base.endswith("/v1"):
-            base = base[: -len("/v1")]
-        try:
-            import httpx
-
-            data = httpx.get(base + "/api/tags", timeout=2.0).json()
-            return [
-                f"ollama:{m['name']}" for m in data.get("models", []) if m.get("name")
-            ]
-        except Exception:
-            return []
-
-    def _curated_models(self) -> list[str]:
-        """The models offered in the composer's selector: every curated-matrix model
-        (`get_settings` culls the ones whose provider has no key) plus custom ids the user
-        added, minus matrix models they removed. Deliberately NO built-in seed list — a
-        fresh install offers nothing until a provider key exists, and then exactly that
-        provider's matrix models appear. The active default is always kept selectable.
-        """
-        from ..providers.matrix import MATRIX
-
-        user = self._prefs.get("models")
-        user = user if isinstance(user, list) else []
-        hidden = set(self._prefs.get("hidden_models") or [])
-        models = [m for m in [*MATRIX, *user] if m not in hidden]
-        return list(dict.fromkeys([self.model, *models]))
-
-    def add_model(self, model: str) -> dict[str, Any]:
-        """Add a model id (e.g. `gpt-4o`, `ollama:qwen2.5-coder:32b`) to the picker.
-        Custom ids persist in prefs; a previously removed matrix model is just unhidden
-        (storing it too would shadow future matrix updates)."""
-        from ..providers.matrix import MATRIX
-
-        model = (model or "").strip()
-        if not model:
-            return {"ok": False, "error": "empty model"}
-        hidden = [m for m in self._prefs.get("hidden_models") or [] if m != model]
-        if hidden:
-            self._prefs["hidden_models"] = hidden
-        else:
-            self._prefs.pop("hidden_models", None)
-        models = self._prefs.get("models")
-        models = models if isinstance(models, list) else []
-        if model not in models and model not in MATRIX:
-            models.append(model)
-        self._prefs["models"] = models
-        self._save_prefs()
-        return {"ok": True, **self.get_settings()}
-
-    def remove_model(self, model: str) -> dict[str, Any]:
-        """Remove a model id from the picker. Custom ids are dropped; matrix models are
-        hidden by id (the matrix is derived, not stored, so a bare drop would resurrect
-        them on the next read)."""
-        from ..providers.matrix import MATRIX
-
-        models = self._prefs.get("models")
-        models = models if isinstance(models, list) else []
-        self._prefs["models"] = [m for m in models if m != model]
-        if model in MATRIX:
-            hidden = self._prefs.get("hidden_models") or []
-            if model not in hidden:
-                self._prefs["hidden_models"] = [*hidden, model]
-        self._save_prefs()
-        return {"ok": True, **self.get_settings()}
-
-    def get_settings(self) -> dict[str, Any]:
-        """Model-access + UI status. Never returns the key; `source` says where it comes from."""
-        import os
-
-        env_key = bool(os.environ.get("OPENAI_API_KEY"))
-        stored = bool((self.secrets.get("provider:openai") or {}).get("api_key"))
-        # Only surface models whose provider is actually configured — the composer picker
-        # reflects exactly what's connected. The active default is always kept selectable
-        # (it's hidden behind the "No model" state until a provider is connected anyway).
-        # Ollama is keyless, so "configured" is meaningless there — its models show only
-        # while a local Ollama answers (cached liveness probe).
-        def _selectable(m: str) -> bool:
-            provider = self._model_provider(m)
-            if provider == "ollama":
-                return self._ollama_alive()
-            return self._provider_configured(provider)
-
-        selectable = [m for m in self._curated_models() if _selectable(m)]
-        if self.model not in selectable:
-            selectable.insert(0, self.model)
-        from ..providers.matrix import model_context_windows, model_labels
-
-        return {
-            "provider": "openai",
-            "model": self.model,
-            "models": selectable,
-            # Curated-matrix display names ({full id → "GLM-5.2 · via Together"}) so every
-            # picker shows human labels; custom models absent here render their raw id.
-            "model_labels": model_labels(),
-            # {full id → context window in tokens}, verified matrix entries only —
-            # drives the composer's context-fill meter (absent id → meter hides).
-            "model_context_windows": model_context_windows(),
-            "has_key": env_key or stored,
-            # Provider-agnostic "can this default model actually run?" — true when the default
-            # model's provider is configured (any provider, not just OpenAI). Drives the GUI's
-            # "No model connected" composer chip and the onboarding Skip warning.
-            "model_ready": self._provider_configured(self._model_provider(self.model)),
-            "source": "env" if env_key else ("store" if stored else None),
-            "onboarded": bool(self._prefs.get("onboarded")),
-            "experimental_connectors": experimental_enabled(self.secrets),
-            "surfaces": self._surfaces(),
-            "nav_layout": self._nav_layout(),
-            "sessions_peek": self.sessions_peek(),
-            "context_bar": self.context_bar(),
-            "scratch_base": self._prefs.get("scratch_base")
-            or self.DEFAULT_SCRATCH_BASE,
-            # Real on-disk secrets location, so the UI shows the OS-native path instead of a
-            # hardcoded POSIX one (Windows -> %APPDATA%\coworker, macOS/Linux -> ~/.config).
-            "secrets_path": str(self.secrets.path),
-            **self.pdf_settings(),
-            **self.compaction_settings_payload(),
-        }
-
-    def _surfaces(self) -> dict[str, bool]:
-        """Which session surfaces are shown in the sidebar. Cowork is always on; Chat and Code
-        are opt-in (default off) so a new user sees Cowork only."""
-        return {
-            "cowork": True,
-            "chat": bool(self._prefs.get("show_chat", False)),
-            "code": bool(self._prefs.get("show_code", False)),
-        }
-
-    def set_surfaces(
-        self, chat: Optional[bool] = None, code: Optional[bool] = None
-    ) -> dict[str, Any]:
-        """Toggle Chat/Code visibility (Cowork is always shown). Persisted in prefs."""
-        if chat is not None:
-            self._prefs["show_chat"] = bool(chat)
-        if code is not None:
-            self._prefs["show_code"] = bool(code)
-        self._save_prefs()
-        return {"ok": True, "surfaces": self._surfaces()}
-
-    def _nav_layout(self) -> str:
-        """Sidebar layout: ``"flat"`` (default) or ``"grouped"`` (by persona). Persisted in
-        prefs (UI-REFRESH §7)."""
-        return "grouped" if self._prefs.get("nav_layout") == "grouped" else "flat"
-
-    def set_nav_layout(self, nav_layout: str) -> dict[str, Any]:
-        """Set + persist the sidebar layout. Unknown values fall back to ``"flat"``."""
-        value = "grouped" if (nav_layout or "").strip() == "grouped" else "flat"
-        self._prefs["nav_layout"] = value
-        self._save_prefs()
-        return {"ok": True, "nav_layout": value}
-
-    DEFAULT_SESSIONS_PEEK = 5
-
-    def sessions_peek(self) -> int:
-        """How many sessions a sidebar group shows before "Show more" (owner ask, 2026-07-03)."""
-        try:
-            n = int(self._prefs.get("sessions_peek", self.DEFAULT_SESSIONS_PEEK))
-        except (TypeError, ValueError):
-            n = self.DEFAULT_SESSIONS_PEEK
-        return max(1, min(n, 50))
-
-    def set_sessions_peek(self, n: int) -> dict[str, Any]:
-        try:
-            self._prefs["sessions_peek"] = max(1, min(int(n), 50))
-        except (TypeError, ValueError):
-            return {"ok": False, "error": "sessions_peek must be a number"}
-        self._save_prefs()
-        return {"ok": True, "sessions_peek": self.sessions_peek()}
-
-    def context_bar(self) -> bool:
-        """Whether the composer shows the context-window fill bar. OFF by default (owner
-        ask): the chip then states the session total, and the popover keeps both numbers."""
-        return bool(self._prefs.get("context_bar", False))
-
-    def set_context_bar(self, shown: Any) -> dict[str, Any]:
-        self._prefs["context_bar"] = bool(shown)
-        self._save_prefs()
-        return {"ok": True, "context_bar": self.context_bar()}
-
-    # -- PDF attachments / token savings (owner ask, 2026-07-17) ----------------
-    DEFAULT_PDF_MAX_PAGES = 20
-    DEFAULT_PDF_MAX_MB = 10
-
-    def pdf_settings(self) -> dict[str, Any]:
-        """Fallback mode for models without native PDF support + the attach-time
-        thresholds (Settings → Token savings: big PDFs quietly eat tokens)."""
-        from ..pdf_support import FALLBACK_MODES
-
-        mode = self._prefs.get("pdf_fallback")
-        try:
-            pages = int(self._prefs.get("pdf_max_pages", self.DEFAULT_PDF_MAX_PAGES))
-        except (TypeError, ValueError):
-            pages = self.DEFAULT_PDF_MAX_PAGES
-        try:
-            mb = int(self._prefs.get("pdf_max_mb", self.DEFAULT_PDF_MAX_MB))
-        except (TypeError, ValueError):
-            mb = self.DEFAULT_PDF_MAX_MB
-        return {
-            "pdf_fallback": mode if mode in FALLBACK_MODES else "text",
-            "pdf_max_pages": max(1, min(pages, 100)),
-            "pdf_max_mb": max(1, min(mb, 10)),
-        }
-
-    def compaction_settings(self) -> dict[str, Any]:
-        """The live auto-compaction knobs (OPE-27) — read by every engine per check, so a
-        Settings change applies without a rebuild. Only the two spec'd overrides plus the
-        summarizer-model pin; absent keys fall back to compaction.py defaults."""
-        from ..compaction import DEFAULT_CAP_TOKENS, DEFAULT_THRESHOLD_PCT
-
-        return {
-            "threshold_pct": float(
-                self._prefs.get("compaction_threshold_pct") or DEFAULT_THRESHOLD_PCT
-            ),
-            "cap_tokens": int(
-                self._prefs.get("compaction_cap_tokens") or DEFAULT_CAP_TOKENS
-            ),
-            # "" → the session's own model (engine falls back to self.model).
-            "model": str(self._prefs.get("compaction_model") or ""),
-        }
-
-    def compaction_settings_payload(self) -> dict[str, Any]:
-        """The same knobs under REST-facing names (prefixed to keep /v1/settings flat)."""
-        settings = self.compaction_settings()
-        return {
-            "compaction_threshold_pct": settings["threshold_pct"],
-            "compaction_cap_tokens": settings["cap_tokens"],
-            "compaction_model": settings["model"],
-        }
-
-    def set_compaction_settings(
-        self,
-        threshold_pct: Any = None,
-        cap_tokens: Any = None,
-        model: Any = None,
-    ) -> dict[str, Any]:
-        """Persist the auto-compaction overrides (OPE-27). Threshold is a percentage of
-        the model's context window (10–95); the cap is an absolute token ceiling; model
-        pins the summarizer ('' → the session's own model). Engines read these live via
-        `compaction_settings()`, so changes apply to running sessions immediately."""
-        if threshold_pct is not None:
-            try:
-                pct = float(threshold_pct)
-            except (TypeError, ValueError):
-                return {"ok": False, "error": "compaction_threshold_pct must be a number"}
-            if not 0.10 <= pct <= 0.95:
-                return {
-                    "ok": False,
-                    "error": "compaction_threshold_pct must be between 0.10 and 0.95",
-                }
-            self._prefs["compaction_threshold_pct"] = pct
-        if cap_tokens is not None:
-            try:
-                self._prefs["compaction_cap_tokens"] = max(
-                    10_000, min(int(cap_tokens), 2_000_000)
-                )
-            except (TypeError, ValueError):
-                return {"ok": False, "error": "compaction_cap_tokens must be a number"}
-        if model is not None:
-            self._prefs["compaction_model"] = str(model)
-        self._save_prefs()
-        return {"ok": True, **self.compaction_settings()}
-
-    def set_pdf_settings(
-        self,
-        fallback: Any = None,
-        max_pages: Any = None,
-        max_mb: Any = None,
-    ) -> dict[str, Any]:
-        from ..pdf_support import FALLBACK_MODES, set_fallback_mode
-
-        if fallback is not None:
-            if fallback not in FALLBACK_MODES:
-                return {"ok": False, "error": "pdf_fallback must be 'text' or 'images'"}
-            self._prefs["pdf_fallback"] = fallback
-        for key, value, ceiling in (
-            ("pdf_max_pages", max_pages, 100),
-            ("pdf_max_mb", max_mb, 10),
-        ):
-            if value is None:
-                continue
-            try:
-                self._prefs[key] = max(1, min(int(value), ceiling))
-            except (TypeError, ValueError):
-                return {"ok": False, "error": f"{key} must be a number"}
-        self._save_prefs()
-        settings = self.pdf_settings()
-        set_fallback_mode(settings["pdf_fallback"])  # engines read the module global
-        return {"ok": True, **settings}
-
-    def set_model_key(self, api_key: str) -> dict[str, Any]:
-        """Persist the model API key to the SecretStore (0600). The new provider client is
-        built lazily on the next turn, so it picks the key up without a restart."""
-        api_key = (api_key or "").strip()
-        if not api_key:
-            return {"ok": False, "error": "empty api key"}
-        # Merge, don't replace: the profile may also hold a custom endpoint (base_url).
-        profile = dict(self.secrets.get("provider:openai") or {})
-        profile.update({"type": "api_key", "api_key": api_key})
-        self.secrets.put("provider:openai", profile)
-        self._refresh_provider("openai")  # rebuild the OpenAI client with the new key
-        return {"ok": True, **self.get_settings()}
-
-    def set_default_model(self, model: str) -> dict[str, Any]:
-        """Set + persist the default model for new sessions (the UI pre-selects it)."""
-        model = (model or "").strip()
-        if not model:
-            return {"ok": False, "error": "empty model"}
-        self.model = model
-        self._prefs["default_model"] = model
-        self._save_prefs()
-        return {"ok": True, **self.get_settings()}
-
-    def set_onboarded(self, value: bool = True) -> dict[str, Any]:
-        """Record that first-run setup is complete (so it isn't shown again)."""
-        self._prefs["onboarded"] = bool(value)
-        self._save_prefs()
-        return {"ok": True, "onboarded": bool(value)}
-
-    def set_scratch_base(self, path: str) -> dict[str, Any]:
-        """Set + persist the common area where each Cowork conversation's scratch directory is
-        created (default ~/OpenWorker). The raw value is stored so the UI shows it as entered;
-        new conversations use it immediately (existing ones keep their provisioned dir).
-        """
-        path = (path or "").strip()
-        if not path:
-            return {"ok": False, "error": "empty path"}
-        try:
-            Path(path).expanduser().mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            return {"ok": False, "error": str(exc)}
-        self._prefs["scratch_base"] = path
-        self._save_prefs()
-        return {"ok": True, **self.get_settings()}
-
-    # -- gateway + connector allow-list (inbound messaging) ---------------------
-    def allow_user(
-        self,
-        name: str,
-        user_id: str,
-        team_id: Optional[str] = None,
-        *,
-        display_name: str = "",
-    ) -> dict[str, Any]:
-        out = self._set_allowed(name, user_id, team_id=team_id, add=True)
-        # Directory picks arrive with the name in hand — record it so the chip
-        # is readable immediately (message-driven allows learn it on arrival).
-        if out.get("ok") and display_name:
-            self._note_person(name, user_id, display_name)
-        return out
-
-    def disallow_user(
-        self, name: str, user_id: str, team_id: Optional[str] = None
-    ) -> dict[str, Any]:
-        if name == "slack" and user_id in self.slack_approval_owner_ids(team_id):
-            return {
-                "ok": False,
-                "error": "Remove this person as an approval owner first.",
-            }
-        return self._set_allowed(name, user_id, team_id=team_id, add=False)
-
-    def slack_approval_owner_ids(self, team_id: Optional[str] = None) -> set[str]:
-        """Stable Slack user ids allowed to resolve consequential Inbox prompts.
-
-        Managed relay installs are installer-owned. Manual Socket Mode has no
-        human OAuth identity, so its owners are selected explicitly.
-        """
-        key = f"slack:team:{team_id}" if team_id else "slack:default"
-        profile = self.secrets.get(key) or {}
-        if team_id:
-            installer = str(profile.get("slack_user_id") or "").strip()
-            return {installer} if installer else set()
-        if profile.get("mode") == "relay":
-            return set()
-        return {
-            str(user_id).strip()
-            for user_id in (profile.get("approval_owner_ids") or [])
-            if str(user_id).strip()
-        }
-
-    def set_slack_approval_owner(
-        self, user_id: str, *, add: bool, display_name: str = ""
-    ) -> dict[str, Any]:
-        """Edit Manual Socket Mode approval owners.
-
-        Owner status implies inbound permission. Relay ownership is derived from
-        the OAuth installer and is intentionally not editable here.
-        """
-        user_id = str(user_id).strip()
-        if not user_id:
-            return {"ok": False, "error": "user_id required"}
-        profile = self.secrets.get("slack:default")
-        if not profile:
-            return {"ok": False, "error": "Slack is not connected in Manual mode."}
-        if profile.get("mode") == "relay" or profile.get("managed"):
-            return {
-                "ok": False,
-                "error": "Relay approval ownership is set by the Slack installer.",
-            }
-
-        owners = self.slack_approval_owner_ids()
-        if add:
-            owners.add(user_id)
-        else:
-            owners.discard(user_id)
-            if not owners and self._has_manual_slack_inbox_binding():
-                return {
-                    "ok": False,
-                    "error": (
-                        "Choose another approval owner before removing the last one "
-                        "while Slack Inbox routing is active."
-                    ),
-                }
-        profile["approval_owner_ids"] = sorted(owners)
-        if add:
-            allowed = set(profile.get("allowed_users") or [])
-            allowed.add(user_id)
-            profile["allowed_users"] = sorted(allowed)
-        self.secrets.put("slack:default", profile)
-        if display_name:
-            self._note_person("slack", user_id, display_name)
-        if self.gateway is not None and "slack" in self.gateway.settings:
-            self.gateway.settings["slack"].allowed_users = set(
-                profile.get("allowed_users") or []
-            )
-        return {
-            "ok": True,
-            "approval_owner_ids": sorted(owners),
-            "allowed_users": list(profile.get("allowed_users") or []),
-        }
-
-    def _has_manual_slack_inbox_binding(self) -> bool:
-        for raw in self.inbox_routing.bindings():
-            if raw.get("channel") != "slack":
-                continue
-            team_id, _ = slack_split(str(raw.get("target") or ""))
-            if team_id is None:
-                return True
-        return False
-
-    def _slack_actor_owns_item(
-        self,
-        item,
-        *,
-        actor_id: str,
-        chat_id: str,
-        team_id: Optional[str],
-    ) -> bool:
-        """Authorize a Slack resolution against both its owner and delivery binding."""
-        event_team, event_channel = slack_split(chat_id)
-        event_team = team_id or event_team
-        binding = self.inbox_routing.binding_for(item.inbox)
-        owner_team = event_team
-        if binding.channel == "slack":
-            owner_team, bound_channel = slack_split(binding.target)
-            if owner_team != event_team or bound_channel != event_channel:
-                return False
-        return bool(actor_id) and actor_id in self.slack_approval_owner_ids(owner_team)
-
-    def set_inbox_binding(
-        self, name: str, *, channel: Optional[str], target: str
-    ) -> dict[str, Any]:
-        """Persist an Inbox transport after validating its approval identity."""
-        channel = str(channel or "").strip() or None
-        target = str(target or "").strip()
-        if channel and not target:
-            return {"ok": False, "error": "Choose a destination channel."}
-        if channel == "slack":
-            settings = load_settings(self.secrets).get("slack")
-            if settings is None or not settings.enabled:
-                return {"ok": False, "error": "Slack is not connected."}
-            team_id, destination = slack_split(target)
-            if not destination:
-                return {"ok": False, "error": "Choose a destination channel."}
-            key = f"slack:team:{team_id}" if team_id else "slack:default"
-            if not self.secrets.get(key):
-                return {
-                    "ok": False,
-                    "error": "That Slack workspace is not connected.",
-                }
-            if not self.slack_approval_owner_ids(team_id):
-                return {
-                    "ok": False,
-                    "error": (
-                        "Choose at least one approval owner in Slack settings before "
-                        "routing Inbox requests there."
-                    ),
-                }
-        self.inbox_routing.set_binding(name, channel=channel, target=target)
-        return {"ok": True, "bindings": self.inbox_routing.bindings()}
-
-    def _set_allowed(
-        self, name: str, user_id: str, *, team_id: Optional[str] = None, add: bool
-    ) -> dict[str, Any]:
-        """Add/remove a sender on the allow-list. With `team_id` the edit targets that
-        scope's profile — a workspace's `slack:team:<id>`, or a GitHub App
-        installation's `github:install:<id>` (the same per-tenant pattern);
-        without, the flat `<name>:default` list (manual single-workspace mode)."""
-        user_id = str(user_id).strip()
-        if not user_id:
-            return {"ok": False, "error": "user_id required"}
-        scope = "install" if name == "github" else "team"
-        profile_key = f"{name}:{scope}:{team_id}" if team_id else f"{name}:default"
-        profile = self.secrets.get(profile_key)
-        if not profile:
-            return {
-                "ok": False,
-                "error": (
-                    "workspace not connected" if team_id else "connector not connected"
-                ),
-            }
-        allowed = set(profile.get("allowed_users") or [])
-        allowed.add(user_id) if add else allowed.discard(user_id)
-        profile["allowed_users"] = sorted(allowed)
-        self.secrets.put(profile_key, profile)
-        # reflect into the live gateway so it takes effect without a restart
-        if self.gateway is not None and name in self.gateway.settings:
-            if team_id:
-                from ..connectors import TeamAuth
-
-                teams = self.gateway.settings[name].teams
-                team = teams.setdefault(team_id, TeamAuth())
-                team.allowed_users = set(allowed)
-            else:
-                self.gateway.settings[name].allowed_users = set(allowed)
-        return {"ok": True, "allowed_users": sorted(allowed), "team_id": team_id}
 
     async def disconnect_slack_workspace(self, team_id: str) -> dict[str, Any]:
         """Stop relaying ONE workspace: delete the cloud routing row (best-effort),
@@ -2312,41 +1332,6 @@ class SessionManager:
         await self.refresh_gateway()
         return {"ok": True, "remaining_workspaces": len(remaining)}
 
-    def slack_status(self) -> dict[str, Any]:
-        """Slack connection health in three honest layers (UX-DECISIONS §21):
-        the desktop↔relay socket, the cloud sign-in that authorizes it, and each
-        workspace's bot token. The desktop can't see the Slack↔cloud leg, so no
-        layer here ever claims it — event silence ≠ outage."""
-        from .. import cloud
-
-        default = self.secrets.get("slack:default") or {}
-        mode = default.get("mode") or ""
-        signin = cloud.status(self.secrets)
-
-        relay: dict[str, Any] = {
-            "state": "offline",
-            "reconnects": 0,
-            "last_event_at": None,
-            "last_error": "",
-        }
-        teams: dict[str, Any] = {}
-        adapter = (
-            self.gateway._adapters.get("slack") if self.gateway is not None else None
-        )
-        snapshot = getattr(
-            adapter, "status", None
-        )  # relay adapter only; Socket Mode has none
-        if callable(snapshot):
-            relay = snapshot()
-            teams = relay.pop("teams", {})
-        return {
-            "ok": True,
-            "mode": mode,
-            "relay": relay,
-            "signed_in": bool(signin.get("signed_in")),
-            "teams": teams,
-        }
-
     async def disconnect_github_installation(
         self, installation_id: str
     ) -> dict[str, Any]:
@@ -2370,38 +1355,6 @@ class SessionManager:
         result = github_installs.disconnect_install(self.secrets, installation_id)
         await self.refresh_gateway()
         return result
-
-    def github_status(self) -> dict[str, Any]:
-        """GitHub relay health, same three honest layers as Slack: the shared
-        relay socket, the cloud sign-in, and per-installation token health."""
-        from .. import cloud
-
-        default = self.secrets.get("github:default") or {}
-        signin = cloud.status(self.secrets)
-        relay: dict[str, Any] = {
-            "state": "offline",
-            "reconnects": 0,
-            "last_event_at": None,
-            "last_error": "",
-        }
-        installs: dict[str, Any] = {}
-        missed: dict[str, Any] = {}
-        adapter = (
-            self.gateway._adapters.get("github") if self.gateway is not None else None
-        )
-        snapshot = getattr(adapter, "status", None)
-        if callable(snapshot):
-            relay = snapshot()
-            installs = relay.pop("installs", {})
-            missed = relay.pop("missed", {})
-        return {
-            "ok": True,
-            "mode": default.get("mode") or "",
-            "relay": relay,
-            "signed_in": bool(signin.get("signed_in")),
-            "installs": installs,
-            "missed": missed,
-        }
 
     async def start_gateway(self) -> list[str]:
         """Build the messaging gateway and start enabled listeners. Inbound messages route to
@@ -2480,22 +1433,6 @@ class SessionManager:
             self.gateway = None
 
     # -- unauthorized inbound (parked, §19) --------------------------------------
-    def _note_person(
-        self, platform: str, user_id: Optional[str], name: Optional[str]
-    ) -> None:
-        """Remember a sender's display name (persisted) so ID-keyed surfaces — the allow-list
-        chips above all — can show who a U07JK… actually is. Best-effort, newest name wins.
-        """
-        if not user_id or not name:
-            return
-        key = f"{platform}:{user_id}"
-        if self._people.get(key) != name:
-            self._people[key] = name
-            try:
-                self._people_path.write_text(json.dumps(self._people))
-            except OSError:
-                pass
-
     async def _park_unauthorized(self, event) -> None:
         """Gateway callback: keep what an unallowed sender said (names already resolved by the
         adapter, best-effort) so the owner can allow-and-deliver without a re-send."""
@@ -2590,132 +1527,6 @@ class SessionManager:
         await self.mcp.aclose()
         self.audit_store.close()
 
-    # -- automation (scheduled tasks) -------------------------------------------
-    def approval_prompt_data(self, session_id: str, request) -> dict[str, Any]:
-        """Extra Inbox-item payload for a parked approval. Always carries the tool name +
-        arguments so the GUI can render the same humanized card (§35) it shows live —
-        without them a reopened session fell back to the raw 'Run `tool`?' treatment.
-        Automation runs additionally carry the owning task + (when the call is eligible)
-        the exact target a standing rule would pin: the GUI offers "Allow every time" only
-        when both are present — in-app only, never on Slack-mirrored buttons (§25)."""
-        from ..permissions import standing_rule_candidate
-
-        data: dict[str, Any] = {
-            "tool": request.tool_name,
-            "arguments": getattr(request, "arguments", None) or {},
-        }
-        task = self.task_store.task_for_run_session(session_id)
-        if task is None:
-            return data
-        data.update({"task_id": task.id, "task_title": task.title})
-        target = standing_rule_candidate(
-            request.tool_name,
-            getattr(request, "arguments", None) or {},
-            getattr(request, "metadata", None),
-        )
-        if target:
-            data["standing_target"] = target
-        return data
-
-    def mint_task_rule(
-        self, session_id: str, tool_name: str, arguments: Any, metadata: Any = None
-    ) -> bool:
-        """Persist a standing rule a human minted via "Allow every time" on a run's
-        approval card (§25's retrofit path). Server-side validation, not trust in the
-        card: the session must be an automation run and the call must be rule-eligible
-        (external risk, declared target argument, non-empty target). Also applies the
-        rule to the live engine so the run's next call auto-allows."""
-        from ..permissions import standing_rule_candidate
-
-        task = self.task_store.task_for_run_session(session_id)
-        if task is None:
-            return False
-        target = standing_rule_candidate(tool_name, arguments or {}, metadata)
-        if not target or not task.add_rule(tool_name, target):
-            return False
-        self.task_store.save(task)
-        engine = self._engines.get(session_id)
-        if engine is not None:
-            engine.permissions.task_rules.setdefault(tool_name, set()).add(target)
-        try:
-            self.audit_store.append(
-                {
-                    "session_id": session_id,
-                    "tool": tool_name,
-                    "arguments": arguments or {},
-                    "stage": "standing_rule_minted",
-                    "status": "granted",
-                    "reason": f"allow every time: {tool_name} → {target} (task {task.id})",
-                }
-            )
-        except Exception:
-            pass
-        return True
-
-    def approval_outcome(self, resolution: str, request, session_id: str):
-        """Map an approval resolution (from any surface) to an ApprovalOutcome, handling
-        the task-persistent "always_task" vocabulary alongside the session-scoped ones.
-        """
-        from ..engine import ApprovalOutcome
-
-        if resolution == "always_task":
-            self.mint_task_rule(
-                session_id,
-                request.tool_name,
-                getattr(request, "arguments", None),
-                getattr(request, "metadata", None),
-            )
-            return ApprovalOutcome.ONCE
-        try:
-            return ApprovalOutcome(resolution)
-        except ValueError:
-            pass
-        if resolution == "allow":
-            return ApprovalOutcome.ONCE
-        if resolution == "always":
-            return ApprovalOutcome.ALWAYS_TOOL
-        return ApprovalOutcome.DENY
-
-    def _scheduled_approver(self, task, session_id: str):
-        from ..engine import ApprovalOutcome
-        from ..permissions import WRITE_TOOLS
-
-        name_allowed = task.name_allowed_tools()
-
-        async def approver(request):
-            # Unattended: auto-allow the deliverable writes (path-scoped to the task
-            # workspace) + tools the task allows BY NAME (legacy entries). Target-bound
-            # rules never reach here — the permission engine matched them already.
-            if request.tool_name in WRITE_TOOLS or request.tool_name in name_allowed:
-                return ApprovalOutcome.ONCE
-            # Anything else parks in the Inbox and suspends the run (§25 graceful
-            # degradation — an ungranted automation still works, it just asks). The item
-            # carries the task binding so the in-app card can offer "Allow every time";
-            # the Slack mirror renders only Approve/Deny buttons.
-            item = self.inbox.add_approval(
-                session_id,
-                f"Run `{request.tool_name}`?",
-                body=_approval_body(request),
-                inbox=self.inbox_routing.route_for(session_id, task.agent),
-                tool_call_id=getattr(request, "tool_call_id", None),
-                data=self.approval_prompt_data(session_id, request),
-            )
-            if item.state == "pending":
-                self.persist_session(session_id)
-                await self.mirror_inbox_item(item)
-            resolution = await self.inbox.wait(item.id)
-            return self.approval_outcome(resolution, request, session_id)
-
-        return approver
-
-    def _seed_task_permissions(self, engine: TurnEngine, task) -> None:
-        """Apply a task's standing allowances to an engine: target-bound rules feed the
-        permission engine's matcher (connector tools included — the target binding is the
-        safety); name-only legacy entries keep their session-allowlist behavior."""
-        engine.permissions.task_rules = task.standing_rules()
-        for tool in task.name_allowed_tools():
-            engine.permissions.allow_tool_for_session(tool)
-
     def _build_task_engine(self, task, *, session_id: str) -> TurnEngine:
         ag = get_agent(task.agent)
         Path(task.workspace).mkdir(parents=True, exist_ok=True)
@@ -2728,6 +1539,8 @@ class SessionManager:
             provider=self.provider,
             memory_store=self.memory_store,
             secrets=self.secrets,
+            wiki_store=self.wiki_store,
+            vault=self.vault,
             # No scheduling tools inside a scheduled run: the executing agent's job is to DO the
             # task, and instructions that mention timing ("every day at 5:32pm…") otherwise tempt
             # it to create another automation instead of running this one.
@@ -2821,35 +1634,6 @@ class SessionManager:
                 )
             except Exception:
                 pass
-
-    # -- inbox replies over messaging connectors --------------------------------
-    def _resolve_inbox_reply(self, event) -> bool:
-        """Try to handle an inbound Slack/Telegram message as an Inbox reply. Returns True if the
-        message carried an `[ow:<id>]` token (so it's consumed here, not routed as a new turn) —
-        resolving the item also releases any agent suspended on it."""
-        from ..inbox_routing import resolve_from_reply
-
-        text = getattr(event, "text", "") or ""
-
-        def _resolve(item_id: str, resolution: str) -> bool:
-            item = self.inbox.get(item_id)
-            if item is None:
-                return False
-            if (
-                getattr(event.source, "platform", "") == "slack"
-                and item.kind in {"approval", "directory", "plan"}
-            ):
-                actor_id = str(getattr(event.source, "user_id", "") or "")
-                if not self._slack_actor_owns_item(
-                    item,
-                    actor_id=actor_id,
-                    chat_id=getattr(event.source, "chat_id", "") or "",
-                    team_id=getattr(event.source, "team_id", None),
-                ):
-                    return False
-            return self.inbox.resolve(item_id, resolution)
-
-        return resolve_from_reply(text, _resolve) is not None
 
     # -- self-wake resumption ---------------------------------------------------
     async def resume_due_wakes(self) -> int:
@@ -3215,172 +1999,6 @@ class SessionManager:
             except Exception:
                 pass
 
-    # -- automation REST --------------------------------------------------------
-    def list_automations(self) -> dict[str, Any]:
-        # Unseen = runs started after the task's seen mark (UX-023 sidebar badges).
-        # `unseen_failed` tints the badge when the NEWEST unseen run errored.
-        tasks = []
-        for t in self.task_store.list():
-            unseen = [
-                r for r in self.task_store.runs(t.id) if r.started_at > t.seen_runs_at
-            ]
-            tasks.append(
-                {
-                    **t.public(),
-                    "unseen_runs": len(unseen),
-                    "unseen_failed": bool(unseen) and unseen[0].status == "error",
-                }
-            )
-        return {"tasks": tasks}
-
-    def mark_automation_seen(self, task_id: str) -> dict[str, Any]:
-        task = self.task_store.get(task_id)
-        if task is None:
-            return {"ok": False, "error": "not found"}
-        task.seen_runs_at = time.time()
-        self.task_store.save(task)
-        return {"ok": True}
-
-    def get_automation(self, task_id: str) -> dict[str, Any]:
-        task = self.task_store.get(task_id)
-        if task is None:
-            return {"error": "not found"}
-        return {
-            "task": task.public(),
-            "runs": [r.to_dict() for r in self.task_store.runs(task_id)],
-        }
-
-    def create_automation(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Create an automation directly from the GUI (the "New automation" / template flow).
-        Mirrors the agent-facing `create_scheduled_task` validation, but binds the task to a
-        fresh per-task scratch workspace instead of an origin conversation's folder."""
-        from croniter import croniter
-
-        title = (payload.get("title") or "").strip()
-        instructions = (payload.get("instructions") or "").strip()
-        cron = (payload.get("cron") or "").strip() or None
-        fire_at = (payload.get("fire_at") or "").strip() or None
-        timezone = (payload.get("timezone") or "").strip() or "local"
-
-        if not title:
-            return {"ok": False, "error": "title is required"}
-        if not instructions:
-            return {"ok": False, "error": "instructions are required"}
-        if not cron and not fire_at:
-            return {
-                "ok": False,
-                "error": "provide a cron (recurring) or a fire_at ISO datetime (one-time)",
-            }
-        if cron and not croniter.is_valid(cron):
-            return {"ok": False, "error": f"invalid cron expression: {cron}"}
-
-        schedule = Schedule(
-            kind="once" if (fire_at and not cron) else "cron",
-            cron=cron,
-            fire_at=fire_at,
-            timezone=timezone,
-        )
-        from ..automation.models import grant_entries
-
-        task = ScheduledTask(
-            title=title,
-            instructions=instructions,
-            schedule=schedule,
-            workspace="",
-            origin_surface="cowork",
-            agent="cowork",
-            # Human-driven path (GUI form / onboarding recipes): the creating surface
-            # rendered the grants, the submit IS the consent. Same validation as the
-            # agent tool — only target-bound write grants survive.
-            always_allowed_tools=grant_entries(payload.get("permissions")),
-        )
-        task.workspace = self._provision_scratch(task.task_session_id)
-        self.task_store.save(task)
-        return {"ok": True, "task": task.public()}
-
-    def update_automation(
-        self, task_id: str, changes: dict[str, Any]
-    ) -> dict[str, Any]:
-        task = self.task_store.get(task_id)
-        if task is None:
-            return {"ok": False, "error": "not found"}
-        if "enabled" in changes:
-            task.enabled = bool(changes["enabled"])
-        if changes.get("instructions") is not None:
-            task.instructions = changes["instructions"]
-        if changes.get("title") is not None:
-            task.title = changes["title"]
-        if changes.get("cron") is not None:
-            from croniter import croniter
-
-            if not croniter.is_valid(changes["cron"]):
-                return {"ok": False, "error": "invalid cron"}
-            task.schedule.cron, task.schedule.kind = changes["cron"], "cron"
-        if changes.get("revoke"):
-            # Revocation from the task detail page ("Allowed without asking … · Revoke").
-            # Human-only, like minting; the agent-facing update tool has no such field.
-            task.revoke_rule(str(changes["revoke"]))
-        self.task_store.save(task)
-        if changes.get("revoke"):
-            # A live run engine may still hold the revoked rule — reseed from the record.
-            for sid, engine in self._engines.items():
-                owner = self.task_store.task_for_run_session(sid)
-                if owner is not None and owner.id == task.id:
-                    engine.permissions.task_rules = task.standing_rules()
-        return {"ok": True, "task": task.public()}
-
-    def delete_automation(self, task_id: str) -> dict[str, Any]:
-        return {"ok": self.task_store.delete(task_id), "id": task_id}
-
-    def prepare_manual_run(self, task_id: str) -> dict[str, Any]:
-        """Create a 'running' manual run and return its session, so the GUI can open it and
-        drive the task LIVE over the normal session WS (you watch the agent + follow up). The
-        automatic scheduler path stays headless (`_run_scheduled_task`)."""
-        task = self.task_store.get(task_id)
-        if task is None:
-            return {"ok": False, "error": "not found"}
-        Path(task.workspace).mkdir(parents=True, exist_ok=True)
-        run = TaskRun(
-            task_id=task.id, trigger="manual"
-        )  # status "running", session_id auto
-        self.task_store.add_run(run)
-        return {
-            "ok": True,
-            "run_id": run.run_id,
-            "session_id": run.session_id,
-            "workspace": task.workspace,
-            "agent": task.agent,
-            # Same execute-now framing as the headless path — manual runs ride a normal live
-            # session whose engine DOES have scheduling tools, so be explicit.
-            "prompt": (
-                f"⏰ Running automation '{task.title}' now. Carry out these instructions "
-                "immediately and produce the result. The schedule already exists — do not create "
-                f"or modify any scheduled tasks.\n\n{task.instructions}"
-            ),
-        }
-
-    def finalize_manual_run(self, task_id: str, run_id: str) -> dict[str, Any]:
-        """Mark a manual run complete once its first turn finished (the WS already saved the
-        session). Pulls result text + artifacts from the persisted transcript/workspace.
-        """
-        run = next(
-            (r for r in self.task_store.runs(task_id) if r.run_id == run_id), None
-        )
-        task = self.task_store.get(task_id)
-        if run is None or task is None:
-            return {"ok": False, "error": "not found"}
-        if run.status == "running":
-            record = self.session_store.load(run.session_id)
-            run.result_text = _last_assistant_text(record.messages) if record else None
-            run.artifacts = _recent_files(task.workspace, since=run.started_at)
-            run.status = "ok"
-            run.finished_at = _epoch()
-            self.task_store.add_run(run)
-            task.last_run, task.last_status = run.finished_at, "ok"
-            task.run_count += 1
-            self.task_store.save(task)
-        return {"ok": True, "run": run.to_dict()}
-
     def save(self, session_id: str, engine: TurnEngine) -> None:
         executor = getattr(engine, "executor", None)
         workspace = os.path.realpath(str(executor.cwd)) if executor else ""
@@ -3745,17 +2363,6 @@ class SessionManager:
                 pass  # a stale/foreign path must not fail the delete
         return {"ok": ok, "session_id": session_id}
 
-    # -- provider proxy ---------------------------------------------------------
-    def provider_complete(self, model, messages, tools=None):
-        return self.provider.complete(model=model, messages=messages, tools=tools)
-
-    def _refresh_provider(self, name: Optional[str] = None) -> None:
-        """Drop the router's cached client(s) so the next turn rebuilds with fresh config.
-        No-op for an injected non-router provider (tests)."""
-        invalidate = getattr(self.provider, "invalidate", None)
-        if callable(invalidate):
-            invalidate(name)
-
     # -- read models ------------------------------------------------------------
     def list_sessions(self, workspace: Optional[str] = None) -> list[dict[str, Any]]:
         ws = self.resolve_workspace(workspace) if workspace else None
@@ -3800,174 +2407,6 @@ class SessionManager:
     def list_agents(self) -> list[dict[str, Any]]:
         return _list_agents()
 
-    # -- skills (SKILLS-SPEC §4.4) ------------------------------------------------
-    def list_skills(self, workspace: Optional[str] = None) -> list[dict[str, Any]]:
-        """Enriched rows for the Settings screen (scope/source/enabled). Optional workspace
-        adds that project's skills, with project copies shadowing same-named global ones."""
-        return self.skill_store.rows(workspace or None)
-
-    def reveal_skill(
-        self, name: str, workspace: Optional[str] = None
-    ) -> dict[str, Any]:
-        """Open the skill's folder in the OS file manager (§6 "Show folder" — the power-user
-        window into folder-is-truth). Same local-machine rationale as reveal_artifact."""
-        import subprocess
-        import sys
-
-        try:
-            folder, _scope = self.skill_store.find(name, workspace or None)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-        try:
-            if sys.platform == "darwin":
-                subprocess.Popen(
-                    ["open", str(folder)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            elif sys.platform == "win32":
-                import os
-
-                os.startfile(str(folder))  # type: ignore[attr-defined]
-            else:
-                subprocess.Popen(
-                    ["xdg-open", str(folder)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-        except OSError as exc:
-            return {"ok": False, "error": str(exc)}
-        return {"ok": True}
-
-    def effective_skill_names(
-        self, session_id: str, workspace: Optional[str | Path] = None
-    ) -> set[str]:
-        """The session's skill menu (§3): merged scopes − Settings disables − session mutes.
-        The single resolver behind the engine catalog, the rail list, and the composer popup."""
-        dirs = [self.skill_store.global_dir]
-        if workspace:
-            dirs.append(self.skill_store.project_dir(workspace))
-        loader = SkillLoader(dirs)
-        return effective_skills(
-            names=set(loader.names()),
-            disabled=self.skill_store.disabled_names(),
-            session_overrides=self.session_skills.get(session_id),
-        )
-
-    def session_skills_view(
-        self, session_id: str, workspace: Optional[str] = None
-    ) -> dict[str, Any]:
-        """The rail payload: every in-scope, Settings-enabled skill with its mute state."""
-        disabled = self.skill_store.disabled_names()
-        overrides = self.session_skills.get(session_id)
-        rows = [
-            {
-                "name": r["name"],
-                "description": r["description"],
-                "scope": r["scope"],
-                "enabled": overrides.get(r["name"], True),
-            }
-            for r in self.skill_store.rows(workspace or None)
-            if r["name"] not in disabled
-        ]
-        return {"skills": rows}
-
-    def _scratch_workspace_error(self, workspace: Any) -> Optional[dict[str, Any]]:
-        """Refuse skill WRITES into a per-conversation scratch dir — a skill saved there is
-        stranded in a throwaway folder. Backend chokepoint: guards every entry path (UI,
-        REST, future import), not just the flows the GUI happens to gate."""
-        if not workspace:
-            return None
-        try:
-            ws = Path(str(workspace)).expanduser().resolve()
-            if ws.is_relative_to(self.scratch_base().resolve()):
-                return {
-                    "ok": False,
-                    "error": (
-                        "That folder is a temporary session space — skills saved there "
-                        "would be lost. Save it globally or pick a real project."
-                    ),
-                }
-        except OSError:
-            pass
-        return None
-
-    def create_skill(self, body: dict[str, Any]) -> dict[str, Any]:
-        blocked = self._scratch_workspace_error(body.get("workspace"))
-        if blocked:
-            return blocked
-        try:
-            created = self.skill_store.create(
-                name=str(body.get("name", "")),
-                description=str(body.get("description", "")),
-                instructions=str(body.get("instructions", "")),
-                scope=str(body.get("scope", "global") or "global"),
-                workspace=body.get("workspace") or None,
-            )
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-        return {"ok": True, "skill": created}
-
-    def update_skill(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
-        try:
-            if "enabled" in body:
-                self.skill_store.set_enabled(name, bool(body["enabled"]))
-            if body.get("description") is not None or body.get("instructions") is not None:
-                self.skill_store.update(
-                    name,
-                    description=body.get("description"),
-                    instructions=body.get("instructions"),
-                    workspace=body.get("workspace") or None,
-                )
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-        return {"ok": True}
-
-    def delete_skill(self, name: str, workspace: Optional[str] = None) -> dict[str, Any]:
-        try:
-            self.skill_store.delete(name, workspace or None)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-        return {"ok": True}
-
-    def move_skill(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
-        # Moving INTO project scope must not target a scratch dir (moving OUT is fine —
-        # that's the rescue path for already-stranded skills).
-        if str(body.get("scope", "")) == "project":
-            blocked = self._scratch_workspace_error(body.get("workspace"))
-            if blocked:
-                return blocked
-        try:
-            moved = self.skill_store.move(
-                name,
-                to_scope=str(body.get("scope", "")),
-                workspace=body.get("workspace") or None,
-            )
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-        return {"ok": True, "skill": moved}
-
-    def stage_skill_upload(self, data: bytes, filename: str = "") -> dict[str, Any]:
-        try:
-            preview = self.skill_store.stage_upload(data, filename)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-        return {"ok": True, **preview}
-
-    def confirm_skill_upload(self, body: dict[str, Any]) -> dict[str, Any]:
-        blocked = self._scratch_workspace_error(body.get("workspace"))
-        if blocked:
-            return blocked
-        try:
-            saved = self.skill_store.confirm_upload(
-                str(body.get("token", "")),
-                scope=str(body.get("scope", "global") or "global"),
-                workspace=body.get("workspace") or None,
-            )
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-        return {"ok": True, "skill": saved}
-
     def list_memory(self) -> list[dict[str, Any]]:
         return [
             {"id": m.id, "scope": m.scope.value, "content": m.content}
@@ -3983,21 +2422,6 @@ class SessionManager:
         return {"id": item.id, "scope": item.scope.value, "content": item.content}
 
 
-def _parse_inbox_json(s: str) -> dict[str, Any]:
-    """Parse a structured Inbox resolution (directory/plan carry their reply as a JSON string)."""
-    import json as _json
-
-    try:
-        v = _json.loads(s) if s else {}
-        return v if isinstance(v, dict) else {}
-    except Exception:
-        return {}
-
-
-def _epoch() -> float:
-    import time
-
-    return time.time()
 
 
 # A Slack message ts looks like "1700000001.000001" (epoch seconds + microseconds). Other
@@ -4013,32 +2437,6 @@ def _inbound_epoch(message_id: Optional[str]) -> float:
         except ValueError:
             pass
     return time.time()
-
-
-def _last_assistant_text(messages: list[dict[str, Any]]) -> Optional[str]:
-    for msg in reversed(messages or []):
-        if msg.get("role") == "assistant" and msg.get("content"):
-            return msg["content"]
-    return None
-
-
-def _recent_files(workspace: str, *, since: float, limit: int = 20) -> list[str]:
-    """Files in the task workspace modified during the run — the run's artifacts."""
-    out: list[str] = []
-    root = Path(workspace)
-    if not root.is_dir():
-        return out
-    for path in root.rglob("*"):
-        if any(part.startswith(".") for part in path.relative_to(root).parts):
-            continue
-        try:
-            if path.is_file() and path.stat().st_mtime >= since - 1:
-                out.append(str(path.relative_to(root)))
-        except OSError:
-            continue
-        if len(out) >= limit:
-            break
-    return out
 
 
 def _artifact_kind(path: Path) -> str:

@@ -21,17 +21,26 @@ import aisuite as ai
 
 from .agents.base import AgentContext
 from .risk import RiskClass
+from .tools.ci_cd import ci_cd_tools
+from .tools.code_review import code_review_tools
 from .tools.files import file_tools
 from .tools.git import git_tools
 from .tools.search import search_tools
+from .tools.cloud_infra import cloud_infra_tools
+from .tools.db_mgmt import db_tools
+from .tools.docker_mgmt import docker_tools
+from .tools.k8s_mgmt import k8s_tools
+from .tools.server_monitor import server_monitor_tools
 from .tools.shell import shell_tools
 from .tools.todo import todo_tools
+from .wiki.tools import wiki_tools
 
 # Context prerequisites a capability may require, mapped to a predicate over AgentContext.
 _REQUIREMENTS: dict[str, Callable[[AgentContext], bool]] = {
     "workspace": lambda c: c.workspace is not None,
     "executor": lambda c: c.executor is not None,
     "todo": lambda c: c.todo is not None,
+    "secrets": lambda c: c.secrets is not None,
 }
 
 
@@ -98,6 +107,44 @@ def _todo(context: AgentContext) -> list:
     return todo_tools(context.todo)  # todo_write (drives the Progress panel)
 
 
+def _server_monitor(context: AgentContext) -> list:
+    return server_monitor_tools(context)  # server_status, service_status, check_ports, …
+
+
+def _ci_cd(context: AgentContext) -> list:
+    return ci_cd_tools(context)  # ci_status, ci_trigger, ci_logs, deploy_status, deploy_rollback
+
+
+def _cloud_infra(context: AgentContext) -> list:
+    return cloud_infra_tools(context)  # aws_ec2_list, cf_dns_list, wasabi_list, …
+
+
+def _database(context: AgentContext) -> list:
+    return db_tools(context)  # db_query, db_status, db_tables, db_backup
+
+
+def _docker(context: AgentContext) -> list:
+    return docker_tools(context)  # docker_ps, docker_logs, docker_restart, ...
+
+
+def _k8s(context: AgentContext) -> list:
+    return k8s_tools(context)  # k8s_pods, k8s_logs, k8s_describe, k8s_restart, k8s_scale, k8s_events
+
+
+def _wiki(context: AgentContext) -> list:
+    return wiki_tools(context)  # wiki_search, wiki_get, wiki_get_credential, wiki_update, wiki_check_alerts
+
+
+def _code_review(context: AgentContext) -> list:
+    return code_review_tools(context)  # review_pr, review_security, review_test_coverage
+
+
+def _ssh(context: AgentContext) -> list:
+    from .connectors.ssh import ssh_tools
+
+    return ssh_tools(context.secrets)  # remote server access via system ssh
+
+
 _CAPS: list[Capability] = [
     Capability(
         id="code_files",
@@ -145,6 +192,78 @@ _CAPS: list[Capability] = [
         description="Maintain a visible task/progress list.",
         build=_todo,
         requires=("todo",),
+        risk=(RiskClass.READ,),
+    ),
+    Capability(
+        id="server_monitor",
+        name="Server monitoring",
+        description="Check server health, resource usage, service status, and logs.",
+        build=_server_monitor,
+        requires=(),
+        risk=(RiskClass.READ,),
+    ),
+    Capability(
+        id="ci_cd",
+        name="CI/CD pipelines",
+        description="GitHub Actions CI/CD: check status, trigger workflows, view logs, deploy, and rollback.",
+        build=_ci_cd,
+        requires=(),
+        risk=(RiskClass.EXEC,),
+    ),
+    Capability(
+        id="cloud_infra",
+        name="Cloud infrastructure",
+        description="AWS, Cloudflare, and Wasabi cloud infrastructure management.",
+        build=_cloud_infra,
+        requires=("secrets",),
+        risk=(RiskClass.READ, RiskClass.EXTERNAL),
+    ),
+    Capability(
+        id="database",
+        name="Database management",
+        description="Query, inspect, and back up configured databases (PostgreSQL, MySQL, SQLite).",
+        build=_database,
+        requires=("secrets",),
+        risk=(RiskClass.EXEC,),
+    ),
+    Capability(
+        id="code_review",
+        name="Code review",
+        description="Analyze PRs, scan for security issues, and inspect test coverage.",
+        build=_code_review,
+        requires=(),
+        risk=(RiskClass.READ,),
+    ),
+    Capability(
+        id="docker",
+        name="Docker management",
+        description="Manage Docker containers, images, and compose services (local or remote).",
+        build=_docker,
+        requires=(),
+        risk=(RiskClass.EXEC,),
+    ),
+    Capability(
+        id="k8s",
+        name="Kubernetes management",
+        description="Manage Kubernetes clusters: pods, logs, deployments, scaling, and events via kubectl.",
+        build=_k8s,
+        requires=(),
+        risk=(RiskClass.EXEC,),
+    ),
+    Capability(
+        id="ssh",
+        name="SSH remote access",
+        description="Execute commands on registered remote servers via SSH.",
+        build=_ssh,
+        requires=("secrets",),
+        risk=(RiskClass.EXEC,),
+    ),
+    Capability(
+        id="wiki",
+        name="Service Wiki",
+        description="Search and manage service documentation and credentials.",
+        build=_wiki,
+        requires=("secrets",),
         risk=(RiskClass.READ,),
     ),
 ]

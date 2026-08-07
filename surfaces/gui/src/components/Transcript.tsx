@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { memo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ApprovalDecision, Item } from "../types";
 import { shortArgs } from "./ApprovalCard";
 import { humanizeAsk, humanizeTool, type HumanLine } from "../humanize";
@@ -12,6 +13,7 @@ import { Icon } from "./Icon";
 const USER_CLAMP_CHARS = 1200;
 
 function ClampedUserText({ text }: { text: string }) {
+  const { t } = useTranslation(["session"]);
   const [open, setOpen] = useState(false);
   if (text.length <= USER_CLAMP_CHARS) return <>{text}</>;
   return (
@@ -22,7 +24,7 @@ function ClampedUserText({ text }: { text: string }) {
         onClick={() => setOpen((o) => !o)}
         className="block ml-auto mt-1.5 text-[12.5px] font-medium opacity-75 hover:opacity-100"
       >
-        {open ? "less…" : "more…"}
+        {open ? t("session:less") : t("session:more")}
       </button>
     </>
   );
@@ -33,6 +35,7 @@ function ClampedUserText({ text }: { text: string }) {
 // so revealing it on group-hover never shifts the layout. `ts` is unix seconds — canonical
 // messages carry it, pre-stamp history doesn't, so the time simply omits itself when absent.
 function BubbleMeta({ text, ts, align }: { text: string; ts?: number; align: "left" | "right" }) {
+  const { t } = useTranslation(["common"]);
   const [copied, setCopied] = useState(false);
   const when = typeof ts === "number" ? new Date(ts * 1000) : null;
   const copy = () => {
@@ -60,7 +63,7 @@ function BubbleMeta({ text, ts, align }: { text: string; ts?: number; align: "le
           title="Copy message"
           onClick={copy}
         >
-          {copied ? "Copied" : <Icon name="copy" size={11} />}
+          {copied ? t("common:status.copied") : <Icon name="copy" size={11} />}
         </button>
         {when && (
           <span data-testid="bubble-ts" title={when.toLocaleString()}>
@@ -177,7 +180,8 @@ function LineText({ line }: { line: HumanLine }) {
   );
 }
 
-function StepRow({ tool, approval }: { tool: ToolItem; approval?: ApprovalItem }) {
+const StepRow = memo(function StepRow({ tool, approval }: { tool: ToolItem; approval?: ApprovalItem }) {
+  const { t } = useTranslation(["session"]);
   const [raw, setRaw] = useState(false);
   const running = tool.status === "…";
   const failed = tool.status !== "ok" && !running;
@@ -203,7 +207,7 @@ function StepRow({ tool, approval }: { tool: ToolItem; approval?: ApprovalItem }
             data-testid="tool-standing-rule"
             title={`Auto-allowed by this automation's standing approval: ${tool.standingRule}. Revoke on its Automations page.`}
           >
-            auto-allowed
+            {t("session:autoAllowed")}
           </span>
         )}
         {!!tool.hidden && (
@@ -233,9 +237,9 @@ function StepRow({ tool, approval }: { tool: ToolItem; approval?: ApprovalItem }
       )}
     </div>
   );
-}
+});
 
-function TurnGroup({
+const TurnGroup = memo(function TurnGroup({
   items,
   live,
   streamingText,
@@ -326,7 +330,7 @@ function TurnGroup({
       )}
     </details>
   );
-}
+});
 
 interface Props {
   items: Item[];
@@ -356,7 +360,13 @@ export function retryAnchor(items: Item[]): number {
   return -1;
 }
 
+// Maximum number of blocks rendered at once. Older blocks are collapsed behind a
+// "Show earlier messages" button so the DOM stays light in 1000+ message sessions.
+const VISIBLE_WINDOW = 200;
+
 export function Transcript({ items, running, streamingText, onRetry }: Props) {
+  const { t } = useTranslation(["session", "common"]);
+  const [showAll, setShowAll] = useState(false);
   // §33 grouping: a turn = the maximal run of assistant/tool/resolved-approval items between
   // breakers (user, connector, notices, plan/dir requests…). Trailing assistant texts are the
   // ANSWER and render as bubbles after the group; interior assistant texts are narration and
@@ -397,9 +407,23 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
   flush(!!running);
 
   const lastTurnIndex = blocks.reduce((acc, b, i) => ("turn" in b ? i : acc), -1);
+  const totalBlocks = blocks.length;
+  const needsWindow = !showAll && totalBlocks > VISIBLE_WINDOW;
+  const visibleBlocks = needsWindow ? blocks.slice(totalBlocks - VISIBLE_WINDOW) : blocks;
+  const visibleOffset = needsWindow ? totalBlocks - VISIBLE_WINDOW : 0;
   return (
     <div className="transcript">
-      {blocks.map((block, bi) => {
+      {needsWindow && (
+        <button
+          className="w-full py-2 text-[12.5px] text-accent hover:underline text-center"
+          data-testid="show-earlier"
+          onClick={() => setShowAll(true)}
+        >
+          {t("session:showEarlierMessages", { count: totalBlocks - VISIBLE_WINDOW })}
+        </button>
+      )}
+      {visibleBlocks.map((block, idx) => {
+        const bi = idx + visibleOffset;
         if ("turn" in block)
           return (
             <TurnGroup
@@ -456,7 +480,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
                 <span className={"status " + (item.resolved === "granted" ? "ok" : "denied")}>
                   {item.resolved === "granted" ? "✓" : "✕"}
                 </span>
-                <span>{item.resolved === "granted" ? "Granted folder access" : "Declined folder access"}</span>
+                <span>{item.resolved === "granted" ? t("session:grantedFolderAccess") : t("session:declinedFolderAccess")}</span>
                 {item.path && <span className="dim">{item.path}</span>}
               </div>
             );
@@ -470,7 +494,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
                   <span className={"status " + (item.resolved === "approved" ? "ok" : "denied")}>
                     {item.resolved === "approved" ? "✓" : "✕"}
                   </span>
-                  <span>{item.resolved === "approved" ? "Plan approved" : "Sent back with feedback"}</span>
+                  <span>{item.resolved === "approved" ? t("session:planApproved") : t("session:sentBackWithFeedback")}</span>
                 </div>
               </div>
             );
@@ -480,7 +504,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
                 {item.text}
                 {item.retriable && !running && onRetry && block.i === retryAnchor(items) && (
                   <button className="btn ml-2" data-testid="notice-retry" onClick={onRetry}>
-                    Retry
+                    {t("common:button.retry")}
                   </button>
                 )}
               </div>

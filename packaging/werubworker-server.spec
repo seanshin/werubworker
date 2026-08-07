@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for the bundled `openworker-server` (desktop sidecar).
+"""PyInstaller spec for the bundled `werubworker-server` (desktop sidecar).
 
 One-DIR bundle (exe + `_internal/` support folder) shipped via Tauri's `resources` slot.
 It used to be a onefile binary in the externalBin slot, but onefile self-extracts its whole
-archive to a temp dir on EVERY launch — 6-7s of "Starting coworker…" splash (measured; the
+archive to a temp dir on EVERY launch — 6-7s of "Starting WeruBWorker…" splash (measured; the
 actual Python import is ~0.5s). The wrinkles handled here:
   - aisuite is a regular pip dependency (git-pinned in pyproject.toml); collect coworker +
     aisuite submodules from the venv.
@@ -105,7 +105,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="openworker-server",
+    name="werubworker-server",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -115,7 +115,7 @@ exe = EXE(
     console=True,
     # target_arch left unset → PyInstaller builds for the host architecture.
 )
-# Onedir: dist/openworker-server/{openworker-server[.exe], _internal/}. The build scripts stage
+# Onedir: dist/werubworker-server/{werubworker-server[.exe], _internal/}. The build scripts stage
 # this whole folder into src-tauri/binaries/sidecar/ for Tauri's `resources` bundling.
 coll = COLLECT(
     exe,
@@ -123,5 +123,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="openworker-server",
+    name="werubworker-server",
 )

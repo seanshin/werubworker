@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   announceCloudChanged,
   AUTOMATIONS_CHANGED,
   CLOUD_CHANGED,
-  cloudLogin,
   cloudLogout,
   getAutomations,
   getCloudStatus,
@@ -12,7 +12,6 @@ import {
   INBOX_UNLOCK,
   PERSONAS_CHANGED,
   setNavLayout,
-  waitForCloudSignIn,
   type Automation,
   type CloudStatus,
   type Persona,
@@ -136,10 +135,22 @@ interface Props {
   onOpenAutomation: (id: string) => void;
   onOpenIntegrations: () => void;
   onOpenAudit: () => void;
+  onOpenAbout: () => void;
   onOpenInbox: () => void;
+  onOpenOps: () => void;
+  onOpenDev: () => void;
+  onOpenDatabase: () => void;
+  onOpenServices: () => void;
+  onOpenWiki: () => void;
+  opsActive: boolean;
+  devActive: boolean;
+  databaseActive: boolean;
+  servicesActive: boolean;
+  wikiActive: boolean;
   scheduledActive: boolean;
   integrationsActive: boolean;
   auditActive: boolean;
+  aboutActive: boolean;
   inboxActive: boolean;
   // Collapse controls (⌘B / hover-peek). `onCollapse` docks/undocks; `onPeekLeave` hides the
   // floating peek when the pointer leaves the panel.
@@ -170,7 +181,8 @@ const compactAge = (iso?: string | null): string => {
 
 // Sessions shown per group before "Show more" comes from Settings (sessions_peek, default 5).
 
-export function Sidebar(props: Props) {
+export const Sidebar = memo(function Sidebar(props: Props) {
+  const { t } = useTranslation(["session", "common"]);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [appMenuOpen, setAppMenuOpen] = useState(false);
   // The account row (§26): cloud sign-in status drives the avatar/name/dot; refreshed on
@@ -942,7 +954,7 @@ export function Sidebar(props: Props) {
           <div className="space-y-0.5">
             {mine.filter(matches).length === 0 ? (
               <div className="px-2 py-1.5 text-[12px] text-faint leading-snug">
-                {normalizedQuery ? "No matching conversations." : "No conversations yet."}
+                {normalizedQuery ? t("common:empty.noMatching") : t("common:empty.noConversations")}
               </div>
             ) : (
               <>
@@ -1002,7 +1014,7 @@ export function Sidebar(props: Props) {
             <Icon name="sidebar" size={16} />
           </button>
         )}
-        <div className="brand-wordmark text-[15px]">OpenWorker<span className="beta-tag">BETA</span></div>
+        <div className="brand-wordmark text-[15px]">WeruBWorker<span className="beta-tag">BETA</span></div>
       </div>
 
       {/* New session: split button — primary starts the last-used persona; ▾ picks a specific one. */}
@@ -1020,7 +1032,7 @@ export function Sidebar(props: Props) {
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left text-muted hover:bg-paper hover:text-ink"
           onClick={() => setSearchModalOpen(true)}
         >
-          <Icon name="search" size={15} className="shrink-0" /> Search
+          <Icon name="search" size={15} className="shrink-0" /> {t("common:label.search")}
         </button>
       </div>
 
@@ -1036,7 +1048,69 @@ export function Sidebar(props: Props) {
           onClick={props.onOpenScheduled}
         >
           <Icon name="clock" size={15} className="shrink-0" />
-          <span className="flex-1">Automations</span>
+          <span className="flex-1">{t("common:label.automations")}</span>
+        </button>
+      </div>
+
+      {/* Management section */}
+      <div className="px-2.5 mt-2">
+        <div className="px-1.5 mb-1 text-[10.5px] uppercase tracking-[0.07em] text-faint font-semibold">
+          {t("session:management.heading")}
+        </div>
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
+            (props.opsActive ? "text-ink bg-paper" : "text-muted")
+          }
+          data-testid="nav-ops"
+          onClick={props.onOpenOps}
+        >
+          <Icon name="wrench" size={15} className="shrink-0" />
+          <span className="flex-1">{t("common:label.servers")}</span>
+        </button>
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
+            (props.devActive ? "text-ink bg-paper" : "text-muted")
+          }
+          data-testid="nav-dev"
+          onClick={props.onOpenDev}
+        >
+          <Icon name="code" size={15} className="shrink-0" />
+          <span className="flex-1">{t("common:label.development")}</span>
+        </button>
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
+            (props.databaseActive ? "text-ink bg-paper" : "text-muted")
+          }
+          data-testid="nav-database"
+          onClick={props.onOpenDatabase}
+        >
+          <Icon name="table" size={15} className="shrink-0" />
+          <span className="flex-1">{t("common:label.database")}</span>
+        </button>
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
+            (props.servicesActive ? "text-ink bg-paper" : "text-muted")
+          }
+          data-testid="nav-services"
+          onClick={props.onOpenServices}
+        >
+          <Icon name="gear" size={15} className="shrink-0" />
+          <span className="flex-1">{t("common:label.serviceConfig")}</span>
+        </button>
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
+            (props.wikiActive ? "text-ink bg-paper" : "text-muted")
+          }
+          data-testid="nav-wiki"
+          onClick={props.onOpenWiki}
+        >
+          <Icon name="book" size={15} className="shrink-0" />
+          <span className="flex-1">{t("common:label.serviceWiki")}</span>
         </button>
       </div>
 
@@ -1097,7 +1171,7 @@ export function Sidebar(props: Props) {
             <div className="space-y-0.5">
               {recentSessions.length === 0 ? (
                 <div className="px-2 py-1.5 text-[12px] text-faint leading-snug">
-                  {normalizedQuery ? "No matching conversations." : "No conversations yet."}
+                  {normalizedQuery ? t("common:empty.noMatching") : t("common:empty.noConversations")}
                 </div>
               ) : (
                 <>
@@ -1136,61 +1210,37 @@ export function Sidebar(props: Props) {
                 data-testid="account-menu"
                 role="menu"
               >
-                {cloud?.signed_in ? (
+                {cloud?.signed_in && (
                   <div
                     className="px-3 py-1.5 mb-1 text-[11px] text-faint truncate border-b border-line"
-                    title={`${accountEmail} · OpenWorker Cloud`}
+                    title={`${accountEmail} · WeruBWorker Cloud`}
                   >
-                    {accountEmail} · OpenWorker Cloud
+                    {accountEmail} · WeruBWorker Cloud
                   </div>
-                ) : (
-                  <>
-                    <div className="px-3 py-1.5 text-[11px] text-faint border-b border-line">
-                      Not signed in — one-click connections need OpenWorker Cloud
-                    </div>
-                    <button
-                      className="w-full flex items-center gap-2.5 px-3 py-1.5 mb-1 text-[13px] text-left text-accent hover:bg-paper"
-                      data-testid="account-sign-in"
-                      onClick={async () => {
-                        setAppMenuOpen(false);
-                        // Opens the system browser server-side; completion lands out-of-band,
-                        // so poll until it flips (refocusing the window also refetches).
-                        await cloudLogin().catch(() => {});
-                        waitForCloudSignIn((s) => {
-                          if (s) setCloud(s);
-                          // Other always-mounted consumers (Settings' telemetry card,
-                          // connector panes) refetch on this.
-                          if (s?.signed_in) announceCloudChanged();
-                        });
-                      }}
-                    >
-                      <Icon name="plug" size={15} className="shrink-0" /> Sign in to OpenWorker
-                      Cloud
-                    </button>
-                  </>
                 )}
                 {appMenuItem(
                   "inbox",
-                  "Inbox",
+                  t("common:label.inbox"),
                   props.onOpenInbox,
                   props.inboxActive,
                   <AttnBadge n={totalAttention} />,
                 )}
-                {appMenuItem("plug", "Connectors", props.onOpenIntegrations, props.integrationsActive)}
+                {appMenuItem("plug", t("common:label.connectors"), props.onOpenIntegrations, props.integrationsActive)}
                 <div className="h-px bg-line my-1 mx-2" />
                 {appMenuItem(
                   "gear",
-                  "Settings",
+                  t("common:label.settings"),
                   props.onManage,
                   false,
                   <span className="text-[11px] text-faint">⌘ ,</span>,
                 )}
-                {appMenuItem("clock", "Automations", props.onOpenScheduled, props.scheduledActive)}
-                {appMenuItem("audit", "Activity", props.onOpenAudit, props.auditActive)}
+                {appMenuItem("clock", t("common:label.automations"), props.onOpenScheduled, props.scheduledActive)}
+                {appMenuItem("audit", t("common:label.activity"), props.onOpenAudit, props.auditActive)}
+                {appMenuItem("info", t("common:label.about"), props.onOpenAbout, props.aboutActive)}
                 {cloud?.signed_in && (
                   <>
                     <div className="h-px bg-line my-1 mx-2" />
-                    {appMenuItem("signOut", "Sign out", async () => {
+                    {appMenuItem("signOut", t("common:button.signOut"), async () => {
                       await cloudLogout().catch(() => {});
                       announceCloudChanged();
                     })}
@@ -1200,7 +1250,7 @@ export function Sidebar(props: Props) {
             </>
           )}
 
-          <button
+          {cloud?.signed_in && <button
             className={
               "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[13px] text-left " +
               (appMenuOpen ? "bg-paper text-ink" : "hover:bg-paper")
@@ -1212,26 +1262,21 @@ export function Sidebar(props: Props) {
             }}
             aria-haspopup="menu"
             aria-expanded={appMenuOpen}
-            aria-label={cloud?.signed_in ? `Account: ${accountEmail}` : "Account: not signed in"}
+            aria-label={`Account: ${accountEmail}`}
           >
             <span
-              className={
-                "w-6 h-6 rounded-full grid place-items-center text-[10.5px] font-semibold shrink-0 " +
-                (cloud?.signed_in
-                  ? "bg-accentSoft text-accent"
-                  : "bg-paper text-faint border border-line")
-              }
+              className="w-6 h-6 rounded-full grid place-items-center text-[10.5px] font-semibold shrink-0 bg-accentSoft text-accent"
               aria-hidden
             >
-              {cloud?.signed_in ? accountName.slice(0, 1).toUpperCase() : "?"}
+              {accountName.slice(0, 1).toUpperCase()}
             </span>
-            <span className={"truncate " + (cloud?.signed_in ? "" : "text-muted")}>
-              {cloud?.signed_in ? accountName : "Not signed in"}
+            <span className="truncate">
+              {accountName}
             </span>
             {cloud?.signed_in && (
               <span
                 className="w-[7px] h-[7px] rounded-full bg-ok shrink-0"
-                title="Signed in to OpenWorker Cloud"
+                title="Signed in to WeruBWorker Cloud"
                 aria-hidden
               />
             )}
@@ -1266,7 +1311,7 @@ export function Sidebar(props: Props) {
               size={14}
               className={"text-faint shrink-0 transition-transform " + (appMenuOpen ? "" : "rotate-180")}
             />
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -1283,7 +1328,42 @@ export function Sidebar(props: Props) {
       )}
     </div>
   );
-}
+}, (prev, next) => {
+  // Custom comparison: skip re-render when the 5s poll returns identical session data.
+  // Compare scalar props by value; compare sessions array by length + identity (the poll
+  // always returns a fresh array, but the contents are the same most cycles).
+  if (prev.agent !== next.agent) return false;
+  if (prev.workspace !== next.workspace) return false;
+  if (prev.activeSession !== next.activeSession) return false;
+  if (prev.collapsed !== next.collapsed) return false;
+  if (prev.opsActive !== next.opsActive) return false;
+  if (prev.devActive !== next.devActive) return false;
+  if (prev.databaseActive !== next.databaseActive) return false;
+  if (prev.servicesActive !== next.servicesActive) return false;
+  if (prev.wikiActive !== next.wikiActive) return false;
+  if (prev.scheduledActive !== next.scheduledActive) return false;
+  if (prev.integrationsActive !== next.integrationsActive) return false;
+  if (prev.auditActive !== next.auditActive) return false;
+  if (prev.aboutActive !== next.aboutActive) return false;
+  if (prev.inboxActive !== next.inboxActive) return false;
+  if (prev.sessions !== next.sessions) {
+    if (prev.sessions.length !== next.sessions.length) return false;
+    for (let i = 0; i < prev.sessions.length; i++) {
+      const a = prev.sessions[i], b = next.sessions[i];
+      if (a.session_id !== b.session_id || a.title !== b.title ||
+          a.updated_at !== b.updated_at || a.liveness !== b.liveness ||
+          a.attention !== b.attention || a.pinned !== b.pinned ||
+          a.archived !== b.archived || a.agent !== b.agent) return false;
+    }
+  }
+  if (prev.projects !== next.projects) {
+    if (prev.projects.length !== next.projects.length) return false;
+    for (let i = 0; i < prev.projects.length; i++) {
+      if (prev.projects[i].path !== next.projects[i].path) return false;
+    }
+  }
+  return true;
+});
 
 // New-session split button (§8): the primary action starts a session with the last-used persona
 // (`current`); the ▾ opens a menu of the enabled personas (from /v1/personas) plus a "Manage

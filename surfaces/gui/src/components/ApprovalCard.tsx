@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ApprovalDecision, Item } from "../types";
 import { humanizeApprovalTitle, type HumanLine } from "../humanize";
 import { Icon } from "./Icon";
@@ -15,14 +16,15 @@ export function shortArgs(args: any): string {
 }
 
 // Human verbs kept for the §25 grant lines (the card title now comes from humanize.ts).
-const TOOL_VERBS: Record<string, string> = {
-  write_file: "Write a file",
-  replace_in_file: "Edit a file",
-  apply_patch: "Apply a patch",
-  apply_unified_diff: "Apply a patch",
-  run_shell: "Run a command",
-  send_message: "Send a message",
-  send_file: "Send a file",
+// Resolved with t() at call sites.
+const TOOL_VERB_KEYS: Record<string, string> = {
+  write_file: "humanize:approval.writeFile",
+  replace_in_file: "humanize:approval.editFile",
+  apply_patch: "humanize:approval.applyPatch",
+  apply_unified_diff: "humanize:approval.applyPatch",
+  run_shell: "humanize:approval.runCommand",
+  send_message: "humanize:approval.sendMessageGeneric",
+  send_file: "humanize:approval.sendFileGeneric",
 };
 
 // §35: routine workspace writes render as a compact ROW; everything else is a full card.
@@ -34,10 +36,11 @@ type ApprovalItem = Extract<Item, { kind: "approval" }>;
 
 // Per-tool button copy (§7): a skill proposal is an "add", not an "allow". Shared with the
 // parked Inbox card so both dialects match.
-export function approvalActionLabels(name?: string): { allow: string; deny: string } {
+export function approvalActionLabels(name?: string, t?: (key: string) => string): { allow: string; deny: string } {
+  const tr = t || ((k: string) => k);
   return name === "save_skill"
-    ? { allow: "Add to my skills", deny: "Not now" }
-    : { allow: "Allow once", deny: "Deny" };
+    ? { allow: tr("humanize:approval.addToSkills"), deny: tr("humanize:approval.notNow") }
+    : { allow: tr("humanize:approval.allowOnce"), deny: tr("humanize:approval.deny") };
 }
 
 // save_skill's review surface (SKILLS-SPEC §5.2): description, the full instructions
@@ -153,7 +156,7 @@ function MessagePreview({ text, label }: { text: string; label?: string }) {
   if (text.length <= 220 && !text.includes("\n")) {
     return (
       <div className="approval-with">
-        {label ? `${label}: ` : ""}“{text}”
+        {label ? `${label}: ` : ""}"{text}"
       </div>
     );
   }
@@ -165,7 +168,7 @@ function Buttons({
   onApprove,
   runTask,
   primaryLabel,
-  denyLabel = "Deny",
+  denyLabel,
 }: {
   item: ApprovalItem;
   onApprove: (decision: ApprovalDecision) => void;
@@ -173,8 +176,11 @@ function Buttons({
   primaryLabel: string;
   denyLabel?: string;
 }) {
+  const { t } = useTranslation(["humanize"]);
   const connector = item.category === "connector";
   const offerStanding = !!(runTask && item.standingTarget);
+  const resolvedDenyLabel = denyLabel || t("humanize:approval.deny");
+  const toolVerb = (name: string) => TOOL_VERB_KEYS[name] ? t(TOOL_VERB_KEYS[name]) : name;
   return (
     <div className="approval-btns">
       <button className="btn approval-primary" onClick={() => onApprove("once")}>
@@ -183,10 +189,10 @@ function Buttons({
       {offerStanding && (
         <button
           className="btn"
-          title={`Always allow ${item.name} → ${item.standingTarget} for “${runTask?.title || "this automation"}” — revoke any time on its Automations page`}
+          title={`Always allow ${item.name} → ${item.standingTarget} for "${runTask?.title || "this automation"}" — revoke any time on its Automations page`}
           onClick={() => onApprove("always_task")}
         >
-          Allow every time
+          {t("humanize:approval.allowEveryTime")}
         </button>
       )}
       {/* In a run context the task-persistent grant replaces the session-scoped one —
@@ -199,20 +205,20 @@ function Buttons({
       {!connector && !offerStanding && item.name !== "run_shell" && item.name !== "save_skill" && (
         <button
           className="btn"
-          title={`Always allow ${TOOL_VERBS[item.name]?.toLowerCase() || item.name} for this session`}
+          title={`Always allow ${toolVerb(item.name).toLowerCase()} for this session`}
           onClick={() => onApprove("always_tool")}
         >
-          Always allow
+          {t("humanize:approval.alwaysAllow")}
         </button>
       )}
       {item.name === "run_shell" && (
         <button className="btn" onClick={() => onApprove("always_command")}>
-          Always allow this command
+          {t("humanize:approval.alwaysAllowCommand")}
         </button>
       )}
       <span className="spacer" />
       <button className="btn quiet-deny" onClick={() => onApprove("deny")}>
-        {denyLabel}
+        {resolvedDenyLabel}
       </button>
     </div>
   );
@@ -231,7 +237,9 @@ export function ApprovalCard({
   runTask?: { id: string; title: string } | null;
   compact?: boolean;
 }) {
+  const { t } = useTranslation(["humanize"]);
   const [peek, setPeek] = useState(false);
+  const toolVerb = (name: string) => TOOL_VERB_KEYS[name] ? t(TOOL_VERB_KEYS[name]) : name;
   const title = humanizeApprovalTitle(item.name, item.args);
   const scope = scopeNote(item.name, item.args, item.category);
   const grants = item.name === "create_scheduled_task" ? permissionLines(item.args) : [];
@@ -254,7 +262,7 @@ export function ApprovalCard({
             </button>
           )}
           <span className="spacer" />
-          <Buttons item={item} onApprove={onApprove} runTask={runTask} primaryLabel="Allow" />
+          <Buttons item={item} onApprove={onApprove} runTask={runTask} primaryLabel={t("humanize:approval.allow")} />
         </div>
         {peek && content && <PreviewBlock text={content} />}
         {reason && <div className="approval-reason">{reason}</div>}
@@ -307,7 +315,7 @@ export function ApprovalCard({
                 {g.access === "write" ? "✓" : "·"}
               </span>
               <span className="grant-line">
-                {TOOL_VERBS[g.tool] || g.tool} <code className="approval-tool">{g.target}</code>
+                {toolVerb(g.tool)} <code className="approval-tool">{g.target}</code>
                 <span className="grant-note">
                   {g.access === "write" ? " — always allowed once you approve" : " — read-only"}
                 </span>
@@ -330,8 +338,8 @@ export function ApprovalCard({
           item={item}
           onApprove={onApprove}
           runTask={runTask}
-          primaryLabel={approvalActionLabels(item.name).allow}
-          denyLabel={approvalActionLabels(item.name).deny}
+          primaryLabel={item.name === "save_skill" ? t("humanize:approval.addToSkills") : t("humanize:approval.allowOnce")}
+          denyLabel={item.name === "save_skill" ? t("humanize:approval.notNow") : t("humanize:approval.deny")}
         />
       )}
     </div>

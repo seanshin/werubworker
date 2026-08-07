@@ -23,6 +23,11 @@ class AgentContext:
     # When None, tools fall back to the single `workspace` root. Held by reference so runtime
     # add/remove of folders is seen by the file tools built from it.
     roots: Optional[list] = None
+    # Secret store for capabilities that need credential access (SSH, etc.).
+    secrets: Optional[Any] = None
+    # Wiki store and vault for the wiki capability (service docs + encrypted credentials).
+    wiki_store: Optional[Any] = None
+    vault: Optional[Any] = None
 
 
 @dataclass

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   getProviders,
   removeProvider,
@@ -95,6 +96,7 @@ export interface ProviderSetupState {
 }
 
 export function useProviderSetup(opts?: { onSaved?: () => void }): ProviderSetupState {
+  const { t } = useTranslation(["settings"]);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   // null = the gallery; a provider name = that provider's key form.
   const [sel, setSel] = useState<string | null>(null);
@@ -219,17 +221,17 @@ export function useProviderSetup(opts?: { onSaved?: () => void }): ProviderSetup
       const used = o?.lastUsed ? relTime(p.last_used_at) : null;
       return (
         <span className="block text-[11.5px] text-ok font-medium truncate">
-          ✓ Connected{used ? <span className="text-muted font-normal"> · used {used}</span> : ""}
+          {t("settings:provider.connected")}{used ? <span className="text-muted font-normal"> · {t("settings:provider.used")} {used}</span> : ""}
         </span>
       );
     }
     if (!p.needs_key)
       return (
         <span className="block text-[11.5px] text-faint truncate">
-          {keylessOk.has(p.name) ? <span className="text-ok font-medium">✓ Running</span> : "No key needed"}
+          {keylessOk.has(p.name) ? <span className="text-ok font-medium">{t("settings:provider.running")}</span> : t("settings:provider.noKeyNeeded")}
         </span>
       );
-    return <span className="block text-[11.5px] text-faint truncate">Not set up</span>;
+    return <span className="block text-[11.5px] text-faint truncate">{t("settings:provider.notSetUp")}</span>;
   };
 
   return {
@@ -271,6 +273,15 @@ export function useProviderSetup(opts?: { onSaved?: () => void }): ProviderSetup
   };
 }
 
+/** When a provider has a custom endpoint, show a friendlier title based on the URL. */
+function customEndpointTitle(p: ProviderInfo): string | null {
+  const url = (p.values?.base_url || "").trim().toLowerCase();
+  if (!url) return null;
+  if (url.includes("ollama")) return "Ollama (Service)";
+  if (url.includes("vllm")) return "vLLM (Service)";
+  try { return new URL(url).hostname; } catch { return null; }
+}
+
 /** The gallery: one card per provider, each wearing its own state. */
 export function ProviderCards({
   ps,
@@ -296,7 +307,7 @@ export function ProviderCards({
         >
           <ProviderMark name={p.name} title={p.title} />
           <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-semibold leading-tight truncate">{p.title}</span>
+            <span className="block text-[13px] font-semibold leading-tight truncate">{customEndpointTitle(p) || p.title}</span>
             {ps.statusFor(p, { lastUsed })}
           </span>
           <span className="text-faint text-[14px]">›</span>
@@ -318,6 +329,7 @@ export function ProviderForm({
   tp: string;
   footer?: ReactNode;
 }) {
+  const { t } = useTranslation(["settings"]);
   const { info, sel } = ps;
   const label = "block text-[12px] text-muted mt-3 mb-1";
   const input =
@@ -392,7 +404,7 @@ export function ProviderForm({
   return (
     <div>
       <button className="text-[12.5px] text-muted hover:text-ink" onClick={ps.backToGallery} data-testid={`${tp}-back`}>
-        ‹ All providers
+        {t("settings:provider.allProviders")}
       </button>
       <div className="flex items-center gap-3 mt-3 mb-1">
         <ProviderMark name={info?.name || ""} title={info?.title || ""} size={36} />

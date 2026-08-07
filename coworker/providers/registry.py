@@ -120,7 +120,11 @@ def _build_openai(profile: dict[str, Any], secrets: Any) -> ProviderClient:
     # which is what compat servers implement.
     base_url = ((profile or {}).get("base_url") or "").strip() or None
     if base_url:
-        return OpenAIProvider(secrets=secrets, base_url=base_url)
+        # When a custom endpoint is configured, prefer the profile's own api_key over
+        # the OPENAI_API_KEY env var — the env key belongs to api.openai.com, not to
+        # the user's self-hosted Ollama/vLLM/proxy behind a different credential.
+        api_key = ((profile or {}).get("api_key") or "").strip() or None
+        return OpenAIProvider(api_key=api_key, secrets=secrets, base_url=base_url)
     return OpenAIResponsesProvider(secrets=secrets)
 
 

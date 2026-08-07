@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OpenWorker",
+  "productName": "WeruBWorker",
   "version": "0.1.7",
-  "identifier": "com.openworker.desktop",
+  "identifier": "com.werubworker.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -19,7 +19,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "publisher": "OpenWorker",
+    "publisher": "WeruBWorker",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -46,8 +46,8 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://download.openworker.com/latest.json",
-        "https://github.com/andrewyng/openworker/releases/latest/download/latest.json"
+        "https://download.werubworker.com/latest.json",
+        "https://github.com/andrewyng/werubworker/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVCNzEzRjY5OTkzNUNBNjkKUldScHlqV1phVDl4VzBvTnFLLytzaDkzNVd3WWNuUm8yNE95WTBFNnBtcGF1RENxeTRuNVhQeloK",
       "windows": {

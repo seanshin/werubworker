@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getRecentWorkspaces, openWorkspace, type RecentWorkspace } from "../api";
 import { chooseFolder } from "../tauri";
 
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function FolderGate({ onChoose, onCancel, create }: Props) {
+  const { t } = useTranslation(["session", "common"]);
   const [recents, setRecents] = useState<RecentWorkspace[]>([]);
   const [path, setPath] = useState("");
   const [error, setError] = useState("");
@@ -40,33 +42,33 @@ export function FolderGate({ onChoose, onCancel, create }: Props) {
     <div className="gate-overlay">
       <div className="gate">
         <div className="gate-mark">✦</div>
-        <h2>{create ? "New project" : "Choose a project folder"}</h2>
+        <h2>{create ? t("session:folderGate.newProject") : t("session:folderGate.chooseFolder")}</h2>
         <p className="gate-sub">
           {create
-            ? "Pick a folder or enter a path. If the path doesn't exist, it will be created."
-            : "This coworker needs a workspace to read, edit, and run in."}
+            ? t("session:folderGate.newProjectDesc")
+            : t("session:folderGate.needsWorkspace")}
         </p>
 
         <div className="gate-input">
           <input
-            placeholder="/path/to/your/project"
+            placeholder={t("session:folderGate.pathPlaceholder")}
             value={path}
             onChange={(e) => setPath(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && open(path, create)}
             autoFocus
           />
-          <button className="btn" onClick={browse} title="Pick a folder">
-            Browse…
+          <button className="btn" onClick={browse} title={t("session:folderGate.chooseFolder")}>
+            {t("session:folderGate.browse")}
           </button>
           <button className="btn primary" onClick={() => open(path, create)} disabled={!path.trim()}>
-            {create ? "Create" : "Open"}
+            {create ? t("session:folderGate.create") : t("session:folderGate.openBtn")}
           </button>
         </div>
         {error && <div className="gate-error">{error}</div>}
 
         {recents.length > 0 && (
           <>
-            <div className="gate-label">Recent</div>
+            <div className="gate-label">{t("session:folderGate.recent")}</div>
             <div className="gate-recents">
               {recents.map((w) => (
                 <div className="gate-recent" key={w.path} onClick={() => open(w.path)} title={w.path}>
@@ -81,7 +83,7 @@ export function FolderGate({ onChoose, onCancel, create }: Props) {
         {onCancel && (
           <div className="gate-foot">
             <button className="btn gate-cancel" onClick={onCancel}>
-              Cancel
+              {t("common:button.cancel")}
             </button>
           </div>
         )}

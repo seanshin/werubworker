@@ -42,6 +42,7 @@ export type IconName =
   | "table"
   | "mic"
   | "stop"
+  | "info"
   | "x";
 
 export function Icon({
@@ -87,7 +88,7 @@ export function Icon({
         </svg>
       );
     case "logo":
-      // The OpenWorker mark — a 6-point star, matching the app + macOS tray icon.
+      // The WeruBWorker mark — a 6-point star, matching the app + macOS tray icon.
       return (
         <svg {...s} fill="currentColor" stroke="none">
           <path d="M12.00 1.80 L13.35 9.66 L20.83 6.90 L14.70 12.00 L20.83 17.10 L13.35 14.34 L12.00 22.20 L10.65 14.34 L3.17 17.10 L9.30 12.00 L3.17 6.90 L10.65 9.66 Z" />
@@ -180,6 +181,13 @@ export function Icon({
       return (
         <svg {...s}>
           <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      );
+    case "info":
+      return (
+        <svg {...s}>
+          <circle cx="12" cy="12" r="10" fill="none" />
+          <path d="M12 16v-4M12 8h.01" />
         </svg>
       );
     case "folderPlus":

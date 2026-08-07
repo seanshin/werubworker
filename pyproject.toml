@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "coworker"
 version = "0.0.0"
-description = "Agent coworker platform — provider-agnostic agentic coworker runtime"
+description = "WeruBWorker — provider-agnostic agentic coworker runtime"
 requires-python = ">=3.10"
 dependencies = [
     "openai>=1.0",
@@ -48,9 +48,9 @@ browser = ["playwright>=1.44"]
 bedrock = ["boto3>=1.34"]
 
 [project.scripts]
-openworker = "coworker.cli:main"
-openworker-server = "coworker.server.run:main"
-openworker-connectors = "coworker.connectors.cli:main"
+werubworker = "coworker.cli:main"
+werubworker-server = "coworker.server.run:main"
+werubworker-connectors = "coworker.connectors.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

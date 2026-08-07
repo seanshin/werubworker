@@ -1,0 +1,87 @@
+{
+  "button": {
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "retry": "다시 시도",
+    "close": "닫기",
+    "confirm": "확인",
+    "add": "추가",
+    "edit": "편집",
+    "remove": "제거",
+    "copy": "복사",
+    "done": "완료",
+    "next": "다음",
+    "back": "뒤로",
+    "skip": "건너뛰기",
+    "clear": "초기화",
+    "refresh": "새로고침",
+    "open": "열기",
+    "send": "전송",
+    "stop": "⏹ 중지",
+    "install": "설치",
+    "connect": "연결",
+    "disconnect": "연결 해제",
+    "signIn": "로그인",
+    "signOut": "로그아웃"
+  },
+  "status": {
+    "loading": "로딩 중...",
+    "connecting": "연결 중...",
+    "connected": "연결됨",
+    "disconnected": "연결 끊김",
+    "notSetUp": "설정 안 됨",
+    "running": "실행 중",
+    "idle": "대기 중",
+    "working": "작업 중",
+    "sleeping": "수면 중 (자동 깨어남)",
+    "error": "오류",
+    "copied": "복사됨"
+  },
+  "label": {
+    "search": "검색",
+    "settings": "설정",
+    "automations": "자동화",
+    "inbox": "인박스",
+    "connectors": "커넥터",
+    "activity": "활동",
+    "recent": "최근",
+    "projects": "프로젝트",
+    "archived": "보관됨",
+    "default": "기본값",
+    "on": "켜기",
+    "off": "끄기",
+    "about": "정보",
+    "servers": "서버",
+    "development": "개발",
+    "database": "데이터베이스",
+    "serviceConfig": "서비스 설정",
+    "serviceWiki": "서비스 위키"
+  },
+  "empty": {
+    "noConversations": "대화가 없습니다",
+    "noMatching": "일치하는 대화가 없습니다",
+    "noProjects": "프로젝트가 없습니다 — 위의 +로 시작하세요",
+    "noProjectConversations": "이 프로젝트에 대화가 없습니다"
+  },
+  "confirm": {
+    "deleteTitle": "이 대화를 삭제할까요?",
+    "deleteMessage": "이 작업은 되돌릴 수 없습니다."
+  },
+  "error": {
+    "somethingWrong": "문제가 발생했습니다.",
+    "tryAgain": "다시 시도",
+    "pageNotFound": "페이지를 찾을 수 없습니다.",
+    "couldNotSave": "워크스페이스 신뢰를 저장할 수 없습니다."
+  },
+  "misc": {
+    "tasks": "작업 목록",
+    "keySet": "키 설정됨",
+    "via": "{{label}} 통해",
+    "justNow": "방금",
+    "mAgo": "{{count}}분 전",
+    "hAgo": "{{count}}시간 전",
+    "dAgo": "{{count}}일 전",
+    "markdownContent": "마크다운 내용..."
+  }
+}

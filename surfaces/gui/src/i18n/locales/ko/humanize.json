@@ -1,0 +1,51 @@
+{
+  "tool": {
+    "ran": "실행:",
+    "startedBg": "백그라운드에서 시작:",
+    "checkedBg": "백그라운드 명령 확인",
+    "stoppedBg": "백그라운드 명령 중지",
+    "read": "읽기:",
+    "wrote": "파일 작성:",
+    "edited": "파일 편집:",
+    "gitLog": "최근 git 이력 조회",
+    "updatedPlan": "계획 업데이트",
+    "sentMessage": "메시지 전송:",
+    "searchedWeb": "웹 검색",
+    "readWebPage": "웹 페이지 읽기",
+    "sentSubAgent": "하위 에이전트로 탐색 전송",
+    "usedSkill": "스킬 사용:",
+    "askedQuestion": "질문을 했습니다",
+    "proposedPlan": "계획을 제안했습니다",
+    "askedFolderAccess": "폴더 접근을 요청했습니다"
+  },
+  "approval": {
+    "writeFile": "파일 작성",
+    "editFile": "파일 편집",
+    "applyPatch": "패치 적용",
+    "runCommand": "명령 실행",
+    "sendMessage": "메시지 전송:",
+    "sendMessageGeneric": "메시지 전송",
+    "sendFile": "파일 전송:",
+    "sendFileGeneric": "파일 전송",
+    "createAutomation": "자동화 생성",
+    "createAutomationGeneric": "자동화 생성",
+    "addSkill": "스킬 추가",
+    "toYourSkills": "스킬에 추가",
+    "use": "사용",
+    "allowOnce": "한 번 허용",
+    "deny": "거부",
+    "alwaysAllow": "항상 허용",
+    "alwaysAllowCommand": "이 명령 항상 허용",
+    "allowEveryTime": "매번 허용",
+    "allow": "허용",
+    "addToSkills": "내 스킬에 추가",
+    "notNow": "나중에"
+  },
+  "denied": {
+    "wantedToRun": "실행하려 했음:",
+    "wantedToWrite": "작성하려 했음:",
+    "wantedToEdit": "편집하려 했음:",
+    "wantedToMessage": "메시지 보내려 했음:",
+    "wantedToUse": "사용하려 했음:"
+  }
+}

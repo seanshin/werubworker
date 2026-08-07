@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   createAutomation,
   deleteAutomation,
@@ -64,6 +65,7 @@ interface Props {
 }
 
 export function ScheduledView({ onOpenRun, onRunNow, initialOpenId }: Props) {
+  const { t } = useTranslation(["session", "common"]);
   const [tasks, setTasks] = useState<Automation[]>([]);
   const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
   const [showForm, setShowForm] = useState(false);
@@ -123,21 +125,20 @@ export function ScheduledView({ onOpenRun, onRunNow, initialOpenId }: Props) {
     <Shell>
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
-          <PanelHead title="Automations" sub="Recurring tasks OpenWorker runs on a schedule." />
+          <PanelHead title={t("session:automation.title")} sub={t("session:automation.subtitle")} />
         </div>
         <button
           className="text-[12.5px] px-3 py-1.5 rounded-lg border border-lineStrong bg-panel hover:border-accent hover:text-accent shrink-0"
           onClick={() => setShowForm((v) => !v)}
         >
-          + New automation
+          {t("session:automation.newAutomation")}
         </button>
       </div>
 
       <div className="text-[12px] text-faint flex gap-1.5 mb-4">
         <span aria-hidden>ⓘ</span>
         <span>
-          Runs only while openworker-server is up — a missed schedule catches up once when it next
-          starts.
+          {t("session:automation.serverNote")}
         </span>
       </div>
 
@@ -156,8 +157,7 @@ export function ScheduledView({ onOpenRun, onRunNow, initialOpenId }: Props) {
       {empty ? (
         !showForm && (
           <div className={CARD + " p-4 text-[12.5px] text-muted"}>
-            No scheduled tasks yet — use a template above, click <strong>+ New automation</strong>,
-            or just ask OpenWorker in a session.
+            {t("session:automation.noTasks")}
           </div>
         )
       ) : (
@@ -207,6 +207,7 @@ function NewAutomationForm({
 }) {
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
+  const { t } = useTranslation(["session", "common"]);
   const [time, setTime] = useState("09:00");
   const [freq, setFreq] = useState("daily");
 
@@ -215,7 +216,7 @@ function NewAutomationForm({
   return (
     <div className={CARD + " tmpl-form p-4 mb-4"}>
       <div className="text-[11px] uppercase tracking-[0.05em] text-faint mb-2.5">
-        New automation
+        {t("session:automation.newAutomation")}
       </div>
       <input
         className="tmpl-input"
@@ -288,6 +289,7 @@ function TaskDetail({
   ) => void;
   onRunNow: (taskId: string, title?: string) => void;
 }) {
+  const { t } = useTranslation(["session", "common"]);
   const [task, setTask] = useState<Automation | null>(null);
   const [runs, setRuns] = useState<AutomationRun[]>([]);
   const [editing, setEditing] = useState(false);
@@ -367,7 +369,7 @@ function TaskDetail({
   return (
     <Shell>
       <button className="text-[13px] text-muted hover:text-ink mb-3" onClick={onBack}>
-        ← Automations
+        ← {t("session:automation.title")}
       </button>
       <div className="sched-detail">
         <div className="sched-detail-head">
@@ -392,7 +394,7 @@ function TaskDetail({
             ) : (
               <>
                 <button className="btn-primary sm" onClick={() => onRunNow(id, task.title)}>
-                  ▶ Run now
+                  ▶ {t("session:automation.runNow")}
                 </button>
                 <button className="btn sm" onClick={startEdit}>Edit</button>
                 <button className="btn sm danger-btn" onClick={remove}>

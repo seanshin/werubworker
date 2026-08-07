@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  cloudLogin,
-  connectManaged,
-  getCloudStatus,
   getConnectors,
   getRecentChannels,
-  waitForCloudSignIn,
-  type CloudStatus,
   type Connector,
   type RecentChannel,
 } from "../api";
@@ -22,16 +18,16 @@ import { SelectMenu } from "./SelectMenu";
 // The `ob-*` testids moved here with the machinery.
 
 // "When" = day choice × free time (owner call 2026-07-11); the cron assembles from the two.
-const DAYS: Record<string, { label: string; dow: string }> = {
-  mon: { label: "Mondays", dow: "1" },
-  tue: { label: "Tuesdays", dow: "2" },
-  wed: { label: "Wednesdays", dow: "3" },
-  thu: { label: "Thursdays", dow: "4" },
-  fri: { label: "Fridays", dow: "5" },
-  sat: { label: "Saturdays", dow: "6" },
-  sun: { label: "Sundays", dow: "0" },
-  weekdays: { label: "Weekdays", dow: "1-5" },
-  daily: { label: "Every day", dow: "*" },
+const DAYS: Record<string, { labelKey: string; dow: string }> = {
+  mon: { labelKey: "session:quickstart.days.mon", dow: "1" },
+  tue: { labelKey: "session:quickstart.days.tue", dow: "2" },
+  wed: { labelKey: "session:quickstart.days.wed", dow: "3" },
+  thu: { labelKey: "session:quickstart.days.thu", dow: "4" },
+  fri: { labelKey: "session:quickstart.days.fri", dow: "5" },
+  sat: { labelKey: "session:quickstart.days.sat", dow: "6" },
+  sun: { labelKey: "session:quickstart.days.sun", dow: "0" },
+  weekdays: { labelKey: "session:quickstart.days.weekdays", dow: "1-5" },
+  daily: { labelKey: "session:quickstart.days.daily", dow: "*" },
 };
 // §30 connect-state spinner (the app has no other spinner — waits elsewhere are label swaps).
 // Exported for Onboarding page 2's sign-in button (same states, same look).
@@ -148,6 +144,22 @@ const TEMPLATES: QuickTemplate[] = [
   },
 ];
 
+// i18n key mapping for template display text (instructions stay in English for the model)
+const TEMPLATE_I18N: Record<string, { title: string; blurb: string }> = {
+  github: { title: "session:automation.githubDigest", blurb: "session:automation.githubDigestDesc" },
+  pipeline: { title: "session:automation.pipelineDigest", blurb: "session:automation.pipelineDigestDesc" },
+  brief: { title: "session:automation.morningBrief", blurb: "session:automation.morningBriefDesc" },
+  news: { title: "session:automation.morningNews", blurb: "session:automation.morningNewsDesc" },
+  inboxdigest: { title: "session:automation.inboxDigest", blurb: "session:automation.inboxDigestDesc" },
+  cleanup: { title: "session:automation.folderCleanup", blurb: "session:automation.folderCleanupDesc" },
+};
+
+const CADENCE_I18N: Record<string, string> = {
+  Weekly: "session:automation.weekly",
+  Daily: "session:automation.daily",
+  Weekdays: "session:automation.weekdays",
+};
+
 export function AutomationQuickstart({
   busy,
   onCreate,
@@ -160,18 +172,11 @@ export function AutomationQuickstart({
     permissions?: { tool: string; target: string; access: "read" | "write" }[];
   }) => void;
 }) {
+  const { t: tr } = useTranslation(["session", "common"]);
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const picked = TEMPLATES.find((t) => t.key === pickedKey) || null;
 
   const [connectors, setConnectors] = useState<Connector[]>([]);
-  const [cloud, setCloud] = useState<CloudStatus | null>(null);
-  const [pendingConn, setPendingConn] = useState<string | null>(null);
-  // §30 connect states: "opening" while the broker POST is in flight (the browser hasn't
-  // appeared yet), "waiting" once it has — the handoff strip explains the out-of-band finish.
-  const [connFlow, setConnFlow] = useState<{ name: string; phase: "opening" | "waiting" } | null>(
-    null,
-  );
-  const [signinPhase, setSigninPhase] = useState<"opening" | "waiting" | null>(null);
   const [recent, setRecent] = useState<RecentChannel[]>([]);
   const [repo, setRepo] = useState("");
   const [channel, setChannel] = useState("");
@@ -182,7 +187,6 @@ export function AutomationQuickstart({
 
   const refresh = () => {
     getConnectors().then(setConnectors).catch(() => {});
-    getCloudStatus().then(setCloud).catch(() => {});
   };
   // Connector state drives the card dots, so load once up front; poll only while a template
   // is being configured (connects and the cloud sign-in land out-of-band).
@@ -212,12 +216,6 @@ export function AutomationQuickstart({
   const channelLabel = channelName ? `#${channelName}` : channel;
   const channelWorkspace = pickedInfo?.workspace;
 
-  // The poll flipping a row to ✓ is what ends its waiting state.
-  useEffect(() => {
-    if (connFlow && connState(connFlow.name)?.connected) setConnFlow(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectors]);
-
   // §30: the configure card scrolls into view on pick — it expands below the fold on
   // three-row grids and otherwise appears "nowhere".
   const cfgRef = useRef<HTMLDivElement | null>(null);
@@ -230,51 +228,6 @@ export function AutomationQuickstart({
     setDay(t.day);
     setTime(t.time);
     setConsent(true);
-    setConnFlow(null);
-  };
-
-  const startConnect = async (name: string) => {
-    if (!cloud?.signed_in) {
-      setPendingConn(name); // the pane appears; sign-in completes it
-      return;
-    }
-    // §30: the broker round-trip takes seconds — narrate it on the row itself.
-    setConnFlow({ name, phase: "opening" });
-    // GitHub is authorize-first at the BROKER: one connect links an existing
-    // installation or lands on the install page — no flow choice here anymore.
-    await connectManaged(name).catch(() => {});
-    // The POST resolves once the system browser is off; the poll ends the waiting state.
-    setConnFlow((f) => (f?.name === name ? { name, phase: "waiting" } : f));
-    refresh();
-  };
-
-  const signinPollRef = useRef<(() => void) | null>(null);
-  const cancelSignin = () => {
-    signinPollRef.current?.();
-    signinPollRef.current = null;
-    setSigninPhase(null);
-  };
-  useEffect(() => cancelSignin, []); // never leave the poll running after unmount
-
-  const signInThenConnect = async () => {
-    setSigninPhase("opening");
-    await cloudLogin().catch(() => {});
-    setSigninPhase("waiting");
-    // Poll until the browser flow lands, then finish the pending connect (bounded).
-    signinPollRef.current = waitForCloudSignIn(async (s) => {
-      signinPollRef.current = null;
-      setSigninPhase(null);
-      if (!s?.signed_in) return;
-      setCloud(s);
-      if (pendingConn) {
-        const name = pendingConn;
-        setConnFlow({ name, phase: "opening" });
-        await connectManaged(name).catch(() => {});
-        setConnFlow((f) => (f?.name === name ? { name, phase: "waiting" } : f));
-        setPendingConn(null);
-        refresh();
-      }
-    });
   };
 
   const create = () => {
@@ -291,12 +244,12 @@ export function AutomationQuickstart({
   };
 
   const gateHint = !allConnected
-    ? `Connect ${picked?.conns
+    ? tr("session:quickstart.connectToContinue", { names: picked?.conns
         .filter((c) => !connState(c.name)?.connected)
         .map((c) => connState(c.name)?.title || c.name)
-        .join(" and ")} to continue`
+        .join(", ") })
     : picked?.needsChannel && !channel
-      ? "Pick a channel to post to first"
+      ? tr("session:quickstart.pickChannel")
       : "";
 
   const label = "block text-[12px] text-muted mt-3 mb-1";
@@ -306,7 +259,7 @@ export function AutomationQuickstart({
   return (
     <div className="mb-4">
       <div className="text-[11px] uppercase tracking-[0.05em] text-faint mb-2.5">
-        Start from a template
+        {tr("session:automation.startFromTemplate")}
       </div>
       {/* Equal-height cards (owner ask 2026-07-12): 1fr rows + h-full — <button> grid items
           don't stretch like divs. */}
@@ -323,8 +276,8 @@ export function AutomationQuickstart({
             }
             onClick={() => pick(t)}
           >
-            <span className="text-[13.5px] font-semibold">{t.title}</span>
-            <span className="text-[12px] text-muted leading-relaxed flex-1">{t.blurb}</span>
+            <span className="text-[13.5px] font-semibold">{TEMPLATE_I18N[t.key] ? tr(TEMPLATE_I18N[t.key].title) : t.title}</span>
+            <span className="text-[12px] text-muted leading-relaxed flex-1">{TEMPLATE_I18N[t.key] ? tr(TEMPLATE_I18N[t.key].blurb) : t.blurb}</span>
             <span className="flex items-center gap-1.5 mt-1">
               {t.conns.map((c) => {
                 const cs = connState(c.name);
@@ -344,7 +297,7 @@ export function AutomationQuickstart({
                 );
               })}
               <span className="text-[11px] text-faint ml-0.5">
-                {t.conns.length === 0 ? `No connections needed · ${t.cadence}` : t.cadence}
+                {t.conns.length === 0 ? `${tr("session:automation.noConnectionsNeeded")} · ${CADENCE_I18N[t.cadence] ? tr(CADENCE_I18N[t.cadence]) : t.cadence}` : (CADENCE_I18N[t.cadence] ? tr(CADENCE_I18N[t.cadence]) : t.cadence)}
               </span>
             </span>
           </button>
@@ -360,17 +313,16 @@ export function AutomationQuickstart({
           {/* §30: the card names its template — without this it starts abruptly after the grid. */}
           <div className="flex items-baseline gap-2 pb-2.5 mb-1 border-b border-line">
             <span className="text-[11px] uppercase tracking-[0.05em] text-accent font-semibold">
-              Set up
+              {tr("session:quickstart.setUp")}
             </span>
-            <span className="text-[14px] font-semibold">{picked.title}</span>
+            <span className="text-[14px] font-semibold">{TEMPLATE_I18N[picked.key] ? tr(TEMPLATE_I18N[picked.key].title) : picked.title}</span>
             <span className="ml-auto text-[12px] text-faint max-sm:hidden">
-              {picked.conns.length ? "Connections, delivery & schedule" : "Delivery & schedule"} ·{" "}
-              {picked.cadence}
+              {picked.conns.length ? tr("session:quickstart.connectionsDeliverySchedule") : tr("session:quickstart.deliverySchedule")} ·{" "}
+              {CADENCE_I18N[picked.cadence] ? tr(CADENCE_I18N[picked.cadence]) : picked.cadence}
             </span>
           </div>
           {picked.conns.map(({ name, why }) => {
             const c = connState(name);
-            const flow = connFlow?.name === name ? connFlow : null;
             return (
               <div key={name} className="border-b border-line last:border-b-0">
                 <div className="flex items-center gap-3 py-2.5">
@@ -380,101 +332,25 @@ export function AutomationQuickstart({
                     <span className="block text-[11.5px] text-faint">{why}</span>
                   </span>
                   {c?.connected ? (
-                    <span className="text-[12.5px] text-ok">✓ Connected</span>
-                  ) : flow ? (
-                    <span className="inline-flex items-center gap-2 text-[12px] text-muted">
-                      <Spinner />
-                      {flow.phase === "opening"
-                        ? "Opening browser…"
-                        : `Waiting for ${c?.title || name}…`}
-                    </span>
+                    <span className="text-[12.5px] text-ok">{tr("session:quickstart.connectedCheck")}</span>
                   ) : (
-                    <button
-                      className="px-3.5 py-1 rounded-full border border-line text-[12.5px] hover:bg-paper"
-                      onClick={() => startConnect(name)}
-                      data-testid={`ob-connect-${name}`}
-                    >
-                      Connect
-                    </button>
+                    <span className="text-[12px] text-faint shrink-0">
+                      Connect in Settings
+                    </span>
                   )}
                 </div>
-                {/* §30 handoff strip: the flow finishes out-of-band in the browser — say so,
-                    and let Cancel clear the LOCAL state (the browser tab is the user's). */}
-                {flow?.phase === "waiting" && (
-                  <div
-                    className="flex items-start gap-2 bg-accentSoft/50 rounded-lg px-3 py-2 mb-2.5 text-[12px] text-muted"
-                    data-testid="ob-connect-wait"
-                  >
-                    <span>↗</span>
-                    <span className="flex-1 min-w-0">
-                      <b className="text-ink font-medium">
-                        Finish connecting {c?.title || name} in your browser.
-                      </b>{" "}
-                      Approve it there, then come back — this page updates by itself.
-                    </span>
-                    <button
-                      className="text-faint underline hover:text-muted shrink-0"
-                      onClick={() => setConnFlow(null)}
-                      data-testid="ob-connect-cancel"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
               </div>
             );
           })}
-
-          {pendingConn && !cloud?.signed_in && (
-            <div
-              className="bg-accentSoft/50 rounded-xl px-4 py-3 mt-3 text-[12.5px] text-muted"
-              data-testid="ob-cloudpane"
-            >
-              <span className="block text-[13px] text-ink font-medium">
-                One sign-in unlocks every one-click connection
-              </span>
-              Connections are brokered by OpenWorker Cloud — your tokens stay on this computer.
-              <div className="flex items-center gap-3 mt-2">
-                {signinPhase ? (
-                  <>
-                    <span className="inline-flex items-center gap-2 text-[12px]">
-                      <Spinner />
-                      {signinPhase === "opening" ? "Opening browser…" : "Waiting for sign-in…"}
-                    </span>
-                    {signinPhase === "waiting" && (
-                      <span className="text-[11.5px] text-faint">
-                        Finish signing in in your browser — this page updates by itself.{" "}
-                        <button
-                          className="underline hover:text-muted"
-                          onClick={cancelSignin}
-                          data-testid="ob-signin-cancel"
-                        >
-                          Cancel
-                        </button>
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <button
-                    className="px-3.5 py-1 rounded-full border border-line text-[12.5px] text-accent hover:bg-panel"
-                    onClick={signInThenConnect}
-                    data-testid="ob-cloud-signin"
-                  >
-                    Sign in to OpenWorker Cloud
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
 
           {allConnected && (
             <div className={picked.conns.length ? "bg-paper rounded-xl px-4 py-3.5 mt-3" : ""} data-testid="ob-recipe">
               {picked.needsRepo && (
                 <>
-                  <label className={label}>Repository</label>
+                  <label className={label}>{tr("session:quickstart.repository")}</label>
                   <input
                     className={input}
-                    placeholder="owner/repo"
+                    placeholder={tr("session:quickstart.repoPlaceholder")}
                     value={repo}
                     onChange={(e) => setRepo(e.target.value)}
                     data-testid="ob-repo"
@@ -483,7 +359,7 @@ export function AutomationQuickstart({
               )}
               {picked.needsChannel && (
                 <>
-                  <label className={label}>Post to channel</label>
+                  <label className={label}>{tr("session:quickstart.postToChannel")}</label>
                   <div data-testid="ob-channel">
                     <ChannelPicker
                       value={channel}
@@ -495,17 +371,17 @@ export function AutomationQuickstart({
                     />
                   </div>
                   <p className="text-[11px] text-warnInk mt-1">
-                    The bot must be a member of the channel — invite @OpenWorker in Slack if it isn't.
+                    {tr("session:quickstart.botMustBeMember")}
                   </p>
                 </>
               )}
-              <label className={label}>When</label>
+              <label className={label}>{tr("session:quickstart.when")}</label>
               <div className="flex gap-2">
                 <div className="flex-1 min-w-0">
                   <SelectMenu
                     ariaLabel="Day"
                     value={day}
-                    options={Object.entries(DAYS).map(([k, v]) => ({ value: k, label: v.label }))}
+                    options={Object.entries(DAYS).map(([k, v]) => ({ value: k, label: tr(v.labelKey) }))}
                     onChange={setDay}
                   />
                 </div>
@@ -519,13 +395,13 @@ export function AutomationQuickstart({
               </div>
               {picked.deliver && (
                 <>
-                  <label className={label}>Deliver to</label>
+                  <label className={label}>{tr("session:quickstart.deliverTo")}</label>
                   <SelectMenu
-                    ariaLabel="Deliver to"
+                    ariaLabel={tr("session:quickstart.deliverTo")}
                     value={deliver}
                     options={[
-                      { value: "app", label: "In the app" },
-                      { value: "slack", label: "Slack DM (connect Slack later)" },
+                      { value: "app", label: tr("session:quickstart.inTheApp") },
+                      { value: "slack", label: tr("session:quickstart.slackDm") },
                     ]}
                     onChange={(v) => setDeliver(v as "app" | "slack")}
                   />
@@ -541,19 +417,16 @@ export function AutomationQuickstart({
                     data-testid="ob-consent"
                   />
                   <span>
-                    Allow this automation to post its digest to{" "}
+                    {tr("session:quickstart.consentAllow")}{" "}
                     <b className="text-ink" title={channel || undefined}>
-                      {channelLabel || "the channel"}
+                      {channelLabel || tr("session:quickstart.theChannel")}
                       {channelWorkspace ? ` (${channelWorkspace})` : ""}
                     </b>{" "}
-                    without asking each time. Anything else still asks first.
+                    {tr("session:quickstart.consentWithout")}
                   </span>
                 </label>
               ) : picked.conns.length > 0 ? (
-                <p className="text-[12.5px] text-muted mt-3">
-                  This automation only <b className="text-ink">reads</b> on schedule — reading
-                  never needs approval.
-                </p>
+                <p className="text-[12.5px] text-muted mt-3" dangerouslySetInnerHTML={{ __html: tr("session:quickstart.readOnly") }} />
               ) : null}
             </div>
           )}
@@ -563,7 +436,7 @@ export function AutomationQuickstart({
               className="text-[12.5px] text-faint hover:text-muted"
               onClick={() => setPickedKey(null)}
             >
-              Cancel
+              {tr("session:quickstart.cancelBtn")}
             </button>
             {/* A silently-disabled primary reads as a bug — always name the missing piece. */}
             {gateHint && (
@@ -580,7 +453,7 @@ export function AutomationQuickstart({
               onClick={create}
               data-testid="ob-create"
             >
-              {busy ? "Creating…" : "Create automation"}
+              {busy ? tr("session:quickstart.creating") : tr("session:quickstart.createAutomation")}
             </button>
           </div>
         </div>

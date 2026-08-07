@@ -98,7 +98,7 @@ def _browser_page(
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        f"<title>{_html.escape(title)} — OpenWorker</title><style>"
+        f"<title>{_html.escape(title)} — WeruBWorker</title><style>"
         ":root{--paper:#f6f5f2;--panel:#fff;--line:#e4e2dc;--ink:#2c2c2a;--muted:#6f6e68;"
         "--faint:#a3a19a;--accent:#3670b2;--ok:#2e7d4f;--ok-soft:#e3f2e9;--bad:#b3423a;"
         "--bad-soft:#f8e7e5}"
@@ -130,9 +130,9 @@ def _browser_page(
         "padding:7px 10px;margin-top:12px;text-align:left;word-break:break-word}"
         ".foot{font-size:10.5px;color:var(--faint)}"
         "</style></head><body>"
-        '<div class="card"><div class="mark"><i></i>OpenWorker</div>'
+        '<div class="card"><div class="mark"><i></i>WeruBWorker</div>'
         f"{icon}<h1>{_html.escape(title)}</h1><p>{_html.escape(detail)}</p>{err}</div>"
-        '<div class="foot">Served locally by OpenWorker on your Mac</div>'
+        '<div class="foot">Served locally by WeruBWorker on your Mac</div>'
         "</body></html>"
     )
 
@@ -147,7 +147,7 @@ def _connector_title(name: str) -> str:
 
 _CONNECT_FAILED_DETAIL = (
     "Something went wrong finishing this connection. "
-    "Close this tab and try again from OpenWorker."
+    "Close this tab and try again from WeruBWorker."
 )
 
 from ..attachments import (
@@ -187,10 +187,15 @@ def create_app(manager: SessionManager) -> FastAPI:
         "/auth/callback",
         "/mcp/oauth/callback",
         "/oauth/callback",
+        "/v1/auth/status",
+        "/v1/auth/setup",
+        "/v1/auth/login",
+        "/v1/auth/logout",
+        "/v1/auth/change-password",
     }
 
     def _request_authenticated(request: Request) -> bool:
-        provided = request.headers.get("x-openworker-token", "")
+        provided = request.headers.get("x-werubworker-token", "") or request.headers.get("x-openworker-token", "")
         return bool(
             api_token
             and provided
@@ -231,7 +236,65 @@ def create_app(manager: SessionManager) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Auth middleware — runs AFTER the sidecar token check (which is registered first and
+    # therefore wraps this one in FastAPI's middleware stack). Auth endpoints themselves are
+    # in tokenless_paths so they pass through both layers.
+    _auth_exempt_paths = tokenless_paths | {"/v1/health"}
+
+    @app.middleware("http")
+    async def require_local_auth(request: Request, call_next):
+        if (
+            request.method == "OPTIONS"
+            or request.url.path in _auth_exempt_paths
+        ):
+            return await call_next(request)
+        auth_token = request.headers.get("x-werub-auth", "")
+        if not manager.auth.verify(auth_token or None):
+            return JSONResponse(
+                {"error": "authentication required", "auth_locked": True},
+                status_code=403,
+            )
+        return await call_next(request)
+
     app.state.manager = manager
+
+    # -- local master password auth endpoints ---------------------------------
+
+    @app.get("/v1/auth/status")
+    def auth_status() -> dict[str, Any]:
+        return manager.auth.status()
+
+    @app.post("/v1/auth/setup")
+    def auth_setup(body: dict) -> dict[str, Any]:
+        try:
+            token = manager.auth.setup(body.get("password", ""))
+            return {"ok": True, "token": token}
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    @app.post("/v1/auth/login")
+    def auth_login(body: dict) -> dict[str, Any]:
+        try:
+            token = manager.auth.login(body.get("password", ""))
+            return {"ok": True, "token": token}
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    @app.post("/v1/auth/logout")
+    def auth_logout() -> dict[str, Any]:
+        manager.auth.logout()
+        return {"ok": True}
+
+    @app.post("/v1/auth/change-password")
+    def auth_change_password(body: dict) -> dict[str, Any]:
+        try:
+            token = manager.auth.change_password(
+                body.get("old_password", ""),
+                body.get("new_password", ""),
+            )
+            return {"ok": True, "token": token}
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
     @app.get("/v1/health")
     def health(request: Request) -> dict[str, Any]:
@@ -451,35 +514,10 @@ def create_app(manager: SessionManager) -> FastAPI:
             elif body.get("dir"):
                 summaries = reg.install_from_dir(str(body["dir"]))
             elif body.get("gallery_slug"):
-                # Gallery install = fetch the manifest markdown from the cloud
-                # (sign-in required), verify its hash, then reuse the exact
-                # same parser + consent path as a local/Git install. The
-                # gallery never changes the trust model: no executable code,
-                # lands disabled pending consent.
-                import hashlib
-                import tempfile
-
-                from .. import cloud
-                from ..config import load_config
-
-                slug = str(body["gallery_slug"]).strip()
-                manifest = cloud.gallery_manifest(manager.secrets, load_config(), slug)
-                if manifest is None:
-                    return {
-                        "ok": False,
-                        "error": "gallery requires cloud sign-in (or the cloud is unreachable)",
-                    }
-                markdown = manifest.get("manifest_markdown", "")
-                digest = "sha256:" + hashlib.sha256(markdown.encode()).hexdigest()
-                if (
-                    manifest.get("manifest_hash")
-                    and manifest["manifest_hash"] != digest
-                ):
-                    return {"ok": False, "error": "manifest hash mismatch"}
-                with tempfile.TemporaryDirectory() as td:
-                    (Path(td) / f"{slug}.md").write_text(markdown)
-                    summaries = reg.install_from_dir(td)
-                cloud.gallery_install_event(manager.secrets, load_config(), slug)
+                return {
+                    "ok": False,
+                    "error": "Gallery install is not available — install personas from a folder or Git URL",
+                }
             else:
                 return {
                     "ok": False,
@@ -491,31 +529,11 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.get("/v1/cloud/gallery/{slug}")
     def cloud_gallery_detail(slug: str) -> dict[str, Any]:
-        """Solo page for one gallery coworker: publisher pitch + capabilities
-        derived locally from the manifest (same parser as install)."""
-        from .. import cloud
-        from ..config import load_config
-
-        body = cloud.gallery_detail(manager.secrets, load_config(), slug)
-        if body is None:
-            return {"ok": False, "error": "gallery requires cloud sign-in"}
-        return body
+        return {"ok": False, "error": "Gallery not available"}
 
     @app.get("/v1/cloud/gallery")
     def cloud_gallery() -> dict[str, Any]:
-        """Gallery cards for the GUI. Signed out ⇒ ok:false (the gallery is a
-        signed-in feature by design; local personas are unaffected)."""
-        from .. import cloud
-        from ..config import load_config
-
-        body = cloud.gallery_list(manager.secrets, load_config())
-        if body is None:
-            return {
-                "ok": False,
-                "error": "gallery requires cloud sign-in",
-                "personas": [],
-            }
-        return {"ok": True, "personas": body.get("personas", [])}
+        return {"ok": False, "error": "Gallery not available", "personas": []}
 
     @app.post("/v1/personas/{persona_id}")
     def update_persona(persona_id: str, body: dict) -> dict[str, Any]:
@@ -1006,133 +1024,128 @@ def create_app(manager: SessionManager) -> FastAPI:
         action = str((body or {}).get("action", "")).strip()
         return await manager.resolve_unauthorized(name, item_id, action)
 
+    # -- SSH server management --------------------------------------------------
+
+    @app.get("/v1/ssh/servers")
+    def ssh_servers_list() -> dict[str, Any]:
+        from ..connectors.ssh import list_servers
+
+        return {"ok": True, "servers": list_servers(manager.secrets)}
+
+    @app.post("/v1/ssh/servers")
+    def ssh_servers_add(body: dict) -> dict[str, Any]:
+        from ..connectors.ssh import add_server
+
+        if not isinstance(body, dict):
+            return {"ok": False, "error": "invalid body"}
+        return add_server(
+            manager.secrets,
+            server_id=str(body.get("server_id", "")).strip(),
+            host=str(body.get("host", "")).strip(),
+            port=int(body.get("port", 22)),
+            username=str(body.get("username", "deploy")).strip(),
+            key_path=str(body.get("key_path", "")).strip(),
+            label=str(body.get("label", "")).strip(),
+            tags=body.get("tags") if isinstance(body.get("tags"), list) else [],
+        )
+
+    @app.delete("/v1/ssh/servers/{server_id}")
+    def ssh_servers_remove(server_id: str) -> dict[str, Any]:
+        from ..connectors.ssh import remove_server
+
+        return remove_server(manager.secrets, server_id)
+
+    @app.post("/v1/ssh/servers/{server_id}/test")
+    async def ssh_servers_test(server_id: str) -> dict[str, Any]:
+        from ..connectors.ssh import get_server
+        from ..connectors.ssh.client import SSHClient
+
+        server = get_server(manager.secrets, server_id)
+        if server is None:
+            return {"ok": False, "error": f"server '{server_id}' not found"}
+        result = await asyncio.to_thread(lambda: SSHClient(server).test_connection())
+        return result
+
+    # -- Ops dashboard status ---------------------------------------------------
+
+    @app.get("/v1/ops/local-status")
+    def ops_local_status() -> dict[str, Any]:
+        """Quick local server status for the OpsView dashboard."""
+        from ..tools.server_monitor import _server_status
+
+        return _server_status()
+
+    # -- Database config management ---------------------------------------------
+
+    @app.get("/v1/databases")
+    def databases_list() -> dict[str, Any]:
+        from ..tools.db_mgmt import _list_databases
+
+        return {"ok": True, "databases": _list_databases(manager)}
+
+    @app.post("/v1/databases")
+    def databases_add(body: dict) -> dict[str, Any]:
+        from ..tools.db_mgmt import _add_database
+
+        if not isinstance(body, dict):
+            return {"ok": False, "error": "invalid body"}
+        return _add_database(
+            manager,
+            name=str(body.get("name", "")).strip(),
+            db_type=str(body.get("type", "")).strip(),
+            host=str(body.get("host", "")).strip(),
+            port=int(body.get("port", 0)),
+            db_name=str(body.get("database", "")).strip(),
+            user=str(body.get("user", "")).strip(),
+            password=str(body.get("password", "")).strip(),
+            path=str(body.get("path", "")).strip(),
+        )
+
+    @app.delete("/v1/databases/{name}")
+    def databases_remove(name: str) -> dict[str, Any]:
+        from ..tools.db_mgmt import _remove_database
+
+        return _remove_database(manager, name)
+
     # -- OpenWorker Cloud: sign-in + managed one-click connect ---------------
     # All optional: the app is fully functional signed out (manual token paste
     # stays available for every connector, before and after sign-in).
 
     @app.get("/v1/cloud/status")
     def cloud_status() -> dict[str, Any]:
-        from .. import cloud
-
-        return {
-            **cloud.status(manager.secrets),
-            "telemetry_enabled": cloud.telemetry_enabled(manager.secrets),
-        }
+        return {"signed_in": False, "account": "", "user_id": "", "telemetry_enabled": False}
 
     @app.post("/v1/cloud/telemetry")
     def cloud_telemetry(body: dict) -> dict[str, Any]:
-        """The Phase 5 opt-out toggle. Local preference only — signed-out users
-        send nothing regardless of this value."""
-        from .. import cloud
-
-        return cloud.set_telemetry_enabled(
-            manager.secrets, bool((body or {}).get("enabled", True))
-        )
+        return {"ok": True, "telemetry_enabled": False}
 
     @app.post("/v1/cloud/login")
     def cloud_login() -> dict[str, Any]:
-        """Start browser sign-in. The sidecar opens the system browser itself
-        (works identically under Tauri and plain-browser dev)."""
-        import webbrowser
-
-        from .. import cloud
-        from ..config import load_config
-
-        out = cloud.begin_login(load_config())
-        webbrowser.open(out["authorize_url"])
-        return {"ok": True, "authorize_url": out["authorize_url"]}
+        return {"error": "Cloud not configured"}
 
     @app.post("/v1/cloud/logout")
     def cloud_logout() -> dict[str, Any]:
-        from .. import cloud
-
-        return cloud.logout(manager.secrets)
+        return {"ok": True}
 
     @app.get("/auth/callback")
     async def cloud_auth_callback(code: str = "", state: str = "", error: str = ""):
         from fastapi.responses import HTMLResponse
 
-        from .. import cloud
-        from ..config import load_config
-
-        signin_failed_detail = (
-            "Close this tab and try signing in again from OpenWorker."
-        )
-        if error:
-            return HTMLResponse(
-                _browser_page(
-                    "Sign-in failed", signin_failed_detail, ok=False, error=error
-                ),
-                status_code=400,
-            )
-        result = await asyncio.to_thread(
-            lambda: cloud.complete_login(manager.secrets, load_config(), code, state)
-        )
-        if not result.get("ok"):
-            return HTMLResponse(
-                _browser_page(
-                    "Sign-in failed",
-                    signin_failed_detail,
-                    ok=False,
-                    error=result.get("error", ""),
-                ),
-                status_code=400,
-            )
-
-        # Restore managed connections in the background: best-effort metadata work
-        # that must not hold the "Signed in" page (or the GUI's signed-in flip)
-        # hostage to another broker round trip. Restored GitHub installs hot-add
-        # the gateway so the relay connects without a restart.
-        async def _restore_connections() -> None:
-            try:
-                out = await asyncio.to_thread(
-                    lambda: cloud.sync_connections(manager.secrets, load_config())
-                )
-                if out.get("restored"):
-                    await manager.refresh_gateway()
-            except Exception:
-                pass  # sign-in stands; the user can still connect by hand
-
-        asyncio.get_running_loop().create_task(_restore_connections())
         return HTMLResponse(
             _browser_page(
-                "Signed in",
-                "You're signed in to OpenWorker Cloud. "
-                "You can close this tab and return to OpenWorker.",
-            )
+                "Cloud not configured",
+                "Cloud sign-in is not available.",
+                ok=False,
+                error="Cloud endpoints are disabled",
+            ),
+            status_code=400,
         )
 
     @app.post("/v1/connectors/{name}/connect-managed")
     async def connector_connect_managed(
         name: str, body: Optional[dict] = None
     ) -> dict[str, Any]:
-        """One-click managed OAuth (requires cloud sign-in). Opens the provider
-        consent page in the system browser; the broker's callback page will
-        form-POST the tokens to /oauth/callback below. `access` picks a consent
-        tier by NAME (e.g. hubspot read | write) — the broker owns the scopes."""
-        import webbrowser
-
-        from .. import cloud
-        from ..config import load_config
-        from ..connectors.descriptors import get_descriptor
-
-        d = get_descriptor(name)
-        if d is not None and d.managed_paused:
-            # GUI shows the Coming-soon state; this guard covers stale GUIs/API callers.
-            return {
-                "ok": False,
-                "error": f"one-click connect for {d.title} is coming soon — connect manually for now",
-            }
-        access = str((body or {}).get("access") or "")
-        flow = str((body or {}).get("flow") or "")  # github: "" install | "authorize"
-        out = await asyncio.to_thread(
-            lambda: cloud.begin_managed_connect(
-                manager.secrets, load_config(), name, access=access, flow=flow
-            )
-        )
-        if out.get("ok"):
-            webbrowser.open(out["authorize_url"])
-        return out
+        return {"ok": False, "error": "Cloud not configured"}
 
     @app.post("/oauth/callback")
     async def managed_oauth_callback(request: Request) -> Any:
@@ -2039,6 +2052,165 @@ def create_app(manager: SessionManager) -> FastAPI:
             pass
         finally:
             manager.unregister_event_client(ws.send_json)
+
+    # ------------------------------------------------------------------
+    # Wiki & Credentials endpoints
+    # ------------------------------------------------------------------
+
+    @app.get("/v1/wiki")
+    def wiki_list(category: str = "", query: str = "", tags: str = "") -> dict[str, Any]:
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+        return {"pages": manager.wiki_store.list_pages(
+            category=category, query=query, tags=tag_list
+        )}
+
+    @app.get("/v1/wiki/categories")
+    def wiki_categories() -> dict[str, Any]:
+        return {"categories": manager.wiki_store.categories()}
+
+    @app.get("/v1/wiki/alerts")
+    def wiki_alerts() -> dict[str, Any]:
+        return {"alerts": manager.wiki_store.list_alerts()}
+
+    @app.post("/v1/wiki/alerts/{alert_id}/ack")
+    def wiki_ack_alert(alert_id: int) -> dict[str, Any]:
+        return manager.wiki_store.ack_alert(alert_id)
+
+    @app.get("/v1/wiki/{page_id}")
+    def wiki_get(page_id: str) -> dict[str, Any]:
+        page = manager.wiki_store.get_page(page_id)
+        if page is None:
+            return JSONResponse({"error": f"page '{page_id}' not found"}, status_code=404)
+        return {"page": page}
+
+    def _wiki_store_credentials(page_id: str, credentials: list, linked_service: str = ""):
+        """Store credential values in the vault and sync to secrets.json."""
+        from ..wiki.sync import WikiSync
+        for cred in (credentials or []):
+            key = cred.get("key", "")
+            value = cred.get("value", "")
+            if key and value:
+                vault_key = f"{page_id}:{key}"
+                manager.vault.store(
+                    vault_key, value,
+                    expires=cred.get("expires", ""),
+                    rotate_days=int(cred.get("rotate_days", 0) or 0),
+                    linked_services=[linked_service] if linked_service else [],
+                )
+        # Sync to secrets.json if linked_service is set
+        if linked_service:
+            sync = WikiSync(manager.wiki_store, manager.vault, manager.secrets)
+            sync.sync_page_to_secrets(page_id)
+
+    @app.post("/v1/wiki")
+    def wiki_create(body: dict) -> dict[str, Any]:
+        body = body or {}
+        page_id = str(body.get("page_id", body.get("id", "")))
+        if not page_id:
+            return JSONResponse({"error": "page_id is required"}, status_code=400)
+        credentials = body.get("credentials") or []
+        linked_service = str(body.get("linked_service", ""))
+        # Strip values from credentials before storing in wiki DB (values go to vault)
+        creds_meta = [
+            {k: v for k, v in c.items() if k != "value"}
+            for c in credentials
+        ]
+        result = manager.wiki_store.create_page(
+            page_id=page_id,
+            name=str(body.get("name", page_id)),
+            category=str(body.get("category", "")),
+            content=str(body.get("content", "")),
+            credentials=creds_meta,
+            linked_service=linked_service,
+            tags=body.get("tags"),
+            updated_by=str(body.get("updated_by", "api")),
+        )
+        # Store values in vault + sync to secrets.json
+        _wiki_store_credentials(page_id, credentials, linked_service)
+        return result
+
+    @app.put("/v1/wiki/{page_id}")
+    def wiki_update(page_id: str, body: dict) -> dict[str, Any]:
+        body = body or {}
+        credentials = body.get("credentials") or []
+        linked_service = body.get("linked_service")
+        # Strip values before DB storage
+        creds_meta = [
+            {k: v for k, v in c.items() if k != "value"}
+            for c in credentials
+        ] if credentials else None
+        result = manager.wiki_store.update_page(
+            page_id=page_id,
+            content=body.get("content"),
+            credentials=creds_meta,
+            name=body.get("name"),
+            category=body.get("category"),
+            tags=body.get("tags"),
+            linked_service=linked_service,
+            updated_by=str(body.get("updated_by", "api")),
+            change_note=str(body.get("change_note", "")),
+        )
+        # Update vault + sync
+        if credentials:
+            page = manager.wiki_store.get_page(page_id)
+            svc = linked_service or (page.get("linked_service", "") if page else "")
+            _wiki_store_credentials(page_id, credentials, svc)
+        return result
+
+    @app.post("/v1/wiki/import-secrets")
+    def wiki_import_secrets() -> dict[str, Any]:
+        """Import all existing secrets.json entries as wiki pages."""
+        from ..wiki.sync import WikiSync
+        sync = WikiSync(manager.wiki_store, manager.vault, manager.secrets)
+        return sync.import_all_secrets()
+
+    @app.post("/v1/wiki/{page_id}/sync")
+    def wiki_sync_to_secrets(page_id: str) -> dict[str, Any]:
+        """Sync wiki page credentials to secrets.json."""
+        from ..wiki.sync import WikiSync
+        sync = WikiSync(manager.wiki_store, manager.vault, manager.secrets)
+        return sync.sync_page_to_secrets(page_id)
+
+    @app.delete("/v1/wiki/{page_id}")
+    def wiki_delete(page_id: str) -> dict[str, Any]:
+        return manager.wiki_store.delete_page(page_id)
+
+    @app.get("/v1/wiki/{page_id}/history")
+    def wiki_history(page_id: str) -> dict[str, Any]:
+        return {"history": manager.wiki_store.get_history(page_id)}
+
+    @app.post("/v1/wiki/{page_id}/credentials/{key}/reveal")
+    def wiki_reveal_credential(page_id: str, key: str) -> dict[str, Any]:
+        vault_key = f"{page_id}:{key}"
+        try:
+            value = manager.vault.retrieve(vault_key)
+            return {"ok": True, "key": key, "value": value}
+        except KeyError:
+            return JSONResponse(
+                {"error": f"credential '{key}' not found"}, status_code=404
+            )
+        except RuntimeError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
+
+    @app.post("/v1/wiki/analyze")
+    def wiki_analyze(body: dict) -> dict[str, Any]:
+        """AI-analyze free-form wiki content to extract credentials and service info.
+        Returns suggested credentials, category, and linked_service for user confirmation."""
+        from ..wiki.analyzer import analyze_document
+        content = str(body.get("content", ""))
+        title = str(body.get("title", ""))
+        if not content:
+            return {"error": "content is required"}
+        return analyze_document(content, title)
+
+    @app.post("/v1/wiki/{page_id}/analyze")
+    def wiki_analyze_page(page_id: str) -> dict[str, Any]:
+        """Analyze an existing wiki page to extract/update credentials."""
+        from ..wiki.analyzer import analyze_document
+        page = manager.wiki_store.get_page(page_id)
+        if page is None:
+            return JSONResponse({"error": "page not found"}, status_code=404)
+        return analyze_document(page.get("content", ""), page.get("name", ""))
 
     return app
 

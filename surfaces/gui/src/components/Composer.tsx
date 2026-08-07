@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { Attachment, SessionUsage } from "../types";
 import { isPdfFile, readFile } from "../attach";
 import { getSettings, inspectPdf, sessionSkills, type SessionSkillRow } from "../api";
@@ -20,10 +21,11 @@ import {
 // polished enough to ship, and Custom (config.toml auto-allow rules) is a power-user mode
 // with no in-app explanation. The server still honors both — a session already in one of
 // those modes keeps working; the picker just doesn't offer them.
-const PERMISSION_OPTIONS: Option[] = [
-  { value: "discuss", label: "Discuss", description: "Chat and explore — no edits or commands" },
-  { value: "interactive", label: "Ask for approval", description: "Ask before edits and commands" },
-  { value: "auto", label: "Full access", description: "Run everything without asking" },
+// Label/description keys — resolved with t() inside the component.
+const PERMISSION_OPTION_KEYS = [
+  { value: "discuss", labelKey: "session:permission.discuss", descKey: "session:permission.discussDesc" },
+  { value: "interactive", labelKey: "session:permission.approval", descKey: "session:permission.approvalDesc" },
+  { value: "auto", labelKey: "session:permission.fullAccess", descKey: "session:permission.fullAccessDesc" },
 ];
 
 // No hardcoded model fallback: until the server supplies the list (a few seconds after a
@@ -92,6 +94,7 @@ interface Props {
 }
 
 export function Composer(props: Props) {
+  const { t } = useTranslation(["session", "common"]);
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   // "/" force-run (SKILLS-SPEC §4.1 #3). The popup derives from the draft: it is open while
@@ -513,7 +516,7 @@ export function Composer(props: Props) {
         <textarea
           ref={textareaRef}
           className="w-full block px-3.5 pt-3.5 pb-1.5 text-[14.5px]"
-          placeholder={props.placeholder || "Ask the coworker…  (drop or paste files)"}
+          placeholder={props.placeholder || t("session:composer.placeholder")}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
@@ -527,8 +530,8 @@ export function Composer(props: Props) {
           <div className="relative">
             <button
               className={iconBtn + (attachMenuOpen ? " bg-paper text-ink" : "")}
-              title="Attach"
-              aria-label="Attach"
+              title={t("session:composer.attach")}
+              aria-label={t("session:composer.attach")}
               onClick={() => setAttachMenuOpen((v) => !v)}
             >
               <Icon name="plus" size={17} />
@@ -537,11 +540,11 @@ export function Composer(props: Props) {
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setAttachMenuOpen(false)} />
                 <div className="absolute z-40 bottom-full mb-1 left-0 min-w-[180px] rounded-xl border border-line bg-panel shadow-2xl py-1.5">
-                  {attachItem("image", "Photo or image", () => pickFiles("image/*"))}
-                  {attachItem("file", "PDF", () => pickFiles("application/pdf,.pdf"))}
+                  {attachItem("image", t("session:composer.attachImage"), () => pickFiles("image/*"))}
+                  {attachItem("file", t("session:composer.attachPdf"), () => pickFiles("application/pdf,.pdf"))}
                   {attachItem(
                     "fileCode",
-                    "Other files",
+                    t("session:composer.attachOther"),
                     () => pickFiles("text/*,.md,.csv,.json,.yaml,.yml,.log,.py,.ts,.tsx,.js,.rs,.go,.toml"),
                   )}
                 </div>
@@ -581,7 +584,7 @@ export function Composer(props: Props) {
             />
           ) : null}
 
-          {dictationBusy === "Transcribing…" && <span className="text-[11.5px] text-accent">Transcribing…</span>}
+          {dictationBusy === "Transcribing…" && <span className="text-[11.5px] text-accent">{t("session:composer.transcribing")}</span>}
 
           <span className="ml-auto" />
 
@@ -605,10 +608,10 @@ export function Composer(props: Props) {
             <button
               className="pill model-warn chip"
               onClick={() => props.onConnectModel?.()}
-              title="Connect a model"
-              aria-label="No model connected — connect a model"
+              title={t("session:composer.connectToSend")}
+              aria-label={t("session:composer.noModel")}
             >
-              <span className="pill-label">No model</span>
+              <span className="pill-label">{t("session:composer.noModelShort")}</span>
               <span className="model-warn-ico" aria-hidden>⚠</span>
             </button>
           ) : modelsLoaded ? (
@@ -620,7 +623,7 @@ export function Composer(props: Props) {
               data-testid="models-loading"
               title="Fetching the model list from the server"
             >
-              <span className="pill-label">Loading models…</span>
+              <span className="pill-label">{t("session:composer.loadingModels")}</span>
             </button>
           ))}
 
@@ -665,7 +668,7 @@ export function Composer(props: Props) {
               }
               onClick={submit}
               disabled={!props.connected || !!dictation?.recording || !!dictationBusy}
-              title={needsModel ? "Connect a model to send" : undefined}
+              title={needsModel ? t("session:composer.connectToSend") : undefined}
               aria-label="Send"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -699,6 +702,7 @@ function UsageChip({
   model: string;
   modelLabels?: Record<string, string>;
 }) {
+  const { t } = useTranslation(["session"]);
   const [open, setOpen] = useState(false);
   const total = totalTokens(usage);
   const pct = contextWindow
@@ -757,7 +761,7 @@ function UsageChip({
             {contextWindow ? (
               <div className="mb-2.5">
                 <div className="text-[10.5px] uppercase tracking-[0.06em] text-faint font-semibold mb-1">
-                  Context window
+                  {t("session:composer.contextWindow")}
                 </div>
                 <div className="h-1.5 rounded-full bg-line overflow-hidden">
                   <div
@@ -775,7 +779,7 @@ function UsageChip({
               </div>
             ) : null}
             <div className="text-[10.5px] uppercase tracking-[0.06em] text-faint font-semibold mb-1">
-              Session totals
+              {t("session:composer.sessionTotals")}
             </div>
             <div className="flex flex-col gap-1.5">
               {Object.entries(usage.byModel).map(([id, t]) => (
@@ -833,7 +837,13 @@ function ModeMenu({
   unattended?: boolean;
   onUnattendedChange?: (on: boolean) => void;
 }) {
+  const { t } = useTranslation(["session"]);
   const [open, setOpen] = useState(false);
+  const PERMISSION_OPTIONS: Option[] = PERMISSION_OPTION_KEYS.map((o) => ({
+    value: o.value,
+    label: t(o.labelKey),
+    description: t(o.descKey),
+  }));
   const current = PERMISSION_OPTIONS.find((o) => o.value === mode);
   return (
     <div className="relative">
@@ -887,7 +897,7 @@ function ModeMenu({
                 <div className="my-1 border-t border-line" />
                 <div className="flex items-center gap-2 px-2.5 py-1.5">
                   <span className="flex-1 min-w-0">
-                    <span className="block text-[13px] text-ink">Send approvals to Inbox</span>
+                    <span className="block text-[13px] text-ink">{t("session:composer.sendToInbox")}</span>
                     <span className="block text-[11px] text-faint leading-snug">
                       Approvals &amp; questions go to the Inbox; the agent keeps working.
                     </span>
