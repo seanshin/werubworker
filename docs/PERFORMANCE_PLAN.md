@@ -1,9 +1,9 @@
 # WeruBWorker 성능 개선 기획서
 
 > 작성일: 2026-08-10  
-> 최종 갱신: 2026-08-10 (v0.2.1 구현 완료, 커밋 `c9e7604`)  
-> 대상 버전: v0.1.7 → v0.2.0 (기획 18항목) + v0.2.1 (후속 4항목)  
-> 범위: 서버 백엔드 / GUI 프론트엔드 / 테스트·빌드 파이프라인
+> 최종 갱신: 2026-08-10 (v0.2.2 릴리즈 완료, 커밋 `a49491b`)  
+> 대상 버전: v0.1.7 → v0.2.0 (18항목) → v0.2.1 (4항목) → v0.2.2 (3항목)  
+> 범위: 서버 백엔드 / GUI 프론트엔드 / 테스트·빌드 파이프라인 / DX
 
 ---
 
@@ -14,10 +14,11 @@
 3. [Phase 2 — GUI 프론트엔드 성능 개선 (P0–P2)](#3-phase-2--gui-프론트엔드-성능-개선)
 4. [Phase 3 — 테스트·빌드 파이프라인 최적화 (P1–P3)](#4-phase-3--테스트빌드-파이프라인-최적화)
 5. [v0.2.1 후속 구현](#5-v021-후속-구현)
-6. [우선순위 매트릭스 및 구현 현황](#6-우선순위-매트릭스-및-구현-현황)
-7. [실측 결과](#7-실측-결과)
-8. [스코프 변경 및 설계 판단](#8-스코프-변경-및-설계-판단)
-9. [후속 과제](#9-후속-과제)
+6. [v0.2.2 DX 및 렌더링 최적화](#6-v022-dx-및-렌더링-최적화)
+7. [우선순위 매트릭스 및 구현 현황](#7-우선순위-매트릭스-및-구현-현황)
+8. [실측 결과](#8-실측-결과)
+9. [스코프 변경 및 설계 판단](#9-스코프-변경-및-설계-판단)
+10. [후속 과제](#10-후속-과제)
 
 ---
 
@@ -557,7 +558,7 @@ coworker/**/*.py + tests/**/*.py  (213개 파일 포매팅, v0.2.1)
 **설계 판단:**
 - v0.2.0에서 `I` (isort) 규칙을 비활성화했으나, v0.2.1에서 `ruff format` 일괄 적용 후 활성화 완료. 70개 import 정렬 자동 수정.
 - 기획에서 "ESLint + Prettier (TypeScript)" 도입을 제안했으나, `tsc --noEmit`이 이미 타입 체크를 수행하므로 제외.
-- pre-commit hook은 미설정. 개발자 경험 영향이 크므로 팀 합의 후 도입 권장.
+- pre-commit hook은 v0.2.2에서 도입 완료 (`.pre-commit-config.yaml`, ruff-pre-commit v0.5.0).
 
 ---
 
@@ -651,7 +652,88 @@ surfaces/gui/src/App.tsx                    (import 교체, ~15줄 감소)
 
 ---
 
-## 6. 우선순위 매트릭스 및 구현 현황
+## 6. v0.2.2 DX 및 렌더링 최적화
+
+v0.2.1 기획서의 "후속 과제 — 단기(v0.2.2)" 3개 항목을 모두 구현 완료.
+
+### 6-1. React 리렌더링 병목 해소 + useCallback 적용 ✅ 완료
+
+**문제:**  
+Sidebar(memo)에 15+ 인라인 콜백이 전달되어 App의 모든 상태 변경 시 Sidebar가 리렌더링됨. `scrollToBottom`, `followLatest`, `handleScroll` 등 고빈도 핸들러도 매 렌더 재생성.
+
+**구현 내용:**
+
+| 카테고리 | useCallback 적용 대상 |
+|---------|---------------------|
+| Sidebar 네비게이션 | `openManage`, `openManagePersonas`, `openScheduled`, `openIntegrations`, `openAudit`, `openAbout`, `openInbox`, `openOps`, `openDev`, `openDatabase`, `openServices`, `openWiki` |
+| Sidebar 상호작용 | `onPeekLeave`, `onOpenPersonaFromSidebar`, `onOpenAutomation` |
+| 스크롤 핸들러 | `scrollToBottom`, `followLatest`, `handleScroll` |
+
+**효과:** Sidebar가 `surface`, `sessions`, `workspace` 등 관련 props 변경 시에만 리렌더링. 무관한 상태(`streaming`, `items`, `running` 등) 변경 시 Sidebar 리렌더링 완전 제거.
+
+**변경 파일:**
+```
+surfaces/gui/src/App.tsx  (인라인 콜백 → useCallback 참조, ~40줄 추가)
+```
+
+---
+
+### 6-2. Lighthouse CI 통합 ✅ 완료
+
+**구현:**  
+CI에 `lighthouse` job 추가. 프로덕션 빌드(`vite build`) 후 `treosh/lighthouse-ci-action@v12`로 측정.
+
+**threshold (warn 레벨):**
+
+| 지표 | 기준 |
+|------|------|
+| Performance score | ≥ 0.7 |
+| Accessibility score | ≥ 0.8 |
+| Best Practices score | ≥ 0.8 |
+| First Contentful Paint | < 3,000ms |
+| Largest Contentful Paint | < 4,000ms |
+| Total Blocking Time | < 500ms |
+| Script total size | < 600 KB |
+
+**변경 파일:**
+```
+.github/workflows/ci.yml           (lighthouse job 추가)
+surfaces/gui/lighthouserc.json      (신규 — threshold 설정)
+```
+
+**설계 판단:**
+- `error` 대신 `warn` 레벨 — SPA 특성상 Lighthouse 점수 변동이 크므로 CI를 블로킹하지 않되 가시성 확보.
+- `numberOfRuns: 1` — CI 시간 절약. 정밀 측정이 필요하면 3으로 상향.
+- `staticDistDir` — 빌드 산출물을 로컬 서버로 직접 제공. 별도 Python 서버 불필요.
+
+---
+
+### 6-3. pre-commit hook 도입 ✅ 완료
+
+**구현:**
+
+`.pre-commit-config.yaml`:
+```yaml
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.0
+    hooks:
+      - id: ruff          # lint + autofix
+        args: [check, --fix]
+      - id: ruff-format   # formatting
+```
+
+활성화: `pip install pre-commit && pre-commit install`
+
+**변경 파일:**
+```
+.pre-commit-config.yaml  (신규)
+pyproject.toml            (pre-commit>=3 의존성 추가)
+```
+
+---
+
+## 7. 우선순위 매트릭스 및 구현 현황
 
 ### v0.2.0 기획 항목 (18개)
 
@@ -685,17 +767,25 @@ surfaces/gui/src/App.tsx                    (import 교체, ~15줄 감소)
 | 5-3 | test_server.py 분할 | ✅ 완료 | REST(262줄) + WS(740줄), conftest 헬퍼 중앙화 |
 | 5-4 | useSessionState 훅 추출 | ✅ 완료 | 15개 상태 캡슐화 + resetSession 헬퍼 |
 
-**종합:** 22개 항목 중 **21개 완료, 1개 부분 완료** (2-5 JSON I/O — ChannelBuffer만 적용)
+### v0.2.2 DX 항목 (3개)
+
+| # | 항목 | 상태 | 비고 |
+|---|------|------|------|
+| 6-1 | useCallback 리렌더링 최적화 | ✅ 완료 | Sidebar 15+ 콜백 + 스크롤 핸들러 3개 |
+| 6-2 | Lighthouse CI 통합 | ✅ 완료 | performance/a11y/LCP/TBT threshold |
+| 6-3 | pre-commit hook | ✅ 완료 | ruff check --fix + ruff format |
+
+**종합:** 25개 항목 중 **24개 완료, 1개 부분 완료** (2-5 JSON I/O — ChannelBuffer만 적용)
 
 ---
 
-## 7. 실측 결과
+## 8. 실측 결과
 
 ### 프론트엔드 번들 크기
 
-| 빌드 산출물 | v0.1.7 | v0.2.1 | 변화 |
+| 빌드 산출물 | v0.1.7 | v0.2.2 | 변화 |
 |------------|--------|--------|------|
-| **메인 번들** (index-*.js) | 734 KB | **352 KB** | **-52.0%** |
+| **메인 번들** (index-*.js) | 734 KB | **353 KB** | **-51.9%** |
 | vendor-react | (메인에 포함) | 133.93 KB | 분리 |
 | vendor-pdf | 357 KB (변동 없음) | 365.12 KB | 별도 청크 |
 | vendor-xlsx | 419 KB (변동 없음) | 429.03 KB | 별도 청크 |
@@ -729,7 +819,7 @@ surfaces/gui/src/App.tsx                    (import 교체, ~15줄 감소)
 
 ---
 
-## 8. 스코프 변경 및 설계 판단
+## 9. 스코프 변경 및 설계 판단
 
 ### 기획 대비 변경된 항목
 
@@ -758,20 +848,15 @@ surfaces/gui/src/App.tsx                    (import 교체, ~15줄 감소)
 | `sessions_changed` / `inbox_changed` push | 폴링 의존도 대폭 감소 | v0.2.1 |
 | `resetSession()` 헬퍼 | 세션 전환 시 일괄 초기화 | v0.2.1 |
 | conftest 공통 헬퍼 중앙화 | ScriptedProvider 등 5개 헬퍼 | v0.2.1 |
+| Sidebar 콜백 안정화 | 15+ 인라인 콜백 → useCallback 참조 | v0.2.2 |
+| Lighthouse CI | 프로덕션 빌드 성능 자동 측정 + threshold | v0.2.2 |
+| pre-commit hook | ruff lint + format 커밋 전 자동 실행 | v0.2.2 |
 
 ---
 
-## 9. 후속 과제
+## 10. 후속 과제
 
-> v0.2.1 단기 과제 4개는 §5에서 모두 구현 완료됨. 아래는 남은 중기/장기 항목.
-
-### 단기 (v0.2.2)
-
-| 항목 | 우선순위 | 설명 |
-|------|---------|------|
-| React DevTools Profiler 분석 | 중 | 실제 사용 시나리오에서 리렌더링 병목 컴포넌트 식별 → 타겟 `useCallback`/`memo` 적용 |
-| Lighthouse CI 통합 | 하 | PR별 성능 점수 추적, 회귀 방지 |
-| pre-commit hook 도입 | 하 | `ruff check` + `ruff format --check`를 커밋 전 자동 실행 |
+> v0.2.1 단기 과제 4개(§5), v0.2.2 DX 과제 3개(§6) 모두 구현 완료됨. 아래는 남은 중기/장기 항목.
 
 ### 중기 (v0.3.0)
 
@@ -793,9 +878,9 @@ surfaces/gui/src/App.tsx                    (import 교체, ~15줄 감소)
 
 ---
 
-## 변경 파일 목록 (v0.2.0 + v0.2.1, 커밋 `c9e7604`)
+## 변경 파일 목록 (v0.2.0 ~ v0.2.2)
 
-**총 246개 파일** (+4,824줄 / -4,987줄)
+커밋: `c9e7604` (v0.2.0+v0.2.1) → `aad19cc` (기획서) → `a49491b` (v0.2.2)
 
 ### Python 백엔드 — 성능 개선 (12개)
 ```
@@ -844,6 +929,13 @@ tests/test_server.py                      — (삭제) → 아래 2개로 분할
 tests/test_server_rest.py                 — (신규) 262줄 (REST API)
 tests/test_server_ws.py                   — (신규) 740줄 (WebSocket)
 tests/test_subscriptions.py               — flush 호출 추가
+```
+
+### DX (v0.2.2, 3개)
+```
+surfaces/gui/src/App.tsx                  — useCallback 15+ 콜백 안정화
+surfaces/gui/lighthouserc.json            — (신규) Lighthouse CI threshold
+.pre-commit-config.yaml                   — (신규) ruff pre-commit hook
 ```
 
 ### 기타 (2개)
