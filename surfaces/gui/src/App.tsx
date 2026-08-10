@@ -142,6 +142,29 @@ function AppInner() {
     [setSettingsTab, setSurface],
   );
 
+  // Stable surface-navigation callbacks for Sidebar (memo'd) — avoids recreation on every render.
+  const openManage = useCallback(() => openSettings("appearance"), [openSettings]);
+  const openManagePersonas = useCallback(() => openSettings("personas"), [openSettings]);
+  const openScheduled = useCallback(() => setSurface("scheduled"), [setSurface]);
+  const openIntegrations = useCallback(() => setSurface("integrations"), [setSurface]);
+  const openAudit = useCallback(() => setSurface("audit"), [setSurface]);
+  const openAbout = useCallback(() => setSurface("about"), [setSurface]);
+  const openInbox = useCallback(() => setSurface("inbox"), [setSurface]);
+  const openOps = useCallback(() => setSurface("ops"), [setSurface]);
+  const openDev = useCallback(() => setSurface("dev"), [setSurface]);
+  const openDatabase = useCallback(() => setSurface("database"), [setSurface]);
+  const openServices = useCallback(() => setSurface("services"), [setSurface]);
+  const openWiki = useCallback(() => setSurface("wiki"), [setSurface]);
+  const onPeekLeave = useCallback(() => setNavPeek(false), [setNavPeek]);
+  const onOpenPersonaFromSidebar = useCallback(
+    (id: string) => openPersona(id, "session"),
+    [openPersona],
+  );
+  const onOpenAutomation = useCallback(
+    (id: string) => { setScheduledOpenId(id); setSurface("scheduled"); },
+    [setScheduledOpenId, setSurface],
+  );
+
   const {
     workspace, setWorkspace,
     branch, setBranch,
@@ -613,18 +636,18 @@ function AppInner() {
   const autoScrollingRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   const [following, setFollowing] = useState(true);
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     autoScrollingRef.current = true;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  };
-  const followLatest = () => {
+  }, []);
+  const followLatest = useCallback(() => {
     atBottomRef.current = true;
     setFollowing(true);
     scrollToBottom();
-  };
-  const handleScroll = () => {
+  }, [scrollToBottom]);
+  const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     const top = el.scrollTop;
@@ -639,7 +662,7 @@ function AppInner() {
     lastScrollTopRef.current = top;
     atBottomRef.current = atBottom;
     setFollowing(atBottom);
-  };
+  }, []);
   // A different session is a fresh viewport — never inherit a scrolled-up state. Declared
   // BEFORE the auto-scroll effect: when a session switch and its hydrated items land in one
   // commit, the reset must run first or the stale ref would skip the initial bottom-scroll.
@@ -1141,25 +1164,20 @@ function AppInner() {
         onDeleteSession={deleteConversation}
         onArchiveSession={toggleArchived}
         onTogglePin={togglePinned}
-        onManage={() => openSettings("appearance")}
-        onOpenPersona={(id) => {
-          openPersona(id, "session");
-        }}
-        onManagePersonas={() => openSettings("personas")}
-        onOpenScheduled={() => setSurface("scheduled")}
-        onOpenAutomation={(id) => {
-          setScheduledOpenId(id);
-          setSurface("scheduled");
-        }}
-        onOpenIntegrations={() => setSurface("integrations")}
-        onOpenAudit={() => setSurface("audit")}
-        onOpenAbout={() => setSurface("about")}
-        onOpenInbox={() => setSurface("inbox")}
-        onOpenOps={() => setSurface("ops")}
-        onOpenDev={() => setSurface("dev")}
-        onOpenDatabase={() => setSurface("database")}
-        onOpenServices={() => setSurface("services")}
-        onOpenWiki={() => setSurface("wiki")}
+        onManage={openManage}
+        onOpenPersona={onOpenPersonaFromSidebar}
+        onManagePersonas={openManagePersonas}
+        onOpenScheduled={openScheduled}
+        onOpenAutomation={onOpenAutomation}
+        onOpenIntegrations={openIntegrations}
+        onOpenAudit={openAudit}
+        onOpenAbout={openAbout}
+        onOpenInbox={openInbox}
+        onOpenOps={openOps}
+        onOpenDev={openDev}
+        onOpenDatabase={openDatabase}
+        onOpenServices={openServices}
+        onOpenWiki={openWiki}
         opsActive={surface === "ops"}
         devActive={surface === "dev"}
         databaseActive={surface === "database"}
@@ -1172,7 +1190,7 @@ function AppInner() {
         inboxActive={surface === "inbox"}
         collapsed={navCollapsed}
         onCollapse={toggleNav}
-        onPeekLeave={() => setNavPeek(false)}
+        onPeekLeave={onPeekLeave}
       />
       </ErrorBoundary>
       <Suspense fallback={<div className="surface-loading" />}>
