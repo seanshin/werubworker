@@ -1,8 +1,8 @@
 # WeruBWorker 성능 개선 기획서
 
 > 작성일: 2026-08-10  
-> 최종 갱신: 2026-08-10 (v0.3.0 릴리즈 완료, 커밋 `46da4a4`)  
-> 대상 버전: v0.1.7 → v0.2.0 (18) → v0.2.1 (4) → v0.2.2 (3) → v0.3.0 (4)  
+> 최종 갱신: 2026-08-10 (Sidebar 가상화 완료, 커밋 `00d045c`)  
+> 대상 버전: v0.1.7 → v0.2.0 (18) → v0.2.1 (4) → v0.2.2 (3) → v0.3.0 (4) → v1.0 (1)  
 > 범위: 서버 백엔드 / GUI 프론트엔드 / 테스트·빌드 / DX / 아키텍처
 
 ---
@@ -322,28 +322,42 @@ surfaces/gui/src/App.tsx                        (~55줄 감소)
 
 ---
 
-### 3-3. 리스트 DOM 제한 강화 ✅ 대안 구현 (P0)
+### 3-3. 리스트 DOM 제한 + Sidebar 가상화 ✅ 완료 (P0 + v1.0)
 
 **원래 기획:**  
 react-window(`FixedSizeList`, `VariableSizeList`)로 Sidebar, SearchModal, Transcript 가상화.
 
-**실제 구현 — 기존 방어책 강화:**
+**구현 (2단계):**
+
+**v0.2.0 — 기존 방어책 강화:**
 
 | 컴포넌트 | 구현 | 사유 |
 |---------|------|------|
-| **Transcript** | `VISIBLE_WINDOW` 200 → **100** | 메시지 높이가 가변적(마크다운, 이미지, 도구 결과)이어서 `VariableSizeList`의 높이 측정 비용이 높음. 기존 "Show earlier messages" 패턴이 이미 DOM 제한 |
-| **SearchModal** | 결과 100개 제한 (`.slice(0, 100)`) | Pinned/Recent 섹션 헤더가 있어 `FixedSizeList`와 구조적 비호환. `max-h-[52vh]`로 이미 스크롤 영역 제한 |
-| **Sidebar** | 변경 없음 | 아코디언+폴더 구조, 기존 `peek`/`showAll` 패턴으로 기본 표시 수 제한 |
+| **Transcript** | `VISIBLE_WINDOW` 200 → **100** | 메시지 높이 가변 → `VariableSizeList` 측정 비용 과다 |
+| **SearchModal** | 결과 100개 제한 (`.slice(0, 100)`) | 섹션 헤더 구조 비호환 |
 
-**미구현 사유 (react-window):**
-- Sidebar: 프로젝트별 폴더 아코디언 안에 세션 행이 렌더링되는 복합 레이아웃. `FixedSizeList`는 플랫 리스트 전용이며, 아코디언 열기/닫기 시 리스트 크기가 동적 변경됨. 가상화 적용 시 아코디언 상태 관리 로직 전면 재작성 필요.
-- Transcript: 각 메시지의 높이가 내용에 따라 수십 px ~ 수천 px까지 변동. `VariableSizeList`의 `itemSize` 콜백이 매 렌더 시 높이를 계산해야 하며, 마크다운 렌더링 결과의 높이를 사전 측정하려면 숨겨진 DOM에 렌더 후 측정하는 방식이 필요 — 오히려 성능 저하 가능.
-- `react-window`는 설치되어 있으나 `@types/react-window`만 사용 중. 실제 컴포넌트는 미사용.
+**v1.0 — Sidebar react-window 가상화:**
+
+| 항목 | 구현 |
+|------|------|
+| 대상 | flat layout의 확장된 Recent 세션 목록 |
+| 활성 조건 | `recentExpanded && length > 20` (VIRTUAL_THRESHOLD) |
+| 컴포넌트 | react-window v2 `List` (`rowComponent` API) |
+| 행 높이 | 40px 고정 (`cardRow`의 py-2 + 콘텐츠) |
+| 최대 높이 | 480px (12행 가시) |
+| overscan | 5행 |
+| 효과 | **100+ 세션 시 DOM 노드: 100+ → ~17개** |
+| fallback | 20개 이하 또는 접힌 상태에서는 기존 DOM 렌더링 유지 |
+
+**미구현 (구조적 비호환):**
+- **grouped layout** (아코디언+폴더): 프로젝트별 아코디언 내부는 `peek`/`showAll`로 제한 유지. 아코디언 열기/닫기 시 리스트 크기 동적 변경으로 `List` 비호환.
+- **Transcript**: 메시지 높이 가변 (마크다운, 이미지) → `VISIBLE_WINDOW=100`으로 대체.
 
 **변경 파일:**
 ```
-surfaces/gui/src/components/Transcript.tsx
-surfaces/gui/src/components/SearchModal.tsx
+surfaces/gui/src/components/Sidebar.tsx      (v1.0, react-window List 적용)
+surfaces/gui/src/components/Transcript.tsx   (v0.2.0, VISIBLE_WINDOW 축소)
+surfaces/gui/src/components/SearchModal.tsx  (v0.2.0, 결과 100개 제한)
 ```
 
 ---
@@ -821,7 +835,7 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 | 2-1 | SQLite WAL + 인덱스 | HIGH | **P0** | ✅ 완료 | `read_uncommitted` 미적용 (불필요) |
 | 2-3 | 엔진 캐시 LRU | HIGH | **P0** | ✅ 완료 | 디스크 직렬화 미구현 (기존 복원 로직으로 충분) |
 | 3-1 | 코드 스플리팅 + Lazy Loading | HIGH | **P0** | ✅ 완료 | 734→352KB (-52%) |
-| 3-3 | 리스트 DOM 제한 | HIGH | **P0** | ✅ 대안 | react-window 대신 기존 방어책 강화 |
+| 3-3 | 리스트 DOM 제한 + 가상화 | HIGH | **P0** | ✅ 완료 | Sidebar react-window v2 List 적용 (v1.0) |
 | 2-4 | MCP 병렬 연결 | HIGH | **P1** | ✅ 완료 | 3단계 파이프라인 |
 | 3-2 | 상태 관리 분리 | HIGH | **P1** | ✅ 완료 | 4개 훅 추출 (v0.2.1에서 useSessionState 추가) |
 | 4-1 | Pytest 병렬 실행 | HIGH | **P1** | ✅ 완료 | 38→19초 (-50%) |
@@ -863,7 +877,13 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 | 7-3 | handleEvent 분해 | ✅ 완료 | 190줄 switch → 20 핸들러 dispatch, App.tsx -170줄 |
 | 7-4 | UIContext 최적화 | ✅ 완료 | browserRefreshKey/artifactCount → App 로컬, 의존성 18→16 |
 
-**종합:** 29개 항목 중 **28개 완료, 1개 부분 완료** (2-5 JSON I/O — ChannelBuffer만 적용)
+### v1.0 장기 항목 (1개 완료)
+
+| # | 항목 | 상태 | 비고 |
+|---|------|------|------|
+| — | Sidebar react-window 가상화 | ✅ 완료 | flat Recent 20+세션 → List 가상화, DOM 100+→~17 |
+
+**종합:** 30개 항목 중 **29개 완료, 1개 부분 완료** (2-5 JSON I/O — ChannelBuffer만 적용)
 
 ---
 
@@ -873,7 +893,7 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 
 | 빌드 산출물 | v0.1.7 | v0.3.0 | 변화 |
 |------------|--------|--------|------|
-| **메인 번들** (index-*.js) | 734 KB | **354 KB** | **-51.8%** |
+| **메인 번들** (index-*.js) | 734 KB | **362 KB** | **-50.7%** |
 | vendor-react | (메인에 포함) | 133.93 KB | 분리 |
 | vendor-pdf | 357 KB (변동 없음) | 365.12 KB | 별도 청크 |
 | vendor-xlsx | 419 KB (변동 없음) | 429.03 KB | 별도 청크 |
@@ -883,8 +903,8 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 | CSS | 94 KB | 97.14 KB | 미세 증가 (loading 스타일) |
 | 빌드 시간 | — | 2.83초 | — |
 
-**초기 로드에 필요한 JS:** 352 KB (메인) + 134 KB (react) = **486 KB**  
-(이전 734 KB 대비 **-34%**, vendor-pdf/xlsx는 해당 뷰 진입 시에만 로드)
+**초기 로드에 필요한 JS:** 362 KB (메인) + 134 KB (react) = **496 KB**  
+(이전 734 KB 대비 **-32%**, react-window +8KB 포함. vendor-pdf/xlsx는 해당 뷰 진입 시에만 로드)
 
 ### Python 테스트 성능
 
@@ -913,7 +933,7 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 
 | 기획 | 실제 | 이유 |
 |------|------|------|
-| react-window 가상화 (3-3) | 기존 윈도우 크기 축소 + DOM 캡 | 아코디언/가변 높이 구조와 비호환 |
+| react-window 가상화 (3-3) | flat layout만 가상화 (v1.0), grouped/Transcript는 대안 | 아코디언/가변 높이는 비호환, flat Recent만 적용 |
 | InboxStore SQLite 마이그레이션 (2-5) | 즉시 저장 유지 | 이미 메모리 캐시, persistence 테스트 호환 |
 | ESLint + Prettier (4-4) | ruff만 도입 | tsc가 이미 타입/품질 검증 |
 
@@ -942,27 +962,27 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 | Service Worker | cache-first 벤더/폰트/CSS, Tauri 자동 비활성 | v0.3.0 |
 | `eventHandlers.ts` dispatch 테이블 | 190줄 switch → 20 핸들러 분해 | v0.3.0 |
 | UIContext → App 로컬 상태 이동 | browserRefreshKey/artifactCount 분리 | v0.3.0 |
+| Sidebar react-window 가상화 | flat Recent 20+세션 → List, DOM 100+→~17 | v1.0 |
 
 ---
 
 ## 11. 후속 과제
 
-> v0.2.1(§5), v0.2.2(§6), v0.3.0(§7) 과제 모두 구현 완료됨. 아래는 장기 항목만 잔존.
+> v0.2.1(§5), v0.2.2(§6), v0.3.0(§7), react-window 가상화(v1.0) 모두 완료됨. 아래는 남은 장기 항목.
 
-### 장기 (v1.0)
+### 장기 (v1.0+)
 
 | 항목 | 우선순위 | 설명 |
 |------|---------|------|
 | SSR / Streaming SSR | 중 | 초기 렌더링 FCP 개선 (현재 CSR only) |
 | SQLite → PostgreSQL 옵션 | 하 | 멀티 프로세스 배포 시 WAL 모드의 단일 writer 제한 해소 |
 | WebAssembly PDF 렌더링 | 하 | pdfjs worker 1.3MB 제거, WASM 기반 경량 뷰어 |
-| react-window 재검토 | 하 | Sidebar를 플랫 리스트로 재구성 후 가상화 적용 가능성 재평가 |
 
 ---
 
-## 변경 파일 목록 (v0.2.0 ~ v0.3.0)
+## 변경 파일 목록 (v0.2.0 ~ v1.0)
 
-커밋: `c9e7604` (v0.2.0+v0.2.1) → `a49491b` (v0.2.2) → `46da4a4` (v0.3.0)
+커밋: `c9e7604` (v0.2.0+v0.2.1) → `a49491b` (v0.2.2) → `46da4a4` (v0.3.0) → `00d045c` (가상화)
 
 ### Python 백엔드 — 성능 개선 (12개)
 ```
@@ -1020,7 +1040,7 @@ surfaces/gui/lighthouserc.json            — (신규) Lighthouse CI threshold
 .pre-commit-config.yaml                   — (신규) ruff pre-commit hook
 ```
 
-### 아키텍처 (v0.3.0, 5개)
+### 아키텍처 (v0.3.0 + v1.0, 6개)
 ```
 surfaces/gui/public/sw.js                 — (신규) Service Worker cache-first
 surfaces/gui/src/main.tsx                 — SW 등록
@@ -1028,6 +1048,7 @@ surfaces/gui/src/hooks/eventHandlers.ts   — (신규) 20 핸들러 dispatch 테
 surfaces/gui/src/App.tsx                  — handleEvent 분해, UIContext 로컬 이동
 surfaces/gui/src/contexts/UIContext.tsx   — browserRefreshKey/artifactCount 제거
 coworker/compaction.py                    — estimate_tokens 경량화
+surfaces/gui/src/components/Sidebar.tsx   — react-window v2 List 가상화 (v1.0)
 ```
 
 ### 기타 (2개)
