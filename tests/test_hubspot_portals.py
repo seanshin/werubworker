@@ -200,6 +200,7 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
+@pytest.mark.skip(reason="Cloud managed OAuth removed")
 def test_managed_callback_lands_in_portal_profile(client):
     import coworker.cloud as cloud
 

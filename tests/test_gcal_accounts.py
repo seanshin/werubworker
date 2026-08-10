@@ -222,6 +222,7 @@ def test_write_tools_require_approval(secrets):
 # --- managed refresh targets the account profile ------------------------------
 
 
+@pytest.mark.skip(reason="Cloud managed OAuth removed")
 def test_account_profile_refreshes_in_place(secrets, monkeypatch):
     from coworker import cloud
 

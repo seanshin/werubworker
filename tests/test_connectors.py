@@ -827,7 +827,7 @@ def test_new_tools_error_when_not_connected(tmp_path):
 
 def _connected_tools(tmp_path, monkeypatch, calls):
     """All new connectors connected + _request recorded instead of hitting the network."""
-    import coworker.connectors.tools._helpers as it
+    import coworker.connectors.tools._helpers as it; from coworker.connectors.integration_tools import make_integration_tools as _make_tools
 
     secrets = SecretStore(tmp_path / "secrets.json")
     for name, fields in _NEW_CONNECTORS.items():
@@ -847,7 +847,7 @@ def _connected_tools(tmp_path, monkeypatch, calls):
         return {"ok": True, "data": {}}
 
     monkeypatch.setattr(it, "_request", fake_request)
-    return {t.__name__: t for t in it.make_integration_tools(secrets)}
+    return {t.__name__: t for t in _make_tools(secrets)}
 
 
 def test_new_tools_request_routing(tmp_path, monkeypatch):
@@ -1121,7 +1121,7 @@ def test_batch3_tools_request_routing(tmp_path, monkeypatch):
 
 
 def test_docusign_account_discovery_caches(tmp_path, monkeypatch):
-    import coworker.connectors.tools._helpers as it
+    import coworker.connectors.tools._helpers as it; from coworker.connectors.integration_tools import make_integration_tools as _make_tools
 
     secrets = SecretStore(tmp_path / "secrets.json")
     secrets.put("docusign:default", {"access_token": "ds_x", "enabled": True})
@@ -1150,7 +1150,7 @@ def test_docusign_account_discovery_caches(tmp_path, monkeypatch):
         return {"ok": True, "data": {}}
 
     monkeypatch.setattr(it, "_request", fake_request)
-    tools = {t.__name__: t for t in it.make_integration_tools(secrets)}
+    tools = {t.__name__: t for t in _make_tools(secrets)}
 
     tools["docusign_list_templates"]()
     assert calls[0] == "https://account.docusign.com/oauth/userinfo"
@@ -1162,7 +1162,7 @@ def test_docusign_account_discovery_caches(tmp_path, monkeypatch):
 
 
 def test_drive_read_file_exports_google_docs(tmp_path, monkeypatch):
-    import coworker.connectors.tools._helpers as it
+    import coworker.connectors.tools._helpers as it; from coworker.connectors.integration_tools import make_integration_tools as _make_tools
 
     secrets = SecretStore(tmp_path / "secrets.json")
     secrets.put("google_drive:default", {"access_token": "ya29.x", "enabled": True})
@@ -1180,7 +1180,7 @@ def test_drive_read_file_exports_google_docs(tmp_path, monkeypatch):
         }
 
     monkeypatch.setattr(it, "_request", fake_request)
-    tools = {t.__name__: t for t in it.make_integration_tools(secrets)}
+    tools = {t.__name__: t for t in _make_tools(secrets)}
     out = tools["drive_read_file"]("f1")
     assert out["ok"] is True and out["content"] == "Doc body text"
 
@@ -1192,12 +1192,12 @@ def test_drive_read_file_exports_google_docs(tmp_path, monkeypatch):
         }
 
     monkeypatch.setattr(it, "_request", fake_request_drawing)
-    tools = {t.__name__: t for t in it.make_integration_tools(secrets)}
+    tools = {t.__name__: t for t in _make_tools(secrets)}
     assert "cannot read" in tools["drive_read_file"]("f2")["error"]
 
 
 def test_notion_read_page_flattens_blocks(tmp_path, monkeypatch):
-    import coworker.connectors.tools._helpers as it
+    import coworker.connectors.tools._helpers as it; from coworker.connectors.integration_tools import make_integration_tools as _make_tools
     from coworker.connectors import accounts
 
     secrets = SecretStore(tmp_path / "secrets.json")
@@ -1224,7 +1224,7 @@ def test_notion_read_page_flattens_blocks(tmp_path, monkeypatch):
         return {"ok": True, "data": {"properties": {"p": 1}, "url": "https://n/x"}}
 
     monkeypatch.setattr(it, "_request", fake_request)
-    tools = {t.__name__: t for t in it.make_integration_tools(secrets)}
+    tools = {t.__name__: t for t in _make_tools(secrets)}
     out = tools["notion_read_page"]("pg1")
     assert out["text"] == "Title\nBody text"
     assert out["account"] == "ws1" and out["url"] == "https://n/x"
@@ -1298,7 +1298,7 @@ def test_google_drive_multi_account_keys_by_email(tmp_path):
 def test_outlook_managed_multi_account_keys_by_email(tmp_path, monkeypatch):
     """Managed Outlook mirrors Gmail/Drive: broker `account` (email from the
     Microsoft id_token) keys each mailbox; tools take an account param."""
-    import coworker.connectors.tools._helpers as it
+    import coworker.connectors.tools._helpers as it; from coworker.connectors.integration_tools import make_integration_tools as _make_tools
     from coworker.cloud import managed_profile_from_callback
     from coworker.connectors import accounts
     from coworker.connectors.setup import managed_connect_connector
@@ -1322,7 +1322,7 @@ def test_outlook_managed_multi_account_keys_by_email(tmp_path, monkeypatch):
         return {"ok": True, "data": {}}
 
     monkeypatch.setattr(it, "_request", fake_request)
-    tools = {t.__name__: t for t in it.make_integration_tools(secrets)}
+    tools = {t.__name__: t for t in _make_tools(secrets)}
     out = tools["outlook_search_messages"]("q", account="ops@acme.com")
     assert out["account"] == "ops@acme.com"
     assert calls[-1]["headers"]["Authorization"] == "Bearer g2"
@@ -1338,7 +1338,7 @@ def test_outlook_calendar_tools_hit_the_right_graph_endpoints(tmp_path, monkeypa
     create carries attendees/location/Teams flags, update PATCHes only the
     provided fields, respond posts to the accept/decline/tentativelyAccept
     action endpoints."""
-    import coworker.connectors.tools._helpers as it
+    import coworker.connectors.tools._helpers as it; from coworker.connectors.integration_tools import make_integration_tools as _make_tools
     from coworker.cloud import managed_profile_from_callback
     from coworker.connectors.setup import managed_connect_connector
 
@@ -1362,7 +1362,7 @@ def test_outlook_calendar_tools_hit_the_right_graph_endpoints(tmp_path, monkeypa
         return {"ok": True, "data": {}}
 
     monkeypatch.setattr(it, "_request", fake_request)
-    tools = {t.__name__: t for t in it.make_integration_tools(secrets)}
+    tools = {t.__name__: t for t in _make_tools(secrets)}
 
     tools["outlook_create_event"](
         "Sync",
@@ -1409,7 +1409,7 @@ def test_outlook_calendar_tools_hit_the_right_graph_endpoints(tmp_path, monkeypa
 def test_batch2_account_param_picks_the_profile(tmp_path, monkeypatch):
     """Two PostHog projects connected → the account param routes the call; the
     default pointer serves bare calls; unknown accounts fail closed."""
-    import coworker.connectors.tools._helpers as it
+    import coworker.connectors.tools._helpers as it; from coworker.connectors.integration_tools import make_integration_tools as _make_tools
     from coworker.connectors import accounts
 
     calls = []
@@ -1426,7 +1426,7 @@ def test_batch2_account_param_picks_the_profile(tmp_path, monkeypatch):
         return {"ok": True, "data": {}}
 
     monkeypatch.setattr(it, "_request", fake_request)
-    tools = {t.__name__: t for t in it.make_integration_tools(secrets)}
+    tools = {t.__name__: t for t in _make_tools(secrets)}
 
     out = tools["posthog_query"]("SELECT 1", account="22")
     assert "/projects/22/" in calls[-1]["url"]
@@ -1517,7 +1517,7 @@ def test_new_write_tools_require_approval(tmp_path, monkeypatch):
 
 
 def test_gitlab_self_hosted_base_url(tmp_path, monkeypatch):
-    import coworker.connectors.tools._helpers as it
+    import coworker.connectors.tools._helpers as it; from coworker.connectors.integration_tools import make_integration_tools as _make_tools
 
     secrets = SecretStore(tmp_path / "secrets.json")
     secrets.put(
@@ -1528,13 +1528,13 @@ def test_gitlab_self_hosted_base_url(tmp_path, monkeypatch):
     monkeypatch.setattr(
         it, "_request", lambda m, url, **kw: calls.append(url) or {"ok": True}
     )
-    tools = {t.__name__: t for t in it.make_integration_tools(secrets)}
+    tools = {t.__name__: t for t in _make_tools(secrets)}
     tools["gitlab_search"]("q")
     assert calls[0] == "https://git.example.com/api/v4/search"
 
 
 def test_quickbooks_sandbox_environment(tmp_path, monkeypatch):
-    import coworker.connectors.tools._helpers as it
+    import coworker.connectors.tools._helpers as it; from coworker.connectors.integration_tools import make_integration_tools as _make_tools
 
     secrets = SecretStore(tmp_path / "secrets.json")
     secrets.put(
@@ -1545,7 +1545,7 @@ def test_quickbooks_sandbox_environment(tmp_path, monkeypatch):
     monkeypatch.setattr(
         it, "_request", lambda m, url, **kw: calls.append(url) or {"ok": True}
     )
-    tools = {t.__name__: t for t in it.make_integration_tools(secrets)}
+    tools = {t.__name__: t for t in _make_tools(secrets)}
     tools["quickbooks_list_customers"]()
     assert calls[0] == "https://sandbox-quickbooks.api.intuit.com/v3/company/r1/query"
 

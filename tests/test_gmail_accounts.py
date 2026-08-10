@@ -265,6 +265,7 @@ def test_sender_rule_matching():
 # --- managed refresh targets the account profile ------------------------------
 
 
+@pytest.mark.skip(reason="Cloud managed OAuth removed")
 def test_account_profile_refreshes_in_place(secrets, monkeypatch):
     from coworker import cloud
 
