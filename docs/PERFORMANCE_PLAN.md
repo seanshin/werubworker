@@ -1,8 +1,8 @@
-# WeruBWorker v0.2.0 성능 개선 기획서
+# WeruBWorker 성능 개선 기획서
 
 > 작성일: 2026-08-10  
-> 최종 갱신: 2026-08-10 (전 항목 구현 완료 후 보완)  
-> 대상 버전: v0.1.7 → v0.2.0  
+> 최종 갱신: 2026-08-10 (v0.2.1 구현 완료, 커밋 `c9e7604`)  
+> 대상 버전: v0.1.7 → v0.2.0 (기획 18항목) + v0.2.1 (후속 4항목)  
 > 범위: 서버 백엔드 / GUI 프론트엔드 / 테스트·빌드 파이프라인
 
 ---
@@ -13,10 +13,11 @@
 2. [Phase 1 — 서버 백엔드 성능 개선 (P0/P1)](#2-phase-1--서버-백엔드-성능-개선)
 3. [Phase 2 — GUI 프론트엔드 성능 개선 (P0–P2)](#3-phase-2--gui-프론트엔드-성능-개선)
 4. [Phase 3 — 테스트·빌드 파이프라인 최적화 (P1–P3)](#4-phase-3--테스트빌드-파이프라인-최적화)
-5. [우선순위 매트릭스 및 구현 현황](#5-우선순위-매트릭스-및-구현-현황)
-6. [실측 결과](#6-실측-결과)
-7. [스코프 변경 및 설계 판단](#7-스코프-변경-및-설계-판단)
-8. [후속 과제](#8-후속-과제)
+5. [v0.2.1 후속 구현](#5-v021-후속-구현)
+6. [우선순위 매트릭스 및 구현 현황](#6-우선순위-매트릭스-및-구현-현황)
+7. [실측 결과](#7-실측-결과)
+8. [스코프 변경 및 설계 판단](#8-스코프-변경-및-설계-판단)
+9. [후속 과제](#9-후속-과제)
 
 ---
 
@@ -41,18 +42,21 @@
 | Python 테스트 실행 | 순차, 약 38초 |
 | 정적 분석 | 미설정 |
 
-### v0.2.0 기준 (개선 후)
+### v0.2.1 기준 (최종 개선 후)
 
 | 항목 | 수치 | 변화 |
 |------|------|------|
-| 메인 JS 번들 | **351 KB** | **-52.2%** |
+| 메인 JS 번들 | **352 KB** | **-52.0%** |
 | 코드 스플리팅 청크 | 12 뷰 + 5 벤더 | 신규 |
 | SQLite 모드 | WAL + 스레드별 커넥션 + 인덱스 3개 | 동시 읽기 허용 |
 | 세션 엔진 캐시 | LRU 50개 + TTL 1시간 | 메모리 안정화 |
 | MCP 연결 | 병렬 (`asyncio.gather`) + 10초 타임아웃 | ~2.5배 단축 |
+| 세션/인박스 업데이트 | 서버 push (`sessions_changed`, `inbox_changed`) | 폴링 5초→30초, 4초→15초 |
 | Python 테스트 | 병렬 (`-n auto`), 약 19초 | **-50%** |
 | 스트리밍 리렌더링 | rAF 배치 (60fps 동기화) | 매 토큰 → 프레임당 1회 |
-| 정적 분석 | ruff (E/F/W), CI 통합 | 신규 |
+| 상태 관리 | 4개 커스텀 훅 (stream, inbox, session, visibleInterval) | App.tsx ~55줄 감소 |
+| 정적 분석 | ruff (E/F/W/I) + format, CI 통합 | 213개 파일 포매팅 |
+| 테스트 구조 | connectors + server 양쪽 분할 완료 | 유지보수 개선 |
 | TS 빌드 | 증분 컴파일 (`.tsbuildinfo`) | 재빌드 가속 |
 
 ---
@@ -279,36 +283,40 @@ surfaces/gui/src/styles.css
 
 ---
 
-### 3-2. 상태 관리 구조 분리 ✅ 부분 완료 (P1)
+### 3-2. 상태 관리 구조 분리 ✅ 완료 (P1 + v0.2.1)
 
 **문제:**  
 `App.tsx` 1,704줄에 30개 이상의 `useState`가 집중. ref-mirror 패턴(streamingRef, reasoningRef, unattendedRef)이 코드 복잡도를 높이고 버그 유발 가능.
 
-**구현 내용:**
+**구현 내용 (v0.2.0 P1 + v0.2.1 후속):**
 
-| 훅 | 추출한 상태 | 줄 수 |
-|----|-----------|-------|
-| `useStreamState` | streaming, reasoning, compacting, streamingRef, reasoningRef, appendDelta, appendReasoningDelta, flush, reset | 65줄 |
-| `useInboxState` | sessionInbox, unattended, unattendedRef, markUnattended, toggleUnattended, resolveSessionInbox, refreshInbox | 63줄 |
+| 훅 | 추출한 상태 | 줄 수 | 시점 |
+|----|-----------|-------|------|
+| `useStreamState` | streaming, reasoning, compacting, streamingRef, reasoningRef, appendDelta, appendReasoningDelta, flush, reset | 113줄 | v0.2.0 P1 |
+| `useInboxState` | sessionInbox, unattended, unattendedRef, markUnattended, toggleUnattended, resolveSessionInbox, refreshInbox | 63줄 | v0.2.0 P1 |
+| `useSessionState` | workspace, branch, agent, mode, connected, running, sessionId, usage, todo, showGate, workspaceTrustRequest, runContext, composerPrefill, resetSession | 70줄 | v0.2.1 |
+| `useVisibleInterval` | visibility-aware setInterval 래퍼 | 44줄 | v0.2.0 P3 |
 
 **변경 파일:**
 ```
-surfaces/gui/src/hooks/useStreamState.ts   (신규)
-surfaces/gui/src/hooks/useInboxState.ts    (신규)
-surfaces/gui/src/App.tsx                    (~40줄 감소)
+surfaces/gui/src/hooks/useStreamState.ts       (신규, v0.2.0)
+surfaces/gui/src/hooks/useInboxState.ts        (신규, v0.2.0)
+surfaces/gui/src/hooks/useSessionState.ts      (신규, v0.2.1)
+surfaces/gui/src/hooks/useVisibleInterval.ts   (신규, v0.2.0)
+surfaces/gui/src/App.tsx                        (~55줄 감소)
 ```
 
 **미구현 및 사유:**
 
 | 기획 항목 | 상태 | 사유 |
 |----------|------|------|
-| `useSessionState()` 훅 추출 | ❌ 미구현 | sessionId, workspace, branch, agent, mode 등이 `handleEvent`의 거의 모든 이벤트 타입에서 읽기/쓰기. 분리하면 handleEvent 인자가 폭증하거나 훅 간 순환 의존 발생 |
 | UIContext 서브 컨텍스트 분할 | ❌ 미구현 | UIContext는 이미 SettingsContext, AuthContext와 분리됨. 추가 분할은 provider 중첩 깊이 증가 + props drilling 교체 비용 대비 효과 미미 |
 | `useSyncExternalStore` 도입 | ❌ 미구현 | 외부 스토어(Redux, Zustand 등) 없이 React state로 충분. 도입 시 전체 상태 관리 패턴 변경 필요 |
 
 **설계 판단:**
 - ref-mirror 패턴은 **제거가 아닌 캡슐화**로 해결. `useStreamState` 내부에서 ref와 state를 동기화하므로 소비자(App.tsx)는 ref를 직접 다루지 않아도 됨.
 - `useInboxState`의 `refreshSessions` 의존성 때문에, 훅 호출 순서를 `refreshSessions` 선언 후로 이동해야 했음. React Hooks 규칙상 조건부 호출은 불가하므로, 선언 순서 조정으로 해결.
+- `useSessionState`는 v0.2.0에서 "handleEvent와의 순환 의존"으로 보류했으나, v0.2.1에서 handleEvent가 훅의 setter들을 직접 참조하는 구조로 충분히 분리 가능함을 확인하여 구현 완료. 15개 상태를 캡슐화하고 `resetSession()` 헬퍼 제공.
 
 ---
 
@@ -423,29 +431,44 @@ surfaces/gui/src/i18n/index.ts
 
 ---
 
-### 3-7. 비활성 탭 폴링 중지 ✅ 완료 (P3)
+### 3-7. 폴링 최적화 + 서버 Push ✅ 완료 (P3 + v0.2.1)
 
 **문제:**  
 3개의 `setInterval` 폴링(4초/5초/15초)이 탭이 비활성(숨김) 상태에서도 계속 실행.
 
-**구현 내용:**
+**구현 내용 (2단계):**
+
+**v0.2.0 — 비활성 탭 중지:**
 
 | 폴링 | 구현 |
 |------|------|
-| 세션 새로고침 (5초) | `useVisibleInterval` 훅 — 탭 hidden 시 interval 중지, visible 시 즉시 1회 실행 + interval 재시작 |
-| 인박스 (4초) | `document.hidden` 체크 — hidden이면 콜백 내부에서 early return |
-| 자동화 (15초, Sidebar) | 변경 없음 — Sidebar 컴포넌트 자체가 탭 전환 시 언마운트/마운트되므로 별도 처리 불필요 |
+| 세션 새로고침 | `useVisibleInterval` 훅 — 탭 hidden 시 interval 중지, visible 시 즉시 1회 실행 + interval 재시작 |
+| 인박스 | `document.hidden` 체크 — hidden이면 콜백 내부에서 early return |
+| 자동화 (Sidebar) | 변경 없음 — Sidebar 컴포넌트 자체가 탭 전환 시 언마운트/마운트 |
+
+**v0.2.1 — 서버 Push 이벤트 + 폴링 완화:**
+
+| 이벤트 | 발생 시점 | 효과 |
+|--------|----------|------|
+| `sessions_changed` | `mark_idle()` (턴 완료 시) | 세션 목록 즉시 갱신 |
+| `inbox_changed` | `mirror_inbox_item()` (인박스 항목 추가), `resolve_inbox()` (항목 해결) | 인박스 뱃지 즉시 갱신 |
+
+Push 이벤트 도입에 따라 폴링 주기 완화:
+- 세션 폴링: **5초 → 30초** (push 실패 시 fallback)
+- 인박스 폴링: **4초 → 15초** (push 실패 시 fallback)
 
 **변경 파일:**
 ```
-surfaces/gui/src/hooks/useVisibleInterval.ts  (신규)
-surfaces/gui/src/App.tsx
+surfaces/gui/src/hooks/useVisibleInterval.ts  (신규, v0.2.0)
+surfaces/gui/src/App.tsx                       (v0.2.0 + v0.2.1)
+coworker/server/manager.py                    (v0.2.1, push 이벤트)
+coworker/server/inbox_mixin.py                (v0.2.1, push 이벤트)
 ```
 
 **설계 판단:**
-- 기획의 "서버→클라이언트 push 이벤트로 폴링 제거"는 WebSocket 프로토콜 변경이 필요하여 v0.2.0 범위 외. 후속 과제로 이관.
-- `useVisibleInterval`은 `savedCb` ref를 사용하여 콜백 변경 시 interval을 재생성하지 않음. delay 변경 시에만 재설정.
-- 인박스 폴링은 `surface !== "session"` 조건이 있어 `useVisibleInterval`로 직접 대체 불가. `document.hidden` 체크를 콜백 내부에 추가하는 방식으로 해결.
+- 기존 `/ws/events` 인프라(`broadcast_event`)를 재사용. 새로운 WS 엔드포인트 없이 기존 이벤트 스트림에 2개 타입 추가.
+- `mark_idle()`에서 `asyncio.ensure_future(broadcast_event(...))`로 비동기 전송 — 턴 완료 지연 없음.
+- 폴링을 완전 제거하지 않고 완화한 이유: WS 연결 끊김, 이벤트 유실, 비-WS 경로(REST 클라이언트) 대응.
 
 ---
 
@@ -468,23 +491,29 @@ pyproject.toml
 
 ---
 
-### 4-2. 테스트 파일 분할 ✅ 부분 완료 (P3)
+### 4-2. 테스트 파일 분할 ✅ 완료 (P3 + v0.2.1)
 
 **구현:**
 
-| 파일 | 이전 | 이후 |
-|------|------|------|
-| `test_connectors.py` | 1,727줄 (57개 테스트) | **715줄** (24개 — 코어/게이트웨이/매니저) |
-| `test_connectors_integration.py` | — | **1,012줄** (33개 — 신규 커넥터 batch 1/2/3) |
-| `test_server.py` | 1,079줄 | 변경 없음 |
+| 파일 | 이전 | 이후 | 시점 |
+|------|------|------|------|
+| `test_connectors.py` | 1,727줄 (57개) | **715줄** (24개 — 코어/게이트웨이/매니저) | v0.2.0 |
+| `test_connectors_integration.py` | — | **1,012줄** (33개 — 신규 커넥터 batch 1/2/3) | v0.2.0 |
+| `test_server.py` | 1,023줄 (43개) | 삭제 → 2개 파일로 분리 | v0.2.1 |
+| `test_server_rest.py` | — | **262줄** (15개 — REST API) | v0.2.1 |
+| `test_server_ws.py` | — | **740줄** (28개 — WebSocket) | v0.2.1 |
 
-**미구현:**
-- `test_server.py` 분할은 미진행. 서버 테스트는 `SessionManager` 인스턴스를 공유하는 패턴이 많아, 파일 분할 시 fixture 중복/재설정 비용이 큼.
+**공통 헬퍼 중앙화 (v0.2.1):**
+`conftest.py`에 `ScriptedProvider`, `_text`, `_tool`, `_client`, `_drain` 헬퍼를 이동하여 두 분할 파일에서 공유.
 
 **변경 파일:**
 ```
 tests/test_connectors.py              (1,727 → 715줄)
 tests/test_connectors_integration.py  (신규, 1,012줄)
+tests/test_server.py                  (삭제)
+tests/test_server_rest.py             (신규, 262줄)
+tests/test_server_ws.py               (신규, 740줄)
+tests/conftest.py                     (공통 헬퍼 추가)
 ```
 
 ---
@@ -506,26 +535,28 @@ tests/test_connectors_integration.py  (신규, 1,012줄)
 
 ---
 
-### 4-4. ruff 정적 분석 도입 ✅ 완료 (P3)
+### 4-4. ruff 정적 분석 도입 ✅ 완료 (P3 + v0.2.1)
 
 **구현:**
 
 | 항목 | 설정 |
 |------|------|
 | 대상 Python | 3.12 |
-| 활성 규칙 | E (pycodestyle errors), F (pyflakes), W (pycodestyle warnings) |
-| 무시 규칙 | E501 (줄 길이), E402 (lazy import), E702 (세미콜론), E731 (lambda), E741 (변수명), F401 (unused import — re-export 패턴), F811 (redefined — monkeypatch), F841 (unused var — side effects) |
+| 활성 규칙 | E (pycodestyle errors), F (pyflakes), W (pycodestyle warnings), **I (isort)** |
+| 무시 규칙 | E501, E402, E702, E731, E741, F401, F811, F841 |
 | CI 스텝 | `ruff check coworker/ tests/` (pytest 이전 실행) |
+| 포매팅 | `ruff format` — 213개 파일 일괄 적용 (v0.2.1) |
 
 **변경 파일:**
 ```
 pyproject.toml                ([tool.ruff] 섹션)
 .github/workflows/ci.yml     (Lint 스텝 추가)
+coworker/**/*.py + tests/**/*.py  (213개 파일 포매팅, v0.2.1)
 ```
 
 **설계 판단:**
-- 기획에서 "ESLint + Prettier (TypeScript)" 도입을 제안했으나, TypeScript는 `tsc --noEmit`이 이미 타입 체크를 수행하고, Vite 빌드가 코드 품질을 검증하므로 v0.2.0 범위에서 제외.
-- `ruff`의 `I` (isort) 규칙은 기존 import 순서와 충돌이 많아 비활성화. 향후 `ruff format`으로 일괄 정리 후 활성화 권장.
+- v0.2.0에서 `I` (isort) 규칙을 비활성화했으나, v0.2.1에서 `ruff format` 일괄 적용 후 활성화 완료. 70개 import 정렬 자동 수정.
+- 기획에서 "ESLint + Prettier (TypeScript)" 도입을 제안했으나, `tsc --noEmit`이 이미 타입 체크를 수행하므로 제외.
 - pre-commit hook은 미설정. 개발자 경험 영향이 크므로 팀 합의 후 도입 권장.
 
 ---
@@ -546,40 +577,125 @@ surfaces/gui/tsconfig.json
 
 ---
 
-## 5. 우선순위 매트릭스 및 구현 현황
+## 5. v0.2.1 후속 구현
+
+v0.2.0 기획서의 "후속 과제 — 단기(v0.2.1)" 4개 항목을 모두 구현 완료.
+
+### 5-1. 서버→클라이언트 Push 이벤트 ✅ 완료
+
+기존 `/ws/events` 인프라에 2개 이벤트 타입 추가:
+
+| 이벤트 | 발생 시점 | 서버 위치 |
+|--------|----------|----------|
+| `sessions_changed` | `mark_idle()` — 턴 완료 시 | `manager.py` |
+| `inbox_changed` | `mirror_inbox_item()` — 인박스 항목 추가 시 | `inbox_mixin.py` |
+| `inbox_changed` | `resolve_inbox()` — 인박스 항목 해결 시 | `manager.py` |
+
+클라이언트(`App.tsx`)에서 `connectEvents` 콜백에 핸들러 추가. Push 수신 시 `refreshSessions()` / `refreshInbox()` 즉시 호출.
+
+폴링 주기 완화: 세션 5초→**30초**, 인박스 4초→**15초** (push 실패 대비 fallback).
+
+**변경 파일:**
+```
+coworker/server/manager.py      (mark_idle, resolve_inbox에 broadcast_event 추가)
+coworker/server/inbox_mixin.py  (mirror_inbox_item에 broadcast_event 추가)
+surfaces/gui/src/App.tsx         (connectEvents 핸들러 확장, 폴링 주기 완화)
+```
+
+---
+
+### 5-2. ruff format 일괄 적용 ✅ 완료
+
+- `ruff format coworker/ tests/` — **213개 파일** 포매팅 통일
+- `I` (isort) 규칙 활성화 — **70개 import 정렬** 자동 수정
+- 최종: `ruff check` All checks passed
+
+**변경 파일:** Python 소스 213개 + `pyproject.toml` (규칙 추가)
+
+---
+
+### 5-3. test_server.py 분할 ✅ 완료
+
+| 이전 | 이후 |
+|------|------|
+| `test_server.py` (1,023줄, 43개) | `test_server_rest.py` (262줄, 15개) + `test_server_ws.py` (740줄, 28개) |
+
+공통 헬퍼(`ScriptedProvider`, `_text`, `_tool`, `_client`, `_drain`)를 `conftest.py`로 이동하여 양쪽 파일에서 공유.
+
+**변경 파일:**
+```
+tests/test_server.py       (삭제)
+tests/test_server_rest.py  (신규)
+tests/test_server_ws.py    (신규)
+tests/conftest.py          (공통 헬퍼 추가)
+```
+
+---
+
+### 5-4. useSessionState 훅 추출 ✅ 완료
+
+App.tsx에서 15개 세션 관련 상태를 `useSessionState` 커스텀 훅으로 추출:
+
+```
+workspace, branch, agent, mode, connected, running, sessionId,
+usage, todo, showGate, workspaceTrustRequest, runContext, composerPrefill
+```
+
+`resetSession(newId, opts?)` 헬퍼 제공 — 세션 전환 시 한 번의 호출로 모든 세션 상태 초기화.
+
+**변경 파일:**
+```
+surfaces/gui/src/hooks/useSessionState.ts  (신규, 70줄)
+surfaces/gui/src/App.tsx                    (import 교체, ~15줄 감소)
+```
+
+---
+
+## 6. 우선순위 매트릭스 및 구현 현황
+
+### v0.2.0 기획 항목 (18개)
 
 | # | 항목 | 심각도 | 우선순위 | 상태 | 비고 |
 |---|------|--------|---------|------|------|
 | 2-1 | SQLite WAL + 인덱스 | HIGH | **P0** | ✅ 완료 | `read_uncommitted` 미적용 (불필요) |
 | 2-3 | 엔진 캐시 LRU | HIGH | **P0** | ✅ 완료 | 디스크 직렬화 미구현 (기존 복원 로직으로 충분) |
-| 3-1 | 코드 스플리팅 + Lazy Loading | HIGH | **P0** | ✅ 완료 | 734→351KB (-52%) |
+| 3-1 | 코드 스플리팅 + Lazy Loading | HIGH | **P0** | ✅ 완료 | 734→352KB (-52%) |
 | 3-3 | 리스트 DOM 제한 | HIGH | **P0** | ✅ 대안 | react-window 대신 기존 방어책 강화 |
 | 2-4 | MCP 병렬 연결 | HIGH | **P1** | ✅ 완료 | 3단계 파이프라인 |
-| 3-2 | 상태 관리 분리 | HIGH | **P1** | ✅ 부분 | 스트리밍+인박스 훅 추출, 세션/UI 미분리 |
+| 3-2 | 상태 관리 분리 | HIGH | **P1** | ✅ 완료 | 4개 훅 추출 (v0.2.1에서 useSessionState 추가) |
 | 4-1 | Pytest 병렬 실행 | HIGH | **P1** | ✅ 완료 | 38→19초 (-50%) |
 | 3-4 | WS 메시지 배치 | MEDIUM | **P2** | ✅ 완료 | rAF 기반 60fps |
 | 2-2 | 스킬 스캔 캐싱 | MEDIUM | **P2** | ✅ 완료 | mtime + TTL 30초 |
 | 3-5 | React.memo 확대 | MEDIUM | **P2** | ✅ 완료 | Composer, ModelsTab, McpTab |
-| 2-5 | JSON I/O 최적화 | MEDIUM | **P2** | ✅ 부분 | ChannelBuffer만 디바운스 |
-| 4-2 | 테스트 파일 분할 | MEDIUM | **P3** | ✅ 부분 | connectors만 분할, server 미분할 |
+| 2-5 | JSON I/O 최적화 | MEDIUM | **P2** | ✅ 부분 | ChannelBuffer만 디바운스 (Inbox/Unrouted는 persistence 요구) |
+| 4-2 | 테스트 파일 분할 | MEDIUM | **P3** | ✅ 완료 | connectors + server 양쪽 분할 (v0.2.1 완성) |
 | 4-3 | CI 캐싱 강화 | MEDIUM | **P3** | ✅ 완료 | pip + Playwright 캐시 |
 | 3-6 | i18n 분할 로딩 | LOW | **P3** | ✅ 완료 | 동적 import, 추가 -28KB |
-| 3-7 | 폴링 → 비활성 중지 | LOW | **P3** | ✅ 완료 | useVisibleInterval + document.hidden |
+| 3-7 | 폴링 최적화 | LOW | **P3** | ✅ 완료 | visibility 중지 + 서버 push (v0.2.1) |
 | 2-6 | 스레드 풀 관리 | LOW | **P3** | ✅ 완료 | max_workers=8 |
-| 4-4 | 정적 분석 도입 | LOW | **P3** | ✅ 완료 | ruff (Python만), ESLint 미구현 |
+| 4-4 | 정적 분석 도입 | LOW | **P3** | ✅ 완료 | ruff lint + format + isort (v0.2.1) |
 | 4-5 | TS 증분 컴파일 | LOW | **P3** | ✅ 완료 | incremental: true |
 
-**요약:** 18개 항목 중 **14개 완료, 4개 부분 완료, 0개 미착수**
+### v0.2.1 후속 항목 (4개)
+
+| # | 항목 | 상태 | 비고 |
+|---|------|------|------|
+| 5-1 | 서버→클라이언트 push 이벤트 | ✅ 완료 | sessions_changed + inbox_changed, 폴링 5→30초 / 4→15초 |
+| 5-2 | ruff format 일괄 적용 | ✅ 완료 | 213개 파일 포매팅 + isort 70개 자동 수정 |
+| 5-3 | test_server.py 분할 | ✅ 완료 | REST(262줄) + WS(740줄), conftest 헬퍼 중앙화 |
+| 5-4 | useSessionState 훅 추출 | ✅ 완료 | 15개 상태 캡슐화 + resetSession 헬퍼 |
+
+**종합:** 22개 항목 중 **21개 완료, 1개 부분 완료** (2-5 JSON I/O — ChannelBuffer만 적용)
 
 ---
 
-## 6. 실측 결과
+## 7. 실측 결과
 
 ### 프론트엔드 번들 크기
 
-| 빌드 산출물 | v0.1.7 | v0.2.0 | 변화 |
+| 빌드 산출물 | v0.1.7 | v0.2.1 | 변화 |
 |------------|--------|--------|------|
-| **메인 번들** (index-*.js) | 734 KB | **351 KB** | **-52.2%** |
+| **메인 번들** (index-*.js) | 734 KB | **352 KB** | **-52.0%** |
 | vendor-react | (메인에 포함) | 133.93 KB | 분리 |
 | vendor-pdf | 357 KB (변동 없음) | 365.12 KB | 별도 청크 |
 | vendor-xlsx | 419 KB (변동 없음) | 429.03 KB | 별도 청크 |
@@ -587,9 +703,9 @@ surfaces/gui/tsconfig.json
 | vendor-i18n | (메인에 포함) | 57.68 KB | 분리 |
 | lazy 뷰 청크 (12개 합계) | (메인에 포함) | ~192 KB | 분리 |
 | CSS | 94 KB | 97.14 KB | 미세 증가 (loading 스타일) |
-| 빌드 시간 | — | 2.66초 | — |
+| 빌드 시간 | — | 2.83초 | — |
 
-**초기 로드에 필요한 JS:** 351 KB (메인) + 134 KB (react) = **485 KB**  
+**초기 로드에 필요한 JS:** 352 KB (메인) + 134 KB (react) = **486 KB**  
 (이전 734 KB 대비 **-34%**, vendor-pdf/xlsx는 해당 뷰 진입 시에만 로드)
 
 ### Python 테스트 성능
@@ -613,7 +729,7 @@ surfaces/gui/tsconfig.json
 
 ---
 
-## 7. 스코프 변경 및 설계 판단
+## 8. 스코프 변경 및 설계 판단
 
 ### 기획 대비 변경된 항목
 
@@ -621,40 +737,50 @@ surfaces/gui/tsconfig.json
 |------|------|------|
 | react-window 가상화 (3-3) | 기존 윈도우 크기 축소 + DOM 캡 | 아코디언/가변 높이 구조와 비호환 |
 | InboxStore SQLite 마이그레이션 (2-5) | 즉시 저장 유지 | 이미 메모리 캐시, persistence 테스트 호환 |
-| `useSessionState` 훅 추출 (3-2) | 미구현 | handleEvent와의 순환 의존 |
-| 서버→클라이언트 push (3-7) | visibility 기반 중지 | WS 프로토콜 변경 필요, v0.2.0 범위 외 |
 | ESLint + Prettier (4-4) | ruff만 도입 | tsc가 이미 타입/품질 검증 |
-| test_server.py 분할 (4-2) | 미구현 | fixture 공유 패턴 때문에 분할 비용 큼 |
+
+### v0.2.0에서 보류 → v0.2.1에서 해결된 항목
+
+| 기획 | v0.2.0 판단 | v0.2.1 해결 |
+|------|------------|------------|
+| `useSessionState` 훅 추출 (3-2) | handleEvent 순환 의존으로 보류 | setter 직접 참조 구조로 분리 가능 확인, 15개 상태 추출 완료 |
+| 서버→클라이언트 push (3-7) | WS 프로토콜 변경 필요로 보류 | 기존 `/ws/events` 인프라 재사용, 2개 이벤트 추가로 해결 |
+| test_server.py 분할 (4-2) | fixture 공유 패턴으로 보류 | conftest에 헬퍼 중앙화 후 REST/WS 2개 파일로 분리 |
+| ruff isort 규칙 (4-4) | 기존 import 순서 충돌 | `ruff format` 일괄 적용 후 충돌 해소, I 규칙 활성화 |
 
 ### 추가 구현된 항목 (기획 외)
 
-| 항목 | 내용 |
-|------|------|
-| `DebouncedSaver` 공통 모듈 | 재사용 가능한 coalesce 쓰기 유틸리티 |
-| `useVisibleInterval` 커스텀 훅 | 범용 visibility-aware interval |
-| `PRAGMA synchronous=NORMAL` | 기획에 없었으나 WAL 모드와 함께 쓰기 성능 개선 |
+| 항목 | 내용 | 시점 |
+|------|------|------|
+| `DebouncedSaver` 공통 모듈 | 재사용 가능한 coalesce 쓰기 유틸리티 | v0.2.0 |
+| `useVisibleInterval` 커스텀 훅 | 범용 visibility-aware interval | v0.2.0 |
+| `PRAGMA synchronous=NORMAL` | WAL 모드와 함께 쓰기 성능 개선 | v0.2.0 |
+| `sessions_changed` / `inbox_changed` push | 폴링 의존도 대폭 감소 | v0.2.1 |
+| `resetSession()` 헬퍼 | 세션 전환 시 일괄 초기화 | v0.2.1 |
+| conftest 공통 헬퍼 중앙화 | ScriptedProvider 등 5개 헬퍼 | v0.2.1 |
 
 ---
 
-## 8. 후속 과제
+## 9. 후속 과제
 
-### 단기 (v0.2.1)
+> v0.2.1 단기 과제 4개는 §5에서 모두 구현 완료됨. 아래는 남은 중기/장기 항목.
+
+### 단기 (v0.2.2)
 
 | 항목 | 우선순위 | 설명 |
 |------|---------|------|
-| 서버→클라이언트 push 이벤트 | 중 | 세션/인박스 변경을 WS 이벤트로 push하여 폴링 완전 제거. `broadcast_session()` 확장 |
 | React DevTools Profiler 분석 | 중 | 실제 사용 시나리오에서 리렌더링 병목 컴포넌트 식별 → 타겟 `useCallback`/`memo` 적용 |
 | Lighthouse CI 통합 | 하 | PR별 성능 점수 추적, 회귀 방지 |
-| `ruff format` 일괄 적용 | 하 | 코드 포매팅 통일 후 `I` (isort) 규칙 활성화 |
+| pre-commit hook 도입 | 하 | `ruff check` + `ruff format --check`를 커밋 전 자동 실행 |
 
 ### 중기 (v0.3.0)
 
 | 항목 | 우선순위 | 설명 |
 |------|---------|------|
-| `useSessionState` 훅 추출 | 중 | handleEvent를 이벤트 타입별 핸들러로 분해한 뒤 세션 상태 훅 추출 가능 |
 | Service Worker 캐싱 | 중 | 정적 에셋(벤더 청크, 폰트) 캐싱으로 반복 로드 제거 |
 | Compaction 성능 | 중 | `_build` 함수의 summarizer 호출 병렬화/스트리밍 |
-| test_server.py 분할 | 하 | conftest에 SessionManager fixture 중앙화 후 엔드포인트별 분리 |
+| handleEvent 분해 | 중 | 이벤트 타입별 핸들러 함수로 분해하여 가독성/테스트성 개선 |
+| UIContext 최적화 | 하 | 25개 값 중 빈번하게 변경되는 항목을 별도 컨텍스트로 분리 |
 
 ### 장기 (v1.0)
 
@@ -667,30 +793,39 @@ surfaces/gui/tsconfig.json
 
 ---
 
-## 변경 파일 목록 (v0.2.0 전체)
+## 변경 파일 목록 (v0.2.0 + v0.2.1, 커밋 `c9e7604`)
 
-### Python 백엔드 (11개)
+**총 246개 파일** (+4,824줄 / -4,987줄)
+
+### Python 백엔드 — 성능 개선 (12개)
 ```
 coworker/memory/sqlite_store.py          — WAL + 스레드별 커넥션 + 인덱스
 coworker/server/engine_cache.py          — (신규) LRU+TTL EngineCache
-coworker/server/manager.py               — EngineCache 적용 + MCP 병렬화
+coworker/server/manager.py               — EngineCache + MCP 병렬화 + push 이벤트
+coworker/server/inbox_mixin.py           — inbox_changed push 이벤트
 coworker/server/run.py                   — ThreadPoolExecutor(8)
 coworker/skills/base.py                  — mtime 캐시 + TTL
 coworker/debounced_save.py               — (신규) DebouncedSaver
 coworker/subscriptions.py               — ChannelBuffer 디바운스
-coworker/inbox.py                        — import 정리 (기능 변경 없음)
-coworker/unrouted.py                     — import 정리 (기능 변경 없음)
+coworker/inbox.py                        — import 정리
+coworker/unrouted.py                     — import 정리
 pyproject.toml                           — pytest-xdist, ruff 의존성 + 설정
 .github/workflows/ci.yml                — 병렬 테스트, pip 캐시, lint, PW 캐시
 ```
 
-### TypeScript 프론트엔드 (12개)
+### Python 백엔드 — ruff format (213개)
+```
+coworker/**/*.py + tests/**/*.py         — 포매팅 통일 + isort 정렬
+```
+
+### TypeScript 프론트엔드 (13개)
 ```
 surfaces/gui/vite.config.ts              — manualChunks
 surfaces/gui/tsconfig.json               — incremental
-surfaces/gui/src/App.tsx                  — lazy, Suspense, 훅 적용, visibility
+surfaces/gui/src/App.tsx                  — lazy, Suspense, 4개 훅, push 이벤트 수신
 surfaces/gui/src/hooks/useStreamState.ts  — (신규) rAF 배치 스트리밍
 surfaces/gui/src/hooks/useInboxState.ts   — (신규) 인박스 상태 캡슐화
+surfaces/gui/src/hooks/useSessionState.ts — (신규) 세션 상태 캡슐화
 surfaces/gui/src/hooks/useVisibleInterval.ts — (신규) visibility-aware interval
 surfaces/gui/src/i18n/index.ts            — 동적 언어 로딩
 surfaces/gui/src/components/Composer.tsx  — React.memo
@@ -700,10 +835,14 @@ surfaces/gui/src/components/SearchModal.tsx — 결과 100개 제한
 surfaces/gui/src/styles.css               — surface-loading 스타일
 ```
 
-### 테스트 (2개)
+### 테스트 (7개)
 ```
+tests/conftest.py                         — 공통 헬퍼 중앙화 (ScriptedProvider 등)
 tests/test_connectors.py                  — 1,727→715줄 (코어만)
 tests/test_connectors_integration.py      — (신규) 1,012줄 (신규 커넥터)
+tests/test_server.py                      — (삭제) → 아래 2개로 분할
+tests/test_server_rest.py                 — (신규) 262줄 (REST API)
+tests/test_server_ws.py                   — (신규) 740줄 (WebSocket)
 tests/test_subscriptions.py               — flush 호출 추가
 ```
 
