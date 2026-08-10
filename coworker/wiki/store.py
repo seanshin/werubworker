@@ -74,9 +74,15 @@ class WikiStore:
 
     def _connect(self) -> sqlite3.Connection:
         self._db.parent.mkdir(parents=True, exist_ok=True)
+        is_new = not self._db.exists()
         conn = sqlite3.connect(str(self._db), timeout=5)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
+        if is_new:
+            try:
+                import os; os.chmod(self._db, 0o600)
+            except OSError:
+                pass
         return conn
 
     # ------------------------------------------------------------------

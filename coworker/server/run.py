@@ -157,13 +157,27 @@ def main(argv=None) -> None:
     # managed-connect redirect must follow the real port, not the 8765 default.
     os.environ["COWORKER_PORT"] = str(args.port)
     generated_token_path = _ensure_api_token(args.port)
+
+    # Security: if no master password is configured and host is 0.0.0.0,
+    # restrict to 127.0.0.1 to prevent unauthenticated remote access.
+    from ..auth import LocalAuth
+    bind_host = args.host
+    if bind_host == "0.0.0.0":
+        auth = LocalAuth(state_dir())
+        if not auth.status().get("configured"):
+            bind_host = "127.0.0.1"
+            print(
+                "⚠ 마스터 비밀번호가 설정되지 않아 localhost(127.0.0.1)에서만 접근 가능합니다.\n"
+                "  외부 접근을 허용하려면 먼저 설정 > 보안에서 비밀번호를 설정하세요."
+            )
+
     try:
         import uvicorn
 
         _exit_when_orphaned()
         app = build_app(args.cwd, args.model, args.mode)
         uvicorn.run(
-            app, host=args.host, port=args.port, ws_max_size=_WS_MAX_FRAME_BYTES
+            app, host=bind_host, port=args.port, ws_max_size=_WS_MAX_FRAME_BYTES
         )
     finally:
         if generated_token_path is not None:

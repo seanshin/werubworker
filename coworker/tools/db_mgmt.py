@@ -232,11 +232,15 @@ def _mysql_cli(cfg: dict, query: str) -> str:
         "-h", cfg.get("host", "localhost"),
         "-P", str(cfg.get("port", 3306)),
         "-u", cfg.get("user", ""),
-        f"--password={cfg.get('password', '')}",
         cfg.get("name", ""),
         "-e", query,
     ]
-    return _run_cli(cmd)
+    # Pass password via environment (avoids ps exposure)
+    env = dict(os.environ, MYSQL_PWD=cfg.get("password", ""))
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=env)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"mysql exit {result.returncode}")
+    return result.stdout
 
 
 # -- SQLite -----------------------------------------------------------------
@@ -373,6 +377,9 @@ def _get_tables(cfg: dict) -> dict[str, Any]:
             table_info = []
             for row in rows:
                 tname = row.get("name", "")
+                # Validate table name to prevent SQL injection
+                if not tname or not all(c.isalnum() or c in "_-." for c in tname):
+                    continue
                 count_result = _execute_query(cfg, f"SELECT count(*) AS row_count FROM \"{tname}\";")
                 count = _extract_scalar(count_result) if count_result.get("ok") else "?"
                 table_info.append({"table_name": tname, "row_count": count})
@@ -419,11 +426,11 @@ def _do_backup(cfg: dict, output_path: str) -> dict[str, Any]:
                 "-h", cfg.get("host", "localhost"),
                 "-P", str(cfg.get("port", 3306)),
                 "-u", cfg.get("user", ""),
-                f"--password={cfg.get('password', '')}",
                 "--result-file", output_path,
                 cfg.get("name", ""),
             ]
-            _run_cli(cmd, timeout=300)
+            env = dict(os.environ, MYSQL_PWD=cfg.get("password", ""))
+            _run_cli(cmd, timeout=300, env=env)
             return {"ok": True, "path": output_path}
 
         elif db_type == "sqlite":
