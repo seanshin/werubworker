@@ -123,7 +123,7 @@ def test_full_disconnect_drops_every_account(secrets):
 
 def _fake_gmail(monkeypatch, responses: dict[str, dict]):
     """Route _request by URL suffix; records the bearer token used."""
-    from coworker.connectors import integration_tools
+    from coworker.connectors.tools import _helpers as integration_tools
 
     calls: list[tuple[str, str]] = []
 

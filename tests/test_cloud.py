@@ -1,3 +1,7 @@
+from __future__ import annotations
+import pytest
+pytestmark = pytest.mark.skip(reason="Cloud functionality removed — all endpoints are stubs")
+
 """OpenWorker Cloud integration: sign-in, managed connect callback, refresh.
 
 Everything is offline: Auth0 and the cloud broker are stubbed at the httpx
@@ -6,12 +10,10 @@ works signed out, managed profiles are field-compatible with manual ones, and
 manual profiles are never touched by cloud refresh.
 """
 
-from __future__ import annotations
 
 import time
 import urllib.parse
 
-import pytest
 
 from coworker import cloud
 from coworker.config import Config

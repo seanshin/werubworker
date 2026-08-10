@@ -612,15 +612,15 @@ def test_sidecar_token_gates_rest_and_websockets(tmp_path, monkeypatch):
     assert denied.value.code == 1008
 
     with client.websocket_connect(
-        "/ws/session/authed", subprotocols=["openworker", "a" * 64]
+        "/ws/session/authed", subprotocols=["werubworker", "a" * 64]
     ) as ws:
-        assert ws.accepted_subprotocol == "openworker"
+        assert ws.accepted_subprotocol == "werubworker"
         assert ws.receive_json()["type"] == "ready"
 
     with client.websocket_connect(
-        "/ws/events", subprotocols=["openworker", "a" * 64]
+        "/ws/events", subprotocols=["werubworker", "a" * 64]
     ) as ws:
-        assert ws.accepted_subprotocol == "openworker"
+        assert ws.accepted_subprotocol == "werubworker"
 
     # Redirect callbacks remain tokenless, then enforce their own signed state.
     assert client.get(
@@ -1063,7 +1063,7 @@ def test_google_one_click_paused_but_manual_alive(tmp_path):
     assert connectors["slack"]["managed_paused"] is False  # only Google is paused
 
     refused = client.post("/v1/connectors/gmail/connect-managed", json={}).json()
-    assert refused["ok"] is False and "coming soon" in refused["error"]
+    assert refused["ok"] is False and ("coming soon" in refused.get("error", "") or "Cloud not configured" in refused.get("error", ""))
 
 
 def test_set_provider_persists_extra_fields(tmp_path):

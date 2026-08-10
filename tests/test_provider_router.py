@@ -30,7 +30,10 @@ def test_base_url_passed_to_sdk(monkeypatch):
     OpenAIProvider(
         api_key="ollama", base_url="http://localhost:11434/v1"
     )._ensure_client()
-    assert captured == {"api_key": "ollama", "base_url": "http://localhost:11434/v1"}
+    assert captured["api_key"] == "ollama"
+    assert captured["base_url"] == "http://localhost:11434/v1"
+    # Custom endpoints also set default_headers for Cloudflare/WAF bypass
+    assert "default_headers" in captured
 
 
 def test_base_url_omitted_when_none(monkeypatch):

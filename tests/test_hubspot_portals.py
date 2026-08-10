@@ -95,7 +95,7 @@ def test_default_repoints_on_disconnect(secrets):
 
 
 def _fake_hubspot(monkeypatch, responses: dict[str, dict]):
-    from coworker.connectors import integration_tools
+    from coworker.connectors.tools import _helpers as integration_tools
 
     calls: list[tuple[str, str, dict]] = []
 

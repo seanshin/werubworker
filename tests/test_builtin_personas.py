@@ -39,11 +39,13 @@ def test_cowork_persona_matches_builder(tmp_path):
 def test_ops_persona_composes_knowledge_toolset(tmp_path):
     reg = PersonaRegistry()
     ctx = _ctx(tmp_path)
-    # Ops uses the same capability list as Cowork (files/search/shell/todo).
-    assert _names(reg.agent("ops"), ctx) == _names(cowork_agent(), ctx)
+    # Ops extends Cowork with server_monitor, ssh, docker, k8s, database, cloud_infra.
+    cowork_names = _names(cowork_agent(), ctx)
     a = reg.agent("ops")
+    ops_names = _names(a, ctx)
+    assert cowork_names.issubset(ops_names)  # ops has everything cowork has, plus more
     assert a.family == "knowledge" and a.messaging and a.connectors
-    assert "read_file_lines" in _names(a, ctx)  # multi-root knowledge files
+    assert "read_file_lines" in ops_names  # multi-root knowledge files
 
 
 def test_code_keeps_single_root_file_tools(tmp_path):

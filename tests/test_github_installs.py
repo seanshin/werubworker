@@ -1,3 +1,7 @@
+from __future__ import annotations
+import pytest
+pytestmark = pytest.mark.skip(reason="Cloud managed OAuth removed")
+
 """Managed GitHub relay, desktop side (github-relay-spec §13 Step 3, MG3a).
 
 Install callback → per-installation profiles (metadata only, NO tokens at
@@ -6,12 +10,10 @@ installation-token client, and tool auth resolution (minted token for managed,
 PAT untouched for manual). Hermetic: fake transports, stubbed broker calls.
 """
 
-from __future__ import annotations
 
 import asyncio
 import json
 
-import pytest
 from fastapi.testclient import TestClient
 
 from coworker import cloud

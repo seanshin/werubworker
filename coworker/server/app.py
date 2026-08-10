@@ -1558,7 +1558,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         if not _origin_allowed(ws.headers.get("origin")):
             await ws.close(code=1008)
             return
-        await ws.accept(subprotocol="openworker" if api_token else None)
+        await ws.accept(subprotocol="werubworker" if api_token else None)
         agent = ws.query_params.get("agent") or "code"
 
         # All four interactive prompts (approval / question / directory / plan) are parked as Inbox
@@ -2043,7 +2043,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         if not _origin_allowed(ws.headers.get("origin")):
             await ws.close(code=1008)
             return
-        await ws.accept(subprotocol="openworker" if api_token else None)
+        await ws.accept(subprotocol="werubworker" if api_token else None)
         manager.register_event_client(ws.send_json)
         try:
             while True:

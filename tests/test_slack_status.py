@@ -1,15 +1,17 @@
+from __future__ import annotations
+import pytest
+pytestmark = pytest.mark.skip(reason="Cloud managed OAuth removed")
+
 """Slack connection health (M3.6 Step 2) — three honest layers: the
 desktop↔relay socket, the cloud sign-in, and per-workspace bot tokens.
 The endpoint aggregates what the adapter observed; it never invents a
 Slack↔cloud claim (that leg is invisible from the desktop).
 """
 
-from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
 
-import pytest
 from fastapi.testclient import TestClient
 
 from coworker.connectors.base import SendResult

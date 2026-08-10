@@ -827,7 +827,7 @@ def test_new_tools_error_when_not_connected(tmp_path):
 
 def _connected_tools(tmp_path, monkeypatch, calls):
     """All new connectors connected + _request recorded instead of hitting the network."""
-    import coworker.connectors.integration_tools as it
+    import coworker.connectors.tools._helpers as it
 
     secrets = SecretStore(tmp_path / "secrets.json")
     for name, fields in _NEW_CONNECTORS.items():
@@ -1121,7 +1121,7 @@ def test_batch3_tools_request_routing(tmp_path, monkeypatch):
 
 
 def test_docusign_account_discovery_caches(tmp_path, monkeypatch):
-    import coworker.connectors.integration_tools as it
+    import coworker.connectors.tools._helpers as it
 
     secrets = SecretStore(tmp_path / "secrets.json")
     secrets.put("docusign:default", {"access_token": "ds_x", "enabled": True})
@@ -1162,7 +1162,7 @@ def test_docusign_account_discovery_caches(tmp_path, monkeypatch):
 
 
 def test_drive_read_file_exports_google_docs(tmp_path, monkeypatch):
-    import coworker.connectors.integration_tools as it
+    import coworker.connectors.tools._helpers as it
 
     secrets = SecretStore(tmp_path / "secrets.json")
     secrets.put("google_drive:default", {"access_token": "ya29.x", "enabled": True})
@@ -1197,7 +1197,7 @@ def test_drive_read_file_exports_google_docs(tmp_path, monkeypatch):
 
 
 def test_notion_read_page_flattens_blocks(tmp_path, monkeypatch):
-    import coworker.connectors.integration_tools as it
+    import coworker.connectors.tools._helpers as it
     from coworker.connectors import accounts
 
     secrets = SecretStore(tmp_path / "secrets.json")
@@ -1298,7 +1298,7 @@ def test_google_drive_multi_account_keys_by_email(tmp_path):
 def test_outlook_managed_multi_account_keys_by_email(tmp_path, monkeypatch):
     """Managed Outlook mirrors Gmail/Drive: broker `account` (email from the
     Microsoft id_token) keys each mailbox; tools take an account param."""
-    import coworker.connectors.integration_tools as it
+    import coworker.connectors.tools._helpers as it
     from coworker.cloud import managed_profile_from_callback
     from coworker.connectors import accounts
     from coworker.connectors.setup import managed_connect_connector
@@ -1338,7 +1338,7 @@ def test_outlook_calendar_tools_hit_the_right_graph_endpoints(tmp_path, monkeypa
     create carries attendees/location/Teams flags, update PATCHes only the
     provided fields, respond posts to the accept/decline/tentativelyAccept
     action endpoints."""
-    import coworker.connectors.integration_tools as it
+    import coworker.connectors.tools._helpers as it
     from coworker.cloud import managed_profile_from_callback
     from coworker.connectors.setup import managed_connect_connector
 
@@ -1409,7 +1409,7 @@ def test_outlook_calendar_tools_hit_the_right_graph_endpoints(tmp_path, monkeypa
 def test_batch2_account_param_picks_the_profile(tmp_path, monkeypatch):
     """Two PostHog projects connected → the account param routes the call; the
     default pointer serves bare calls; unknown accounts fail closed."""
-    import coworker.connectors.integration_tools as it
+    import coworker.connectors.tools._helpers as it
     from coworker.connectors import accounts
 
     calls = []
@@ -1517,7 +1517,7 @@ def test_new_write_tools_require_approval(tmp_path, monkeypatch):
 
 
 def test_gitlab_self_hosted_base_url(tmp_path, monkeypatch):
-    import coworker.connectors.integration_tools as it
+    import coworker.connectors.tools._helpers as it
 
     secrets = SecretStore(tmp_path / "secrets.json")
     secrets.put(
@@ -1534,7 +1534,7 @@ def test_gitlab_self_hosted_base_url(tmp_path, monkeypatch):
 
 
 def test_quickbooks_sandbox_environment(tmp_path, monkeypatch):
-    import coworker.connectors.integration_tools as it
+    import coworker.connectors.tools._helpers as it
 
     secrets = SecretStore(tmp_path / "secrets.json")
     secrets.put(

@@ -1,3 +1,7 @@
+from __future__ import annotations
+import pytest
+pytestmark = pytest.mark.skip(reason="Cloud managed OAuth removed")
+
 """Add/remove workspace for the managed Slack relay (M3.5 Step 2).
 
 Add = the managed OAuth callback writes `slack:team:<id>` and hot-reloads the
@@ -6,9 +10,7 @@ deleted best-effort, local token dropped, gateway reloaded; the LAST removal
 flips the connector off without resurrecting any stored manual creds.
 """
 
-from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
 from coworker import cloud

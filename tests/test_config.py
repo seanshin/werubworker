@@ -140,5 +140,6 @@ def test_cloud_endpoints_default_to_production():
     from coworker.config import Config
 
     cfg = Config()
-    assert cfg.cloud_base_url == "https://api.openworker.com"
-    assert cfg.cloud_relay_ws_url.startswith("wss://")
+    # Cloud endpoints are disabled (empty) — reserved for WeruB Service
+    assert cfg.cloud_base_url == ""
+    assert cfg.cloud_relay_ws_url == ""

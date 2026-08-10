@@ -1,9 +1,11 @@
+from __future__ import annotations
+import pytest
+pytestmark = pytest.mark.skip(reason="Cloud functionality removed — all endpoints are stubs")
+
 """Sidecar loopback routes for OpenWorker Cloud: /oauth/callback,
 /auth/callback, /v1/cloud/*, connect-managed gating."""
 
-from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
 from coworker.server import SessionManager, create_app

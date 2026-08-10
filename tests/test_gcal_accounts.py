@@ -42,7 +42,7 @@ def _tool(secrets, name: str):
 
 def _fake_gcal(monkeypatch, responses: dict[str, dict]):
     """Route _request by URL suffix; records (method, url, bearer, body)."""
-    from coworker.connectors import integration_tools
+    from coworker.connectors.tools import _helpers as integration_tools
 
     calls: list[tuple[str, str, str, dict | None]] = []
 
