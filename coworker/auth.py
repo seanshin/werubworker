@@ -20,6 +20,8 @@ _PBKDF2_ITERATIONS = 600_000
 _SALT_BYTES = 32
 _TOKEN_BYTES = 32  # secrets.token_urlsafe(32) → 43-char URL-safe string
 _DEFAULT_LOCK_TIMEOUT = 30 * 60  # 30 minutes
+_MAX_LOGIN_FAILURES = 5
+_LOCKOUT_DURATION = 5 * 60  # 5 minutes
 
 
 class LocalAuth:
@@ -57,11 +59,44 @@ class LocalAuth:
         return self._issue_token()
 
     def login(self, password: str) -> str:
-        """Verify *password* and return a session token.  Raises on failure."""
+        """Verify *password* and return a session token.  Raises on failure.
+
+        After *_MAX_LOGIN_FAILURES* consecutive wrong passwords the account is
+        locked for *_LOCKOUT_DURATION* seconds.  The failure counter and last
+        failure timestamp are persisted in auth.json so a restart doesn't reset
+        the lockout.
+        """
         if not self._state.get("hash"):
             raise ValueError("No password configured.")
+
+        # -- lockout check -------------------------------------------------------
+        fail_count = self._state.get("login_fail_count", 0)
+        last_fail = self._state.get("login_fail_time", 0.0)
+        if fail_count >= _MAX_LOGIN_FAILURES:
+            elapsed = time.time() - last_fail
+            if elapsed < _LOCKOUT_DURATION:
+                remaining = int(_LOCKOUT_DURATION - elapsed) + 1
+                raise ValueError(
+                    f"Account locked after {_MAX_LOGIN_FAILURES} failed attempts. "
+                    f"Try again in {remaining}s."
+                )
+            # Lockout expired — reset counters before proceeding.
+            self._state["login_fail_count"] = 0
+            self._state["login_fail_time"] = 0.0
+            self._save()
+
+        # -- password verification ------------------------------------------------
         if not self._check(password):
+            self._state["login_fail_count"] = self._state.get("login_fail_count", 0) + 1
+            self._state["login_fail_time"] = time.time()
+            self._save()
             raise ValueError("Incorrect password.")
+
+        # Success — clear any accumulated failures.
+        if self._state.get("login_fail_count", 0) > 0:
+            self._state["login_fail_count"] = 0
+            self._state["login_fail_time"] = 0.0
+            self._save()
         return self._issue_token()
 
     def verify(self, token: Optional[str] = None) -> bool:

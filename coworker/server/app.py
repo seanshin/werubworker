@@ -258,6 +258,23 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     app.state.manager = manager
 
+    # -- IP whitelist middleware -----------------------------------------------
+    from ..config import load_config as _load_config
+
+    _cfg = _load_config()
+    _allowed_hosts: list[str] = _cfg.allowed_hosts
+
+    @app.middleware("http")
+    async def ip_whitelist(request: Request, call_next):
+        if _allowed_hosts:
+            client_host = request.client.host if request.client else None
+            if client_host not in _allowed_hosts:
+                return JSONResponse(
+                    {"error": "host not allowed"},
+                    status_code=403,
+                )
+        return await call_next(request)
+
     # -- local master password auth endpoints ---------------------------------
 
     @app.get("/v1/auth/status")

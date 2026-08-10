@@ -39,6 +39,8 @@ class Config:
     port: int = 8765
     # Web search provider: "duckduckgo" (keyless default) | "tavily" | "brave" (need a key).
     web_search_provider: str = "duckduckgo"
+    # IP whitelist: when non-empty only these hosts may connect (request.client.host).
+    allowed_hosts: list[str] = field(default_factory=list)
     # Reserved for WeruB Service (cloud endpoints are disabled).
     cloud_base_url: str = ""
     cloud_auth_domain: str = ""
@@ -56,6 +58,7 @@ _FIELDS = {
     "host",
     "port",
     "web_search_provider",
+    "allowed_hosts",
     "cloud_base_url",
     "cloud_auth_domain",
     "cloud_client_id",

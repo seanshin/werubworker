@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import os
 import queue
+import re
 import signal
 import subprocess
 import sys
@@ -37,6 +38,24 @@ from typing import Any, Optional
 import aisuite as ai
 
 _IS_WINDOWS = sys.platform == "win32"
+
+# Patterns that match commands too dangerous to execute under any circumstance.
+BLOCKED_PATTERNS = [
+    re.compile(r"rm\s+-rf\s+/[^/]"),       # rm -rf / (root delete)
+    re.compile(r"mkfs\."),                   # filesystem format
+    re.compile(r"dd\s+.*of=/dev/"),          # disk overwrite
+    re.compile(r":()\s*\{\s*:\|:&\s*\};:"),  # fork bomb
+    re.compile(r">\s*/dev/sd"),              # direct disk write
+    re.compile(r"chmod\s+-R\s+777\s+/"),     # chmod 777 root
+]
+
+
+def _is_blocked(command: str) -> str | None:
+    """Return the matched pattern string if *command* is blocked, else ``None``."""
+    for pat in BLOCKED_PATTERNS:
+        if pat.search(command):
+            return pat.pattern
+    return None
 
 # Foreground timeout bounds: long enough for installs/builds/test runs by default, capped so
 # a model-requested timeout can't wedge the turn for more than ten minutes.
@@ -543,6 +562,16 @@ def shell_tools(executor: Executor) -> list:
     ) -> dict:
         # `description` is not used here on purpose: it rides along in the call arguments
         # so approval prompts and the audit log can show intent, not just the raw command.
+        blocked = _is_blocked(command)
+        if blocked:
+            return {
+                "command": command,
+                "error": f"command blocked by safety filter (matched: {blocked})",
+                "exit_code": None,
+                "output": "",
+                "timed_out": False,
+                "truncated": False,
+            }
         if run_in_background:
             return executor.run_background(command)
         timeout = None

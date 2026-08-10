@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +26,31 @@ try:
     _HAS_CRYPTO = True
 except ImportError:
     _HAS_CRYPTO = False
+
+
+_AUDIT_MAX_ENTRIES = 1000
+
+
+def _audit_log_path() -> Path:
+    return Path.home() / ".config" / "werubworker" / "audit.log"
+
+
+def _write_audit(action: str, key_name: str) -> None:
+    """Append a single audit entry and trim the file to *_AUDIT_MAX_ENTRIES* lines."""
+    path = _audit_log_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).isoformat()
+    entry = f"{ts}  {action}  {key_name}\n"
+    try:
+        # Append first, then trim if needed.
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(entry)
+        # Trim to last N entries.
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if len(lines) > _AUDIT_MAX_ENTRIES:
+            path.write_text("".join(lines[-_AUDIT_MAX_ENTRIES:]), encoding="utf-8")
+    except OSError:
+        pass  # best-effort; never break vault operations for logging
 
 
 class Vault:
@@ -96,6 +123,7 @@ class Vault:
                 entry["history"] = data[key].get("history", [])
             data[key] = entry
             self._write(data)
+        _write_audit("store", key)
         return {"ok": True, "key": key}
 
     def retrieve(self, key: str) -> str:
@@ -105,6 +133,7 @@ class Vault:
         if entry is None:
             raise KeyError(f"credential '{key}' not found in vault")
         raw = entry["value"]
+        _write_audit("retrieve", key)
         if entry.get("encrypted", False):
             if not self.is_unlocked():
                 raise RuntimeError("vault is locked — unlock with master password first")
@@ -158,6 +187,7 @@ class Vault:
             entry["updated_at"] = time.time()
             data[key] = entry
             self._write(data)
+        _write_audit("rotate", key)
         return {"ok": True, "key": key, "history_count": len(history)}
 
     def check_expiring(self, days: int = 30) -> list[dict]:
