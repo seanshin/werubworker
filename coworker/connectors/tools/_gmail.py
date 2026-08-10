@@ -19,9 +19,7 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     _ACCOUNT_PROP = {
         "type": "string",
         "description": "Mailbox email to use; omit for the default account.",
@@ -58,18 +56,14 @@ def register(
                 detail = meta.get("data") if meta.get("ok") else None
                 # Fail-open on a metadata miss: ids alone reveal nothing, and
                 # gmail_get_message re-enforces before any content flows.
-                if isinstance(detail, dict) and _gmail_is_hidden(
-                    detail, filters, label_map
-                ):
+                if isinstance(detail, dict) and _gmail_is_hidden(detail, filters, label_map):
                     hidden += 1
                 else:
                     kept.append(m)
             if hidden:
                 data["messages"] = kept
                 if isinstance(data.get("resultSizeEstimate"), int):
-                    data["resultSizeEstimate"] = max(
-                        0, data["resultSizeEstimate"] - hidden
-                    )
+                    data["resultSizeEstimate"] = max(0, data["resultSizeEstimate"] - hidden)
                 result = {
                     "ok": True,
                     "data": data,

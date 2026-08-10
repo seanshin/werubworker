@@ -65,9 +65,7 @@ class PersonaManifest:
     mcp: list[str] = field(default_factory=list)
     recommends: list[Recommendation] = field(default_factory=list)
     builtin: bool = False
-    source: Optional[str] = (
-        None  # where it was loaded from (path / url), for provenance
-    )
+    source: Optional[str] = None  # where it was loaded from (path / url), for provenance
 
     @property
     def needs_workspace(self) -> bool:
@@ -136,9 +134,7 @@ def _recommends(persona_id: str, meta: dict) -> list[Recommendation]:
     out: list[Recommendation] = []
     for item in raw:
         if not isinstance(item, dict):
-            raise ManifestError(
-                f"persona {persona_id!r}: each `recommends` item must be a mapping"
-            )
+            raise ManifestError(f"persona {persona_id!r}: each `recommends` item must be a mapping")
         if "connector" in item:
             kind, ref = "connector", str(item.get("connector") or "").strip()
         elif "mcp" in item:
@@ -148,9 +144,7 @@ def _recommends(persona_id: str, meta: dict) -> list[Recommendation]:
                 f"persona {persona_id!r}: each `recommends` item needs a `connector:` or `mcp:` key"
             )
         if not ref:
-            raise ManifestError(
-                f"persona {persona_id!r}: a `recommends` item has an empty {kind}"
-            )
+            raise ManifestError(f"persona {persona_id!r}: a `recommends` item has an empty {kind}")
         tier = str(item.get("tier", "optional")).strip().lower()
         if tier not in VALID_REC_TIERS:
             raise ManifestError(
@@ -189,9 +183,7 @@ def parse_manifest(
         # so `My Persona.md` without an explicit id still installs (as `my-persona`).
         persona_id = _slugify(str(fallback_id or ""))
         if not persona_id:
-            raise ManifestError(
-                "manifest needs an `id` (or a filename to derive one from)"
-            )
+            raise ManifestError("manifest needs an `id` (or a filename to derive one from)")
     if not body.strip():
         raise ManifestError(f"persona {persona_id!r} has no body (the system prompt)")
 

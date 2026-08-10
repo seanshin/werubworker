@@ -17,9 +17,7 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def github_search(
         query: str, search_type: str = "issues", max_results: int = 10
     ) -> dict[str, Any]:
@@ -79,9 +77,7 @@ def register(
         )
     )
 
-    def github_create_issue(
-        owner: str, repo: str, title: str, body: str = ""
-    ) -> dict[str, Any]:
+    def github_create_issue(owner: str, repo: str, title: str, body: str = "") -> dict[str, Any]:
         return _github_call(
             secrets,
             "POST",
@@ -242,9 +238,7 @@ def register(
         )
     )
 
-    def _writable_target(
-        raw: str, *, default_name: str = ""
-    ) -> tuple[Any, dict[str, Any] | None]:
+    def _writable_target(raw: str, *, default_name: str = "") -> tuple[Any, dict[str, Any] | None]:
         """Resolve a directory inside a WRITABLE granted root — clones and pulls
         never touch anything the user hasn't shared with the session."""
         from pathlib import Path as _Path
@@ -258,9 +252,7 @@ def register(
             else (writable[0] / default_name).resolve()
         )
         if not any(path.is_relative_to(root) for root in writable):
-            return None, {
-                "error": f"{path} is outside the session's writable directories"
-            }
+            return None, {"error": f"{path} is outside the session's writable directories"}
         return path, None
 
     def github_clone(owner: str, repo: str, directory: str = "") -> dict[str, Any]:
@@ -268,9 +260,7 @@ def register(
         if err:
             return err
         if target.exists() and any(target.iterdir()):
-            return {
-                "error": f"{target} already exists and is not empty (use github_pull?)"
-            }
+            return {"error": f"{target} already exists and is not empty (use github_pull?)"}
         url = f"{_github_git_base()}/{owner}/{repo}.git"
         _out, git_err = _run_git(
             [*_github_git_auth_args(secrets, owner), "clone", url, str(target)]

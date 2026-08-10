@@ -114,9 +114,7 @@ def test_run_shell_accepts_description_and_clamped_timeout(executor):
 # -- background tasks ------------------------------------------------------------
 
 ECHO_THEN_SLEEP = (
-    "Write-Output started; Start-Sleep -Seconds 30"
-    if _WIN
-    else "echo started; sleep 30"
+    "Write-Output started; Start-Sleep -Seconds 30" if _WIN else "echo started; sleep 30"
 )
 QUICK_ECHO = "Write-Output quick_done" if _WIN else "echo quick_done"
 
@@ -140,9 +138,7 @@ def _poll_output(reg, task_id, *, until_status=None, deadline=10.0):
 def test_background_task_runs_and_exits(executor):
     reg = ToolRegistry()
     reg.register_all(shell_tools(executor))
-    started = reg.execute(
-        "run_shell", {"command": QUICK_ECHO, "run_in_background": True}
-    )
+    started = reg.execute("run_shell", {"command": QUICK_ECHO, "run_in_background": True})
     assert started["status"] == "running" and started["task_id"]
 
     acc, res = _poll_output(reg, started["task_id"], until_status="exited")
@@ -158,9 +154,7 @@ def test_background_task_runs_and_exits(executor):
 def test_background_task_kill(executor):
     reg = ToolRegistry()
     reg.register_all(shell_tools(executor))
-    started = reg.execute(
-        "run_shell", {"command": ECHO_THEN_SLEEP, "run_in_background": True}
-    )
+    started = reg.execute("run_shell", {"command": ECHO_THEN_SLEEP, "run_in_background": True})
     acc, _ = _poll_output(reg, started["task_id"])
     assert "started" in acc  # it's alive and producing output
 
@@ -174,10 +168,5 @@ def test_background_task_kill(executor):
 def test_background_unknown_task_errors(executor):
     reg = ToolRegistry()
     reg.register_all(shell_tools(executor))
-    assert (
-        "unknown task"
-        in reg.execute("shell_task_output", {"task_id": "bg-99"})["error"]
-    )
-    assert (
-        "unknown task" in reg.execute("shell_task_kill", {"task_id": "bg-99"})["error"]
-    )
+    assert "unknown task" in reg.execute("shell_task_output", {"task_id": "bg-99"})["error"]
+    assert "unknown task" in reg.execute("shell_task_kill", {"task_id": "bg-99"})["error"]

@@ -45,10 +45,8 @@ class UnroutedStore:
         if not self.path:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps({"items": [asdict(i) for i in self._items]}, indent=2),
-            encoding="utf-8",
-        )
+        payload = json.dumps({"items": [asdict(i) for i in self._items]}, indent=2)
+        self.path.write_text(payload, encoding="utf-8")
 
     def record(self, source: str, sender: str, text: str, reason: str) -> UnroutedItem:
         item = UnroutedItem(

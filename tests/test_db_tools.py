@@ -7,13 +7,13 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
+from coworker.secrets import SecretStore
 from coworker.tools.db_mgmt import (
-    _is_readonly,
     _execute_query,
+    _is_readonly,
     _sqlite_query,
     db_tools,
 )
-from coworker.secrets import SecretStore
 
 
 def _make_context(secrets: SecretStore) -> SimpleNamespace:

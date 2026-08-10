@@ -18,9 +18,7 @@ class AutomationMixin:
         # `unseen_failed` tints the badge when the NEWEST unseen run errored.
         tasks = []
         for t in self.task_store.list():
-            unseen = [
-                r for r in self.task_store.runs(t.id) if r.started_at > t.seen_runs_at
-            ]
+            unseen = [r for r in self.task_store.runs(t.id) if r.started_at > t.seen_runs_at]
             tasks.append(
                 {
                     **t.public(),
@@ -95,9 +93,7 @@ class AutomationMixin:
         self.task_store.save(task)
         return {"ok": True, "task": task.public()}
 
-    def update_automation(
-        self, task_id: str, changes: dict[str, Any]
-    ) -> dict[str, Any]:
+    def update_automation(self, task_id: str, changes: dict[str, Any]) -> dict[str, Any]:
         task = self.task_store.get(task_id)
         if task is None:
             return {"ok": False, "error": "not found"}
@@ -137,9 +133,7 @@ class AutomationMixin:
         if task is None:
             return {"ok": False, "error": "not found"}
         Path(task.workspace).mkdir(parents=True, exist_ok=True)
-        run = TaskRun(
-            task_id=task.id, trigger="manual"
-        )  # status "running", session_id auto
+        run = TaskRun(task_id=task.id, trigger="manual")  # status "running", session_id auto
         self.task_store.add_run(run)
         return {
             "ok": True,
@@ -160,9 +154,7 @@ class AutomationMixin:
         """Mark a manual run complete once its first turn finished (the WS already saved the
         session). Pulls result text + artifacts from the persisted transcript/workspace.
         """
-        run = next(
-            (r for r in self.task_store.runs(task_id) if r.run_id == run_id), None
-        )
+        run = next((r for r in self.task_store.runs(task_id) if r.run_id == run_id), None)
         task = self.task_store.get(task_id)
         if run is None or task is None:
             return {"ok": False, "error": "not found"}

@@ -100,6 +100,13 @@ def _watch_parent_windows(parent: int) -> None:
 
 
 def build_app(workspace: str | None, model: str, mode: str):
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Bound the default executor so concurrent tool calls don't spawn unlimited threads.
+    loop = asyncio.get_event_loop()
+    loop.set_default_executor(ThreadPoolExecutor(max_workers=8))
+
     manager = SessionManager(
         workspace=Path(workspace).expanduser().resolve() if workspace else None,
         data_dir=state_dir(),
@@ -131,9 +138,7 @@ def _ensure_api_token(port: int) -> Path | None:
         return None  # Tauri supplied an in-memory token; never persist it.
     token = secrets.token_hex(32)
     os.environ["COWORKER_API_TOKEN"] = token
-    return write_private_text(
-        state_dir() / f"sidecar-{port}.token", token + "\n"
-    )
+    return write_private_text(state_dir() / f"sidecar-{port}.token", token + "\n")
 
 
 def main(argv=None) -> None:
@@ -161,6 +166,7 @@ def main(argv=None) -> None:
     # Security: if no master password is configured and host is 0.0.0.0,
     # restrict to 127.0.0.1 to prevent unauthenticated remote access.
     from ..auth import LocalAuth
+
     bind_host = args.host
     if bind_host == "0.0.0.0":
         auth = LocalAuth(state_dir())
@@ -176,9 +182,7 @@ def main(argv=None) -> None:
 
         _exit_when_orphaned()
         app = build_app(args.cwd, args.model, args.mode)
-        uvicorn.run(
-            app, host=bind_host, port=args.port, ws_max_size=_WS_MAX_FRAME_BYTES
-        )
+        uvicorn.run(app, host=bind_host, port=args.port, ws_max_size=_WS_MAX_FRAME_BYTES)
     finally:
         if generated_token_path is not None:
             generated_token_path.unlink(missing_ok=True)

@@ -10,9 +10,9 @@ import time
 import uuid
 from typing import Any
 
+from ..secrets import SecretStore
 from .store import WikiStore
 from .vault import Vault
-from ..secrets import SecretStore
 
 
 class WikiSync:

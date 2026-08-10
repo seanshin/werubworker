@@ -65,9 +65,7 @@ Operate things.
     m = parse_manifest(text)
     assert m.workspace == "deliverable" and m.needs_workspace is True
 
-    coded = parse_manifest(
-        "---\nid: dev\nfamily: code\nworkspace: none\ntools: [git]\n---\nCode."
-    )
+    coded = parse_manifest("---\nid: dev\nfamily: code\nworkspace: none\ntools: [git]\n---\nCode.")
     assert coded.workspace == "git" and coded.needs_workspace is True
 
 

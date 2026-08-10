@@ -9,9 +9,7 @@ from . import _helpers
 from ._helpers import _attach, _gcal_profile, _google_headers, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     _CAL_ACCOUNT_PROP = {
         "type": "string",
         "description": "Google account email to use; omit for the default account.",
@@ -83,11 +81,7 @@ def register(
         email, profile, err = _gcal_profile(secrets, account)
         if err:
             return err
-        items = [
-            {"id": c.strip()}
-            for c in str(calendars or "primary").split(",")
-            if c.strip()
-        ]
+        items = [{"id": c.strip()} for c in str(calendars or "primary").split(",") if c.strip()]
         return _gcal_result(
             email,
             _helpers._request(
@@ -199,9 +193,7 @@ def register(
         if end:
             payload["end"] = {"dateTime": end, "timeZone": timezone}
         if not payload:
-            return {
-                "error": "nothing to update — pass summary, description, start, or end"
-            }
+            return {"error": "nothing to update — pass summary, description, start, or end"}
         return _gcal_result(
             email,
             _helpers._request(

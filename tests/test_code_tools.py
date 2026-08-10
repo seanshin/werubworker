@@ -49,8 +49,9 @@ def test_ripgrep_uses_the_same_ignored_dirs_as_the_python_fallback(tmp_path, mon
     monkeypatch.setattr(
         search.subprocess,
         "run",
-        lambda cmd, **kwargs: commands.append(cmd)
-        or SimpleNamespace(returncode=0, stdout="", stderr=""),
+        lambda cmd, **kwargs: (
+            commands.append(cmd) or SimpleNamespace(returncode=0, stdout="", stderr="")
+        ),
     )
 
     search_tools(str(tmp_path))[0](pattern="hello", glob="*.py")
@@ -77,9 +78,7 @@ def test_py_grep_fallback_skips_ignored_dirs(tmp_path):
 def test_git_log_lists_commits(tmp_path):
     ws = tmp_path / "repo"
     ws.mkdir()
-    run = lambda *a: subprocess.run(
-        ["git", "-C", str(ws), *a], capture_output=True, check=True
-    )
+    run = lambda *a: subprocess.run(["git", "-C", str(ws), *a], capture_output=True, check=True)
     run("init", "-q")
     run("config", "user.email", "t@t.io")
     run("config", "user.name", "T")
@@ -171,8 +170,7 @@ def test_cowork_has_grep_not_search_files(tmp_path):
     from coworker.agents.cowork import cowork_tool_factory
 
     names = {
-        getattr(t, "__name__", "")
-        for t in cowork_tool_factory(AgentContext(workspace=tmp_path))
+        getattr(t, "__name__", "") for t in cowork_tool_factory(AgentContext(workspace=tmp_path))
     }
     assert "grep" in names and "search_files" not in names
     assert "git_log" not in names  # git history isn't useful for Cowork

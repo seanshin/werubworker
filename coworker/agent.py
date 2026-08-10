@@ -11,8 +11,6 @@ from typing import Any, Callable, Optional
 
 from .agents import Agent, AgentContext, code_agent
 from .automation import scheduling_tools
-from .selfwake import selfwake_tools
-from .subscriptions import subscription_tools
 from .config import load_config
 from .connectors import (
     connector_list,
@@ -24,22 +22,24 @@ from .connectors import (
 from .engine import Approver, TurnEngine
 from .environment import environment_context
 from .memory import MemoryStore, Scope, format_memories, memory_tools
+from .overrides import RiskOverrideStore
 from .permissions import Mode, PermissionEngine
 from .project import load_agents_md
-from .roots import RootDir, normalize_roots, render_context
 from .providers import ProviderClient, ProviderRouter
-from .overrides import RiskOverrideStore
+from .roots import RootDir, normalize_roots, render_context
 from .secrets import SecretStore, state_dir
+from .selfwake import selfwake_tools
 from .skills import SkillLoader, save_skill_tool, skill_catalog_text, skill_tools
+from .subscriptions import subscription_tools
 from .tools import ToolRegistry
 from .tools.ask import ask_user_tool
 from .tools.directories import request_directory_tool
 from .tools.plan import propose_plan_tool
+from .tools.shell import LocalExecutor
 from .tools.subagent import explorer_tools
+from .tools.todo import TodoList
 from .web import make_web_fetch_tool, make_web_search_tool
 from .workspace_trust import WorkspaceTrustStore
-from .tools.shell import LocalExecutor
-from .tools.todo import TodoList
 
 # Appended each turn while discuss mode is active: enforcement-only read-only, with no
 # pressure toward a plan proposal (that's what distinguishes it from plan mode).
@@ -90,9 +90,7 @@ English, but sentences and descriptions must be in Korean."""
 def _enabled_connector_tools(secrets: SecretStore) -> tuple[set[str], set[str]]:
     connectors = {c["name"]: c for c in connector_list(secrets)}
     enabled_connectors = {
-        name
-        for name, c in connectors.items()
-        if c.get("connected") and c.get("enabled")
+        name for name, c in connectors.items() if c.get("connected") and c.get("enabled")
     }
     enabled_tools = {
         tool["name"]
@@ -191,13 +189,16 @@ def build_engine(
 
     workspace_trusted = bool(ws and WorkspaceTrustStore().is_trusted(ws))
     config = load_config(ws, workspace_trusted=workspace_trusted)
-    executor = (
-        LocalExecutor(cwd=ws) if (agent.needs_workspace and ws is not None) else None
-    )
+    executor = LocalExecutor(cwd=ws) if (agent.needs_workspace and ws is not None) else None
     todo = TodoList()
     context = AgentContext(
-        workspace=ws, executor=executor, todo=todo, roots=root_list or None,
-        secrets=secrets, wiki_store=wiki_store, vault=vault,
+        workspace=ws,
+        executor=executor,
+        todo=todo,
+        roots=root_list or None,
+        secrets=secrets,
+        wiki_store=wiki_store,
+        vault=vault,
     )
 
     registry = ToolRegistry()
@@ -212,9 +213,7 @@ def build_engine(
         registry.register(make_send_message_tool(secrets))
         # send_file (§34): hand deliverables into the chat — same targets, but its OWN
         # approval surface (a thread's standing send_message grant never covers uploads).
-        registry.register(
-            make_send_file_tool(secrets, workspace=ws, roots=root_list or None)
-        )
+        registry.register(make_send_file_tool(secrets, workspace=ws, roots=root_list or None))
         # Channel subscriptions (inbound): listen to a channel, catch up, (un)subscribe. The agent
         # obtains a channel via ask_user or from a channel message it's reacting to.
         if subscription_store is not None and channel_buffer is not None and session_id:
@@ -290,9 +289,7 @@ def build_engine(
             instructions = f"{instructions}\n\n{conventions}"
 
     if memory_store is not None:
-        registry.register_all(
-            memory_tools(memory_store, workspace=str(ws) if ws else None)
-        )
+        registry.register_all(memory_tools(memory_store, workspace=str(ws) if ws else None))
         instructions = f"{instructions}\n\n{_MEMORY_GUIDANCE}"
         remembered = memory_store.list(scope=Scope.GLOBAL)
         if ws is not None:
@@ -314,9 +311,7 @@ def build_engine(
     # before-save rule holds without any bespoke plumbing. Bundled files may only come from
     # this session's roots.
     registry.register(
-        save_skill_tool(
-            allowed_dirs=[r.path for r in (root_list or [])] or ([ws] if ws else [])
-        )
+        save_skill_tool(allowed_dirs=[r.path for r in (root_list or [])] or ([ws] if ws else []))
     )
 
     # User-local risk overrides (mainly to relax MCP's conservative default). Empty store →
@@ -343,9 +338,7 @@ def build_engine(
     # flip mid-session, so it's checked each turn, not baked into the instructions) and the live
     # directory list (orphan Cowork can gain folders mid-session; Cowork/MyHelper only).
     roots_context = (
-        (lambda: render_context(root_list))
-        if root_list and agent.family == "knowledge"
-        else None
+        (lambda: render_context(root_list)) if root_list and agent.family == "knowledge" else None
     )
 
     # Late-bound engine ref: the closure needs the conversation history (for the disable
@@ -393,9 +386,7 @@ def build_engine(
         approver=approver,
         # Stop kills the in-flight foreground shell command, not just the loop.
         interrupt_hooks=[executor.interrupt_now] if executor is not None else None,
-        max_iterations=(
-            max_iterations if max_iterations is not None else config.max_iterations
-        ),
+        max_iterations=(max_iterations if max_iterations is not None else config.max_iterations),
         model_settings=model_settings,
         messages=messages,
         audit_sink=audit_sink,

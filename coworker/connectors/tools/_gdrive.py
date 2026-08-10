@@ -19,9 +19,7 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     _DRIVE = "https://www.googleapis.com/drive/v3"
     _DRIVE_FIELDS = "files(id,name,mimeType,modifiedTime,size,webViewLink)"
     # Google-native types export to text; everything else downloads as-is.
@@ -34,12 +32,8 @@ def register(
     def _drive_quote(term: str) -> str:
         return term.replace("\\", "\\\\").replace("'", "\\'")
 
-    def drive_search_files(
-        query: str, max_results: int = 10, account: str = ""
-    ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "google_drive", account, "access_token"
-        )
+    def drive_search_files(query: str, max_results: int = 10, account: str = "") -> dict[str, Any]:
+        aid, profile, err = _account_profile(secrets, "google_drive", account, "access_token")
         if err:
             return err
         q = _drive_quote(query)
@@ -78,9 +72,7 @@ def register(
     def drive_list_folder(
         folder_id: str = "root", max_results: int = 20, account: str = ""
     ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "google_drive", account, "access_token"
-        )
+        aid, profile, err = _account_profile(secrets, "google_drive", account, "access_token")
         if err:
             return err
         return _acct_result(
@@ -115,12 +107,8 @@ def register(
         )
     )
 
-    def drive_read_file(
-        file_id: str, max_chars: int = 20000, account: str = ""
-    ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "google_drive", account, "access_token"
-        )
+    def drive_read_file(file_id: str, max_chars: int = 20000, account: str = "") -> dict[str, Any]:
+        aid, profile, err = _account_profile(secrets, "google_drive", account, "access_token")
         if err:
             return err
         headers = _google_headers(profile["access_token"])
@@ -143,9 +131,7 @@ def register(
                 params={"mimeType": export_mime},
             )
         elif mime.startswith("application/vnd.google-apps"):
-            return _acct_result(
-                aid, {"error": f"cannot read {mime} as text", "file": info}
-            )
+            return _acct_result(aid, {"error": f"cannot read {mime} as text", "file": info})
         else:
             body = _helpers._request(
                 "GET",

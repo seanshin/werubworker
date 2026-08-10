@@ -7,6 +7,7 @@ import threading
 import time
 
 import aisuite as ai
+
 from coworker.engine import ApprovalOutcome, PermissionRequest, TurnEngine
 from coworker.events import EventType
 from coworker.permissions import PermissionEngine
@@ -109,9 +110,7 @@ def test_tool_turn_order_and_execution(tmp_path):
     ]
     finished = next(e for e in events if e.type == EventType.TOOL_FINISHED)
     assert finished.data["status"] == "ok"
-    assert any(
-        m.get("role") == "tool" and "hello" in m["content"] for m in engine.messages
-    )
+    assert any(m.get("role") == "tool" and "hello" in m["content"] for m in engine.messages)
 
 
 def test_write_requires_approval_then_approved(tmp_path):
@@ -148,10 +147,7 @@ def test_denied_tool_yields_error_and_continues(tmp_path):
     finished = next(e for e in events if e.type == EventType.TOOL_FINISHED)
     assert finished.data["status"] == "denied"
     assert _types(events)[-1] == EventType.TURN_END
-    assert any(
-        m.get("role") == "tool" and "not executed" in m["content"]
-        for m in engine.messages
-    )
+    assert any(m.get("role") == "tool" and "not executed" in m["content"] for m in engine.messages)
 
 
 def test_max_iterations_rail(tmp_path):
@@ -253,17 +249,13 @@ def test_low_risk_tool_calls_run_concurrently(tmp_path):
     assert len(finished) == 2
     assert all(e.data["status"] == "ok" for e in finished)
     # a tool result message exists for every call id
-    tool_ids = {
-        m.get("tool_call_id") for m in engine.messages if m.get("role") == "tool"
-    }
+    tool_ids = {m.get("tool_call_id") for m in engine.messages if m.get("role") == "tool"}
     assert tool_ids == {"call_0", "call_1"}
 
 
 def test_non_low_risk_tool_calls_stay_sequential(tmp_path):
     order = []
-    medium = ai.ToolMetadata(
-        category="filesystem", risk_level="medium", requires_approval=False
-    )
+    medium = ai.ToolMetadata(category="filesystem", risk_level="medium", requires_approval=False)
 
     def first():
         """Record start/end with a delay."""

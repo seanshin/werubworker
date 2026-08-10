@@ -16,13 +16,16 @@ from .base import Agent, AgentContext
 
 # Capabilities: cowork baseline + monitoring + SSH + Docker + DB + cloud infra.
 OPS_CAPABILITIES = [
-    "files", "search", "shell", "todo",
+    "files",
+    "search",
+    "shell",
+    "todo",
     "server_monitor",  # CPU, memory, disk, ports, processes, logs
-    "ssh",             # Remote server access
-    "docker",          # Container management
-    "k8s",             # Kubernetes cluster management
-    "database",        # DB query, status, backup
-    "cloud_infra",     # AWS, Cloudflare, Wasabi
+    "ssh",  # Remote server access
+    "docker",  # Container management
+    "k8s",  # Kubernetes cluster management
+    "database",  # DB query, status, backup
+    "cloud_infra",  # AWS, Cloudflare, Wasabi
 ]
 
 OPS_INSTRUCTIONS = (

@@ -23,6 +23,7 @@ import aisuite as ai
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _run(cmd: list[str], timeout: int = 30, cwd: str | None = None) -> str:
     """Run a command and return its stdout (best-effort, never raises)."""
     try:
@@ -43,9 +44,7 @@ def _github_token(context: Any = None) -> Optional[str]:
     return profile.get("token") or os.environ.get("GITHUB_TOKEN")
 
 
-def _github_api(
-    token: str, method: str, url: str, *, params: dict | None = None
-) -> dict[str, Any]:
+def _github_api(token: str, method: str, url: str, *, params: dict | None = None) -> dict[str, Any]:
     """Call the GitHub REST API via httpx."""
     try:
         import httpx
@@ -91,7 +90,9 @@ def _review_pr(token: str, repo: str, pr_number: int) -> dict[str, Any]:
 
     # Fetch changed files
     files_resp = _github_api(
-        token, "GET", f"{_GITHUB_API}/repos/{repo}/pulls/{pr_number}/files",
+        token,
+        "GET",
+        f"{_GITHUB_API}/repos/{repo}/pulls/{pr_number}/files",
         params={"per_page": 100},
     )
     if "error" in files_resp:
@@ -104,13 +105,15 @@ def _review_pr(token: str, repo: str, pr_number: int) -> dict[str, Any]:
     total_additions = 0
     total_deletions = 0
     for f in files_data:
-        changed_files.append({
-            "filename": f.get("filename"),
-            "status": f.get("status"),
-            "additions": f.get("additions", 0),
-            "deletions": f.get("deletions", 0),
-            "patch_preview": (f.get("patch") or "")[:500],
-        })
+        changed_files.append(
+            {
+                "filename": f.get("filename"),
+                "status": f.get("status"),
+                "additions": f.get("additions", 0),
+                "deletions": f.get("deletions", 0),
+                "patch_preview": (f.get("patch") or "")[:500],
+            }
+        )
         total_additions += f.get("additions", 0)
         total_deletions += f.get("deletions", 0)
 
@@ -122,11 +125,15 @@ def _review_pr(token: str, repo: str, pr_number: int) -> dict[str, Any]:
             f"{len(large_files)} file(s) have large diffs (>300 lines) — consider splitting."
         )
     if total_additions + total_deletions > 1000:
-        suggestions.append("PR is very large — consider breaking into smaller PRs for easier review.")
+        suggestions.append(
+            "PR is very large — consider breaking into smaller PRs for easier review."
+        )
     test_files = [f for f in changed_files if "test" in f["filename"].lower()]
     src_files = [f for f in changed_files if "test" not in f["filename"].lower()]
     if src_files and not test_files:
-        suggestions.append("No test files modified — consider adding test coverage for the changes.")
+        suggestions.append(
+            "No test files modified — consider adding test coverage for the changes."
+        )
 
     return {
         "title": pr.get("title"),
@@ -153,9 +160,18 @@ def _review_security(path: str = ".") -> dict[str, Any]:
 
     # Patterns to scan for
     secret_patterns = [
-        (r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"][A-Za-z0-9_\-]{16,}['\"]", "Possible hardcoded API key"),
-        (r"(?i)(secret|password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{8,}['\"]", "Possible hardcoded secret/password"),
-        (r"(?i)(aws_access_key_id|aws_secret_access_key)\s*[:=]\s*['\"][A-Za-z0-9/+=]{16,}['\"]", "Possible AWS credential"),
+        (
+            r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"][A-Za-z0-9_\-]{16,}['\"]",
+            "Possible hardcoded API key",
+        ),
+        (
+            r"(?i)(secret|password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{8,}['\"]",
+            "Possible hardcoded secret/password",
+        ),
+        (
+            r"(?i)(aws_access_key_id|aws_secret_access_key)\s*[:=]\s*['\"][A-Za-z0-9/+=]{16,}['\"]",
+            "Possible AWS credential",
+        ),
         (r"AKIA[0-9A-Z]{16}", "Possible AWS Access Key ID"),
         (r"(?i)bearer\s+[A-Za-z0-9_\-\.]{20,}", "Possible hardcoded Bearer token"),
         (r"ghp_[A-Za-z0-9]{36}", "Possible GitHub personal access token"),
@@ -163,12 +179,36 @@ def _review_security(path: str = ".") -> dict[str, Any]:
     ]
 
     sql_patterns = [
-        (r"""(?i)(?:execute|cursor\.execute|query)\s*\(\s*(?:f['\"]|['\"].*%s|['\"].*\+\s*\w)""", "Possible SQL injection (string interpolation in query)"),
-        (r"(?i)(?:SELECT|INSERT|UPDATE|DELETE).*\+\s*(?:request|params|input|args)", "Possible SQL injection (concatenation with user input)"),
+        (
+            r"""(?i)(?:execute|cursor\.execute|query)\s*\(\s*(?:f['\"]|['\"].*%s|['\"].*\+\s*\w)""",
+            "Possible SQL injection (string interpolation in query)",
+        ),
+        (
+            r"(?i)(?:SELECT|INSERT|UPDATE|DELETE).*\+\s*(?:request|params|input|args)",
+            "Possible SQL injection (concatenation with user input)",
+        ),
     ]
 
     # File extensions to scan
-    code_exts = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rb", ".php", ".rs", ".yml", ".yaml", ".json", ".env", ".cfg", ".ini", ".conf"}
+    code_exts = {
+        ".py",
+        ".js",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".java",
+        ".go",
+        ".rb",
+        ".php",
+        ".rs",
+        ".yml",
+        ".yaml",
+        ".json",
+        ".env",
+        ".cfg",
+        ".ini",
+        ".conf",
+    }
 
     scanned = 0
     max_files = 2000
@@ -176,8 +216,20 @@ def _review_security(path: str = ".") -> dict[str, Any]:
     for dirpath, dirnames, filenames in os.walk(root):
         # Skip common non-source dirs
         dirnames[:] = [
-            d for d in dirnames
-            if d not in {"node_modules", ".git", "__pycache__", ".venv", "venv", "dist", "build", ".tox", ".mypy_cache"}
+            d
+            for d in dirnames
+            if d
+            not in {
+                "node_modules",
+                ".git",
+                "__pycache__",
+                ".venv",
+                "venv",
+                "dist",
+                "build",
+                ".tox",
+                ".mypy_cache",
+            }
         ]
         for fname in filenames:
             if scanned >= max_files:
@@ -195,24 +247,30 @@ def _review_security(path: str = ".") -> dict[str, Any]:
 
             for pattern, desc in secret_patterns:
                 for m in re.finditer(pattern, content):
-                    line_no = content[:m.start()].count("\n") + 1
-                    findings.append({
-                        "file": rel,
-                        "line": line_no,
-                        "type": "secret",
-                        "description": desc,
-                        "match_preview": m.group(0)[:60] + "..." if len(m.group(0)) > 60 else m.group(0),
-                    })
+                    line_no = content[: m.start()].count("\n") + 1
+                    findings.append(
+                        {
+                            "file": rel,
+                            "line": line_no,
+                            "type": "secret",
+                            "description": desc,
+                            "match_preview": m.group(0)[:60] + "..."
+                            if len(m.group(0)) > 60
+                            else m.group(0),
+                        }
+                    )
 
             for pattern, desc in sql_patterns:
                 for m in re.finditer(pattern, content):
-                    line_no = content[:m.start()].count("\n") + 1
-                    findings.append({
-                        "file": rel,
-                        "line": line_no,
-                        "type": "sql_injection",
-                        "description": desc,
-                    })
+                    line_no = content[: m.start()].count("\n") + 1
+                    findings.append(
+                        {
+                            "file": rel,
+                            "line": line_no,
+                            "type": "sql_injection",
+                            "description": desc,
+                        }
+                    )
 
     # Check for dependency vulnerabilities
     dep_audit: dict[str, Any] = {}
@@ -257,8 +315,10 @@ def _review_test_coverage(path: str = ".") -> dict[str, Any]:
 
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [
-            d for d in dirnames
-            if d not in {"node_modules", ".git", "__pycache__", ".venv", "venv", "dist", "build", ".tox"}
+            d
+            for d in dirnames
+            if d
+            not in {"node_modules", ".git", "__pycache__", ".venv", "venv", "dist", "build", ".tox"}
         ]
         for fname in filenames:
             fpath = Path(dirpath) / fname
@@ -287,6 +347,7 @@ def _review_test_coverage(path: str = ".") -> dict[str, Any]:
     if cov_json.exists():
         try:
             import json as _json
+
             raw = _json.loads(cov_json.read_text())
             totals = raw.get("totals", {})
             coverage_data["python_coverage"] = {
@@ -302,6 +363,7 @@ def _review_test_coverage(path: str = ".") -> dict[str, Any]:
     if cov_xml.exists():
         try:
             import xml.etree.ElementTree as ET
+
             tree = ET.parse(str(cov_xml))
             cov_root = tree.getroot()
             line_rate = cov_root.get("line-rate")
@@ -335,7 +397,7 @@ def _review_test_coverage(path: str = ".") -> dict[str, Any]:
         base = Path(tf).stem.lower()
         for prefix in ("test_", "test"):
             if base.startswith(prefix):
-                base = base[len(prefix):]
+                base = base[len(prefix) :]
                 break
         for suffix in ("_test", "_spec", ".test", ".spec"):
             if base.endswith(suffix):
@@ -436,6 +498,7 @@ _REVIEW_TEST_COVERAGE_SCHEMA = {
 # Public factory — called by catalog.py
 # ---------------------------------------------------------------------------
 
+
 def code_review_tools(context: Any = None) -> list:
     """Return the code review toolset: review_pr, review_security, review_test_coverage.
     All read-only, no approval required."""
@@ -446,7 +509,9 @@ def code_review_tools(context: Any = None) -> list:
         """Analyze a GitHub PR: changed files, diff summary, review suggestions."""
         t = token_holder["token"]
         if not t:
-            return {"error": "GitHub token not configured (set github:default.token in secrets or GITHUB_TOKEN env var)"}
+            return {
+                "error": "GitHub token not configured (set github:default.token in secrets or GITHUB_TOKEN env var)"
+            }
         return _review_pr(t, repo, pr_number)
 
     def review_security(path: str = ".") -> dict:

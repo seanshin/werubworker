@@ -10,9 +10,7 @@ from . import _helpers
 from ._helpers import _attach, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     _CLICKUP = "https://api.clickup.com/api/v2"
 
     def clickup_list_teams() -> dict[str, Any]:
@@ -144,9 +142,7 @@ def register(
         )
     )
 
-    def clickup_create_task(
-        list_id: str, name: str, description: str = ""
-    ) -> dict[str, Any]:
+    def clickup_create_task(list_id: str, name: str, description: str = "") -> dict[str, Any]:
         profile, err = _profile(secrets, "clickup", "api_token")
         if err:
             return err

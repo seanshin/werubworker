@@ -117,12 +117,8 @@ def test_web_search_rest(tmp_path, monkeypatch):
     )
     got = client.get("/v1/web-search").json()
     assert got["provider"] == "tavily" and got["has_key"] is True
-    assert (
-        "sk-secret-xyz" not in client.get("/v1/web-search").text
-    )  # key never returned
-    assert (
-        client.post("/v1/web-search", json={"provider": "nope"}).json()["ok"] is False
-    )
+    assert "sk-secret-xyz" not in client.get("/v1/web-search").text  # key never returned
+    assert client.post("/v1/web-search", json={"provider": "nope"}).json()["ok"] is False
 
 
 def test_engine_registers_web_search(tmp_path):

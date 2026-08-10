@@ -78,12 +78,8 @@ class ProviderDescriptor:
     needs_key: bool
     fields: list[ProviderField]
     build: Callable[[dict[str, Any], Any], ProviderClient] = field(repr=False)
-    recommended_model: Optional[str] = (
-        None  # pre-filled in the UI; auto-added on configure
-    )
-    env_key: Optional[str] = (
-        None  # env var that can supply the API key (e.g. ANTHROPIC_API_KEY)
-    )
+    recommended_model: Optional[str] = None  # pre-filled in the UI; auto-added on configure
+    env_key: Optional[str] = None  # env var that can supply the API key (e.g. ANTHROPIC_API_KEY)
     # One-line note under the provider title (e.g. "Connects through X's OpenAI-compatible API").
     blurb: str = ""
 
@@ -140,9 +136,7 @@ def _build_anthropic(profile: dict[str, Any], secrets: Any) -> ProviderClient:
         thinking_budget = int(str((profile or {}).get("thinking_budget") or "").strip())
     except ValueError:
         thinking_budget = DEFAULT_THINKING_BUDGET
-    return AnthropicProvider(
-        api_key=api_key, secrets=secrets, thinking_budget=thinking_budget
-    )
+    return AnthropicProvider(api_key=api_key, secrets=secrets, thinking_budget=thinking_budget)
 
 
 def _build_gemini(profile: dict[str, Any], secrets: Any) -> ProviderClient:
@@ -206,9 +200,7 @@ def _openai_compat(vendor: str, default_base_url: str, env_key: Optional[str] = 
             os.environ.get(env_key, "").strip() if env_key else ""
         )
         if not api_key:
-            raise RuntimeError(
-                f"No {vendor} API key configured — add it in Settings ▸ Models."
-            )
+            raise RuntimeError(f"No {vendor} API key configured — add it in Settings ▸ Models.")
         return OpenAIProvider(api_key=api_key, base_url=base_url)
 
     return build
@@ -590,9 +582,7 @@ def get_descriptor(name: str) -> Optional[ProviderDescriptor]:
     return _BY_NAME.get(name)
 
 
-def build_provider_client(
-    name: str, profile: dict[str, Any], secrets: Any
-) -> ProviderClient:
+def build_provider_client(name: str, profile: dict[str, Any], secrets: Any) -> ProviderClient:
     """Build a `ProviderClient` for `name` from its stored profile. Unknown → OpenAI default."""
     descriptor = _BY_NAME.get(name) or _BY_NAME["openai"]
     return descriptor.build(profile or {}, secrets)
@@ -607,9 +597,7 @@ def descriptor_configured(d: ProviderDescriptor, profile: dict[str, Any]) -> boo
         return True  # keyless (Ollama) — usable out of the box
     profile = profile or {}
     if any(f.key == "api_key" for f in d.fields):
-        return bool(profile.get("api_key")) or bool(
-            d.env_key and os.environ.get(d.env_key)
-        )
+        return bool(profile.get("api_key")) or bool(d.env_key and os.environ.get(d.env_key))
     return all(profile.get(f.key) for f in d.fields if f.required)
 
 
@@ -654,9 +642,7 @@ def _verify_bedrock(fields: dict[str, Any], timeout: float) -> dict[str, Any]:
         get("bedrock_api_key") or os.environ.get("AWS_BEARER_TOKEN_BEDROCK")
     ):
         return {"ok": False, "error": "Enter a Bedrock API key to test."}
-    if method == "iam" and not (
-        get("aws_access_key_id") and get("aws_secret_access_key")
-    ):
+    if method == "iam" and not (get("aws_access_key_id") and get("aws_secret_access_key")):
         return {"ok": False, "error": "Enter an access key ID and secret access key."}
     try:
         if method == "api_key":

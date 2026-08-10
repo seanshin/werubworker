@@ -9,9 +9,7 @@ from . import _helpers
 from ._helpers import _attach, _bearer_headers, _clamp, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def stripe_search_customers(query: str, max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "stripe", "api_key")
         if err:
@@ -37,9 +35,7 @@ def register(
         )
     )
 
-    def stripe_list_charges(
-        customer_id: str = "", max_results: int = 10
-    ) -> dict[str, Any]:
+    def stripe_list_charges(customer_id: str = "", max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "stripe", "api_key")
         if err:
             return err
@@ -67,9 +63,7 @@ def register(
         )
     )
 
-    def stripe_list_invoices(
-        customer_id: str = "", max_results: int = 10
-    ) -> dict[str, Any]:
+    def stripe_list_invoices(customer_id: str = "", max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "stripe", "api_key")
         if err:
             return err

@@ -9,9 +9,7 @@ from . import _helpers
 from ._helpers import _attach, _html_to_text, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def browser_read_url(url: str, max_chars: int = 20000) -> dict[str, Any]:
         if not url.lower().startswith(("http://", "https://")):
             return {"error": "url must start with http:// or https://"}

@@ -9,9 +9,7 @@ from . import _helpers
 from ._helpers import _attach, _bearer_headers, _clamp, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def asana_list_workspaces() -> dict[str, Any]:
         profile, err = _profile(secrets, "asana", "token")
         if err:
@@ -36,9 +34,7 @@ def register(
         )
     )
 
-    def asana_search_tasks(
-        workspace_gid: str, query: str, max_results: int = 10
-    ) -> dict[str, Any]:
+    def asana_search_tasks(workspace_gid: str, query: str, max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "asana", "token")
         if err:
             return err
@@ -95,9 +91,7 @@ def register(
         )
     )
 
-    def asana_create_task(
-        project_gid: str, name: str, notes: str = ""
-    ) -> dict[str, Any]:
+    def asana_create_task(project_gid: str, name: str, notes: str = "") -> dict[str, Any]:
         profile, err = _profile(secrets, "asana", "token")
         if err:
             return err

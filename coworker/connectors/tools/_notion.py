@@ -17,9 +17,7 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def _notion_headers(profile: dict[str, Any]) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {profile['access_token']}",
@@ -32,16 +30,12 @@ def register(
         for b in blocks:
             content = b.get(b.get("type", ""), {})
             texts = content.get("rich_text") or content.get("title") or []
-            line = "".join(
-                t.get("plain_text", "") for t in texts if isinstance(t, dict)
-            )
+            line = "".join(t.get("plain_text", "") for t in texts if isinstance(t, dict))
             if line:
                 lines.append(line)
         return "\n".join(lines)
 
-    def notion_search(
-        query: str, max_results: int = 10, account: str = ""
-    ) -> dict[str, Any]:
+    def notion_search(query: str, max_results: int = 10, account: str = "") -> dict[str, Any]:
         aid, profile, err = _account_profile(secrets, "notion", account, "access_token")
         if err:
             return err

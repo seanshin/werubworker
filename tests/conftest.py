@@ -10,8 +10,52 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
+from fastapi.testclient import TestClient
 
+from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient, ToolCall
+from coworker.server import SessionManager, create_app
 from coworker.testing.fake_slack import FakeSlack
+
+
+# -- Shared server-test helpers ------------------------------------------------
+
+
+class ScriptedProvider(ProviderClient):
+    """A ProviderClient that returns queued AssistantTurns (streams via base default)."""
+
+    def __init__(self, turns):
+        self._turns = list(turns)
+
+    def complete(self, *, model, messages, tools=None, **settings):
+        return self._turns.pop(0)
+
+    def capabilities(self, model):
+        return ModelCapabilities()
+
+
+def _text(text):
+    return AssistantTurn(text=text, finish_reason="stop")
+
+
+def _tool(name, args, call_id="call_1"):
+    return AssistantTurn(tool_calls=[ToolCall(id=call_id, name=name, arguments=args)])
+
+
+def _client(tmp_path, turns):
+    manager = SessionManager(workspace=tmp_path, provider=ScriptedProvider(turns))
+    return TestClient(create_app(manager))
+
+
+def _drain(ws, on_permission=None):
+    """Collect event types until turn_done; optionally answer permission_required."""
+    types = []
+    while True:
+        event = ws.receive_json()
+        types.append(event["type"])
+        if event["type"] == "permission_required" and on_permission:
+            ws.send_json({"type": "approval", "decision": on_permission})
+        if event["type"] == "turn_done":
+            return types
 
 
 @pytest.fixture(autouse=True)

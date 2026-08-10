@@ -66,9 +66,7 @@ def test_persona_detail_endpoint(tmp_path, monkeypatch):
     assert detail["id"] == "ops"
     assert detail["name"] == "Ops Coworker"
     assert detail["enabled"] is False  # non-default personas ship disabled (opt-in)
-    assert (
-        detail["workspace"] == "deliverable"
-    )  # §16 collapse: ops is a scratch persona now
+    assert detail["workspace"] == "deliverable"  # §16 collapse: ops is a scratch persona now
     assert detail["default_permission_mode"] == "interactive"
     assert "anthropic:claude-opus-4-8" in detail["recommended_models"]
     assert {"files", "search", "shell", "todo"}.issubset(set(detail["tools"]))
@@ -116,9 +114,7 @@ def test_persona_set_default_connection(tmp_path, monkeypatch):
 
     # reflected in the next GET
     detail = client.get("/v1/personas/ops").json()
-    assert {d["connector"]: d["enabled"] for d in detail["default_connections"]}[
-        "github"
-    ] is False
+    assert {d["connector"]: d["enabled"] for d in detail["default_connections"]}["github"] is False
 
     # ...and in a brand-new session's effective set (github now off by persona default)
     eff = mgr.effective_connectors("brandnew", "ops")
@@ -150,10 +146,7 @@ def test_persona_enable_toggle(tmp_path, monkeypatch):
     ] is False
 
     # unknown id → error
-    assert (
-        client.post("/v1/personas/nope/enable", json={"enabled": False}).json()["ok"]
-        is False
-    )
+    assert client.post("/v1/personas/nope/enable", json={"enabled": False}).json()["ok"] is False
 
 
 # -- §6 per-session connections ------------------------------------------------
@@ -202,9 +195,7 @@ def test_fresh_session_view_uses_persona_hint(tmp_path, monkeypatch):
 
     # without the hint the same fresh session would fall back to the default persona
     fallback = client.get("/v1/sessions/brand-new/connections").json()
-    assert {c["connector"]: c for c in fallback["connected"]}["slack"][
-        "enabled"
-    ] is True
+    assert {c["connector"]: c for c in fallback["connected"]}["slack"]["enabled"] is True
 
 
 def test_session_set_override(tmp_path, monkeypatch):
@@ -216,10 +207,7 @@ def test_session_set_override(tmp_path, monkeypatch):
 
     # slack starts effective (connected + ops core default on)
     assert "slack" in mgr.effective_connectors("s1", "ops")
-    before = {
-        c["connector"]
-        for c in client.get("/v1/sessions/s1/connections").json()["connected"]
-    }
+    before = {c["connector"] for c in client.get("/v1/sessions/s1/connections").json()["connected"]}
     assert "slack" in before
 
     # mute slack for this session
@@ -234,8 +222,7 @@ def test_session_set_override(tmp_path, monkeypatch):
     view_conn = {c["connector"]: c for c in resp["connections"]["connected"]}
     assert view_conn["slack"]["enabled"] is False
     fresh = {
-        c["connector"]: c
-        for c in client.get("/v1/sessions/s1/connections").json()["connected"]
+        c["connector"]: c for c in client.get("/v1/sessions/s1/connections").json()["connected"]
     }
     assert fresh["slack"]["enabled"] is False
 

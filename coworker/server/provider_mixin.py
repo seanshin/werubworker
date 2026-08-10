@@ -24,9 +24,7 @@ class ProviderMixin:
             profile = self.secrets.get(f"provider:{d.name}") or {}
             configured = descriptor_configured(d, profile)
             values = {
-                f.key: profile.get(f.key)
-                for f in d.fields
-                if not f.secret and profile.get(f.key)
+                f.key: profile.get(f.key) for f in d.fields if not f.secret and profile.get(f.key)
             }
             out.append(
                 {
@@ -38,16 +36,12 @@ class ProviderMixin:
                     # by set_provider) and when the provider last served a completion (epoch,
                     # stamped by the router's on_use hook). Absent for env-only config.
                     "key_set_at": profile.get("key_set_at"),
-                    "last_used_at": (self._prefs.get("provider_last_used") or {}).get(
-                        d.name
-                    ),
+                    "last_used_at": (self._prefs.get("provider_last_used") or {}).get(d.name),
                 }
             )
         return out
 
-    def set_provider(
-        self, name: str, fields: Optional[dict[str, Any]]
-    ) -> dict[str, Any]:
+    def set_provider(self, name: str, fields: Optional[dict[str, Any]]) -> dict[str, Any]:
         """Store a provider's config in its `provider:<name>` SecretStore profile and rebuild
         its cached client. Merges provided fields into any existing profile."""
         d = get_descriptor(name)
@@ -102,9 +96,7 @@ class ProviderMixin:
         self._refresh_provider(name)
         return {"ok": True, "provider": name}
 
-    def verify_provider(
-        self, name: str, fields: Optional[dict[str, Any]]
-    ) -> dict[str, Any]:
+    def verify_provider(self, name: str, fields: Optional[dict[str, Any]]) -> dict[str, Any]:
         """Test a provider's credentials with a live read-only call, WITHOUT persisting them, so
         onboarding can offer a "Test" button. Falls back to stored/env values when the form left
         a field blank (e.g. testing an already-configured provider)."""
@@ -174,11 +166,7 @@ class ProviderMixin:
             return [m.split(":", 1)[-1] for m in self._ollama_models()]
         from ..providers.matrix import models_for_provider
 
-        return list(
-            dict.fromkeys(
-                [*models_for_provider(name), *self.COMPAT_MODELS.get(name, [])]
-            )
-        )
+        return list(dict.fromkeys([*models_for_provider(name), *self.COMPAT_MODELS.get(name, [])]))
 
     def _model_provider(self, model: str) -> str:
         """The provider a model string routes to (known `prefix:` or the OpenAI default)."""
@@ -233,9 +221,7 @@ class ProviderMixin:
             import httpx
 
             data = httpx.get(base + "/api/tags", timeout=2.0).json()
-            return [
-                f"ollama:{m['name']}" for m in data.get("models", []) if m.get("name")
-            ]
+            return [f"ollama:{m['name']}" for m in data.get("models", []) if m.get("name")]
         except Exception:
             return []
 

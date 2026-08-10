@@ -22,14 +22,14 @@ import aisuite as ai
 from .agents.base import AgentContext
 from .risk import RiskClass
 from .tools.ci_cd import ci_cd_tools
-from .tools.code_review import code_review_tools
-from .tools.files import file_tools
-from .tools.git import git_tools
-from .tools.search import search_tools
 from .tools.cloud_infra import cloud_infra_tools
+from .tools.code_review import code_review_tools
 from .tools.db_mgmt import db_tools
 from .tools.docker_mgmt import docker_tools
+from .tools.files import file_tools
+from .tools.git import git_tools
 from .tools.k8s_mgmt import k8s_tools
+from .tools.search import search_tools
 from .tools.server_monitor import server_monitor_tools
 from .tools.shell import shell_tools
 from .tools.todo import todo_tools
@@ -80,13 +80,9 @@ def _files(context: AgentContext) -> list:
     aisuite's `read_file`/`read_file_lines`. Only our `grep` replaces the slow `search_files`.
     """
     ws = str(context.workspace)
-    file_kwargs = (
-        {"roots": context.roots} if context.roots else {"root": ws, "allow_write": True}
-    )
+    file_kwargs = {"roots": context.roots} if context.roots else {"root": ws, "allow_write": True}
     return [
-        t
-        for t in ai.toolkits.files(**file_kwargs)
-        if getattr(t, "__name__", "") != "search_files"
+        t for t in ai.toolkits.files(**file_kwargs) if getattr(t, "__name__", "") != "search_files"
     ]
 
 
@@ -128,11 +124,15 @@ def _docker(context: AgentContext) -> list:
 
 
 def _k8s(context: AgentContext) -> list:
-    return k8s_tools(context)  # k8s_pods, k8s_logs, k8s_describe, k8s_restart, k8s_scale, k8s_events
+    return k8s_tools(
+        context
+    )  # k8s_pods, k8s_logs, k8s_describe, k8s_restart, k8s_scale, k8s_events
 
 
 def _wiki(context: AgentContext) -> list:
-    return wiki_tools(context)  # wiki_search, wiki_get, wiki_get_credential, wiki_update, wiki_check_alerts
+    return wiki_tools(
+        context
+    )  # wiki_search, wiki_get, wiki_get_credential, wiki_update, wiki_check_alerts
 
 
 def _code_review(context: AgentContext) -> list:

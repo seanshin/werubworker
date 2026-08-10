@@ -362,7 +362,7 @@ export function retryAnchor(items: Item[]): number {
 
 // Maximum number of blocks rendered at once. Older blocks are collapsed behind a
 // "Show earlier messages" button so the DOM stays light in 1000+ message sessions.
-const VISIBLE_WINDOW = 200;
+const VISIBLE_WINDOW = 100;
 
 export function Transcript({ items, running, streamingText, onRetry }: Props) {
   const { t } = useTranslation(["session", "common"]);

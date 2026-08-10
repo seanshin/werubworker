@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coworker.wiki.store import WikiStore
-from coworker.wiki.vault import Vault
-from coworker.wiki.analyzer import analyze_document, _detect_category, _is_false_positive
-from coworker.wiki.sync import WikiSync
 from coworker.secrets import SecretStore
-
+from coworker.wiki.analyzer import _detect_category, _is_false_positive, analyze_document
+from coworker.wiki.store import WikiStore
+from coworker.wiki.sync import WikiSync
+from coworker.wiki.vault import Vault
 
 # ---------------------------------------------------------------------------
 # WikiStore
@@ -336,7 +335,10 @@ def test_wiki_sync_secrets_to_page(tmp_path):
     sync = WikiSync(wiki, vault, secrets)
 
     # Put a secret profile
-    secrets.put("database:staging", {"type": "postgresql", "host": "staging.db.local", "password": "stg_pass"})
+    secrets.put(
+        "database:staging",
+        {"type": "postgresql", "host": "staging.db.local", "password": "stg_pass"},
+    )
 
     # Sync to wiki
     result = sync.sync_secrets_to_page("database:staging")

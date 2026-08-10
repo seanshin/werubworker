@@ -10,9 +10,7 @@ from . import _helpers
 from ._helpers import _attach, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     _FIGMA = "https://api.figma.com/v1"
 
     def _figma_headers(profile: dict[str, Any]) -> dict[str, str]:
@@ -91,9 +89,7 @@ def register(
         )
     )
 
-    def figma_post_comment(
-        file_key: str, message: str, reply_to: str = ""
-    ) -> dict[str, Any]:
+    def figma_post_comment(file_key: str, message: str, reply_to: str = "") -> dict[str, Any]:
         profile, err = _profile(secrets, "figma", "access_token")
         if err:
             return err

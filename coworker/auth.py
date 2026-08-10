@@ -15,7 +15,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-
 _PBKDF2_ITERATIONS = 600_000
 _SALT_BYTES = 32
 _TOKEN_BYTES = 32  # secrets.token_urlsafe(32) → 43-char URL-safe string

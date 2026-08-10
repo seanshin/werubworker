@@ -5,14 +5,14 @@ import asyncio
 import pytest
 
 from coworker.connectors.base import MessageEvent, SessionSource
+from coworker.providers import ModelCapabilities, ProviderClient
+from coworker.server.manager import SessionManager
 from coworker.subscriptions import (
     ChannelBuffer,
     SubscriptionStore,
     resolve_channel,
     subscription_tools,
 )
-from coworker.providers import ModelCapabilities, ProviderClient
-from coworker.server.manager import SessionManager
 
 
 class ScriptedProvider(ProviderClient):
@@ -32,13 +32,8 @@ def test_resolve_channel():
     assert resolve_channel("C0777") == "slack:C0777"  # bare id → default platform
     assert resolve_channel("") == ""
     # Slack "Copy link" URL → the id in the path (case-normalized), query/anchor tolerated.
-    assert (
-        resolve_channel("https://acme.slack.com/archives/C0123ABC") == "slack:C0123ABC"
-    )
-    assert (
-        resolve_channel("https://acme.slack.com/archives/c0123abc?foo=1")
-        == "slack:C0123ABC"
-    )
+    assert resolve_channel("https://acme.slack.com/archives/C0123ABC") == "slack:C0123ABC"
+    assert resolve_channel("https://acme.slack.com/archives/c0123abc?foo=1") == "slack:C0123ABC"
     # A bare #name can't be looked up locally — resolving it literally would create a
     # subscription that never matches inbound `slack:C…` traffic, so it must fail.
     assert resolve_channel("#general") == ""
@@ -46,13 +41,12 @@ def test_resolve_channel():
 
 def test_subscribe_rejects_bare_channel_names(tmp_path):
     from fastapi.testclient import TestClient
+
     from coworker.server import create_app
 
     mgr = SessionManager(workspace=tmp_path, provider=ScriptedProvider([]))
     client = TestClient(create_app(mgr))
-    r = client.post(
-        "/v1/subscriptions", json={"session_id": "sN", "channel": "#general"}
-    ).json()
+    r = client.post("/v1/subscriptions", json={"session_id": "sN", "channel": "#general"}).json()
     assert r["ok"] is False and "channel ID" in r["error"]
     assert mgr.subscriptions.for_session("sN") == []
 
@@ -62,6 +56,7 @@ def test_channel_buffer_persists_across_restarts(tmp_path):
     buf = ChannelBuffer(state_path=path)
     buf.record("slack:C9", "bob", "deploy failed", name="ops-alerts")
     buf.record("slack:C7", "amy", "standup at 10")
+    buf._saver.flush()  # ensure debounced write lands before reload
 
     # A fresh instance over the same file sees the channels, names, AND catch-up messages.
     reloaded = ChannelBuffer(state_path=path)
@@ -110,9 +105,7 @@ def test_store_crud_and_persistence(tmp_path):
 def test_buffer_and_tools(tmp_path):
     st = SubscriptionStore(tmp_path / "subs.json")
     buf = ChannelBuffer()
-    sub, unsub, lst, getmsgs = subscription_tools(
-        st, "sess", buf, routing_targets=["slack:CINBOX"]
-    )
+    sub, unsub, lst, getmsgs = subscription_tools(st, "sess", buf, routing_targets=["slack:CINBOX"])
 
     assert sub("<#C0123|alerts>")["subscribed"] == "slack:C0123"
     assert lst()["channels"] == ["slack:C0123"]
@@ -167,9 +160,7 @@ def test_dispatch_fans_out_to_subscribers(tmp_path, monkeypatch):
 
     # a CHANNEL with no subscribers → buffered, nobody delivered
     delivered.clear()
-    asyncio.run(
-        mgr._dispatch_inbound(_event("noise", chat_type="channel", chat_id="C2"))
-    )
+    asyncio.run(mgr._dispatch_inbound(_event("noise", chat_type="channel", chat_id="C2")))
     assert delivered == []
     assert mgr.channel_buffer.recent("slack:C2")[-1]["text"] == "noise"
 
@@ -186,6 +177,7 @@ def test_dispatch_fans_out_to_subscribers(tmp_path, monkeypatch):
 
 def test_subscriptions_endpoint_and_collision(tmp_path):
     from fastapi.testclient import TestClient
+
     from coworker.server import create_app
 
     mgr = SessionManager(workspace=tmp_path, provider=ScriptedProvider([]))
@@ -205,15 +197,16 @@ def test_subscriptions_endpoint_and_collision(tmp_path):
 
 def test_subscribe_unsubscribe_and_recent_endpoints(tmp_path):
     from fastapi.testclient import TestClient
+
     from coworker.server import create_app
 
     mgr = SessionManager(workspace=tmp_path, provider=ScriptedProvider([]))
     mgr.channel_buffer.record("slack:C9", "bob", "deploy failed")  # seeds the picker
     client = TestClient(create_app(mgr))
 
-    assert [
-        c["channel"] for c in client.get("/v1/channels/recent").json()["channels"]
-    ] == ["slack:C9"]
+    assert [c["channel"] for c in client.get("/v1/channels/recent").json()["channels"]] == [
+        "slack:C9"
+    ]
 
     # subscribe via a Slack #mention token → resolved to the id
     r = client.post(
@@ -279,9 +272,7 @@ def test_unauthorized_messages_park_and_resolve(tmp_path, monkeypatch):
 
     # allow_deliver: sender allow-listed AND the parked message reaches the subscriber + buffer
     r = asyncio.run(
-        mgr.resolve_unauthorized(
-            "slack", mgr.parked.list("slack")[0]["id"], "allow_deliver"
-        )
+        mgr.resolve_unauthorized("slack", mgr.parked.list("slack")[0]["id"], "allow_deliver")
     )
     assert r["ok"]
     profile = mgr.secrets.get("slack:default")
@@ -294,9 +285,7 @@ def test_unauthorized_messages_park_and_resolve(tmp_path, monkeypatch):
     assert slack["allowed_user_names"] == {"U9": "bob"}
 
     # unknown item / wrong platform → error
-    assert (
-        asyncio.run(mgr.resolve_unauthorized("slack", "nope", "dismiss"))["ok"] is False
-    )
+    assert asyncio.run(mgr.resolve_unauthorized("slack", "nope", "dismiss"))["ok"] is False
 
 
 def test_parked_store_persists_and_caps(tmp_path):
@@ -306,9 +295,7 @@ def test_parked_store_persists_and_caps(tmp_path):
     store = ParkedStore(path, cap=2)
     store.park(platform="slack", chat_id="C1", user_id="U1", text="one")
     store.park(platform="slack", chat_id="C1", user_id="U1", text="two")
-    store.park(
-        platform="slack", chat_id="C1", user_id="U1", text="three"
-    )  # evicts "one"
+    store.park(platform="slack", chat_id="C1", user_id="U1", text="three")  # evicts "one"
     assert [i["text"] for i in store.list("slack")] == ["three", "two"]  # newest first
 
     reloaded = ParkedStore(path, cap=2)

@@ -29,9 +29,7 @@ class Config:
     model: str = "gpt-5.6-sol"
     mode: str = "interactive"
     max_iterations: int = 150
-    allowed_commands: list[str] = field(
-        default_factory=lambda: list(DEFAULT_ALLOWED_COMMANDS)
-    )
+    allowed_commands: list[str] = field(default_factory=lambda: list(DEFAULT_ALLOWED_COMMANDS))
     # In "custom" permission mode, these tools are auto-approved (e.g. file edits)
     # while everything else still asks.
     auto_allow: list[str] = field(default_factory=list)
@@ -115,8 +113,6 @@ def load_config(
                     setattr(cfg, key, value)
             if workspace_trusted:
                 cfg.allowed_commands = list(
-                    dict.fromkeys(
-                        [*cfg.allowed_commands, *workspace_allowed_commands(workspace)]
-                    )
+                    dict.fromkeys([*cfg.allowed_commands, *workspace_allowed_commands(workspace)])
                 )
     return cfg

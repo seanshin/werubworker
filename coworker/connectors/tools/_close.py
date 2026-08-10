@@ -10,9 +10,7 @@ from . import _helpers
 from ._helpers import _attach, _clamp, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     _CLOSE = "https://api.close.com/api/v1"
 
     def _close_auth(profile: dict[str, Any]) -> tuple[str, str]:
@@ -66,9 +64,7 @@ def register(
         )
     )
 
-    def close_list_opportunities(
-        lead_id: str = "", max_results: int = 10
-    ) -> dict[str, Any]:
+    def close_list_opportunities(lead_id: str = "", max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "close", "api_key")
         if err:
             return err

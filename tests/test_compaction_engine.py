@@ -32,9 +32,7 @@ class CompactingProvider(ProviderClient):
         self.main_calls = 0
 
     def complete(self, *, model, messages, tools=None, **settings):
-        if messages and "compacting an AI coworker" in str(
-            messages[0].get("content", "")
-        ):
+        if messages and "compacting an AI coworker" in str(messages[0].get("content", "")):
             self.summary_calls.append({"model": model, "messages": messages})
             if self.summary_fails > 0:
                 self.summary_fails -= 1
@@ -56,9 +54,7 @@ def long_history(turns=8, bulk=1500):
     msgs = [{"role": "system", "content": "be helpful"}]
     for i in range(turns):
         msgs.append({"role": "user", "content": f"request {i}", "ts": 1.0})
-        msgs.append(
-            {"role": "assistant", "content": f"answer {i} " + "x" * bulk, "ts": 1.0}
-        )
+        msgs.append({"role": "assistant", "content": f"answer {i} " + "x" * bulk, "ts": 1.0})
     return msgs
 
 
@@ -87,7 +83,7 @@ def collect(engine, text="continue"):
 
 def test_compacts_before_the_turn_when_estimate_crosses(tmp_path):
     provider = CompactingProvider([AssistantTurn(text="done", finish_reason="stop")])
-    engine = make_engine(tmp_path,provider, messages=long_history(), cap=400)
+    engine = make_engine(tmp_path, provider, messages=long_history(), cap=400)
     events = collect(engine)
 
     assert any(e.type == EventType.COMPACTED for e in events)
@@ -104,10 +100,7 @@ def test_compacts_before_the_turn_when_estimate_crosses(tmp_path):
     assert SUMMARY.splitlines()[-1] in out[1]["content"]
     assert "request 0" in out[1]["content"]  # mechanical user-message list
     assert any("answer 0" in str(m.get("content")) for m in engine.messages)
-    assert any(
-        m.get("role") == "notice" and m.get("kind") == "compacted"
-        for m in engine.messages
-    )
+    assert any(m.get("role") == "notice" and m.get("kind") == "compacted" for m in engine.messages)
 
 
 def test_usage_signal_triggers_between_tool_turns(tmp_path):
@@ -123,7 +116,7 @@ def test_usage_signal_triggers_between_tool_turns(tmp_path):
             AssistantTurn(text="done", finish_reason="stop"),
         ]
     )
-    engine = make_engine(tmp_path,provider, messages=long_history(turns=2, bulk=10), cap=400)
+    engine = make_engine(tmp_path, provider, messages=long_history(turns=2, bulk=10), cap=400)
     events = collect(engine)
     assert any(e.type == EventType.COMPACTED for e in events)
     assert provider.summary_calls  # driven by usage, not the (tiny) estimate
@@ -134,7 +127,7 @@ def test_summarizer_failure_unattended_auto_trims(tmp_path):
     provider = CompactingProvider(
         [AssistantTurn(text="done", finish_reason="stop")], summary_fails=99
     )
-    engine = make_engine(tmp_path,provider, messages=long_history(), cap=400)
+    engine = make_engine(tmp_path, provider, messages=long_history(), cap=400)
     events = collect(engine)  # is_attended is None → unattended policy
 
     compacted = [e for e in events if e.type == EventType.COMPACTED]
@@ -147,7 +140,7 @@ def test_summarizer_failure_attended_prompts_retry_then_succeeds(tmp_path):
     provider = CompactingProvider(
         [AssistantTurn(text="done", finish_reason="stop")], summary_fails=2
     )
-    engine = make_engine(tmp_path,provider, messages=long_history(), cap=400)
+    engine = make_engine(tmp_path, provider, messages=long_history(), cap=400)
     engine.is_attended = lambda: True
     asked = []
 
@@ -166,7 +159,7 @@ def test_summarizer_failure_attended_choose_trim(tmp_path):
     provider = CompactingProvider(
         [AssistantTurn(text="done", finish_reason="stop")], summary_fails=99
     )
-    engine = make_engine(tmp_path,provider, messages=long_history(), cap=400)
+    engine = make_engine(tmp_path, provider, messages=long_history(), cap=400)
     engine.is_attended = lambda: True
 
     async def asker(args, tool_call_id=None):
@@ -183,7 +176,7 @@ def test_raw_overflow_routes_into_compaction_and_retries(tmp_path):
     provider = CompactingProvider(
         [AssistantTurn(text="recovered", finish_reason="stop")], main_overflows=1
     )
-    engine = make_engine(tmp_path,provider, messages=long_history(), cap=1_000_000)
+    engine = make_engine(tmp_path, provider, messages=long_history(), cap=1_000_000)
     events = collect(engine)
 
     assert any(e.type == EventType.COMPACTED for e in events)
@@ -198,7 +191,9 @@ def test_non_overflow_provider_errors_still_surface(tmp_path):
         def complete(self, *, model, messages, tools=None, **settings):
             raise RuntimeError("rate limit exceeded")
 
-    engine = make_engine(tmp_path,FailingProvider([]), messages=long_history(turns=1), cap=1_000_000)
+    engine = make_engine(
+        tmp_path, FailingProvider([]), messages=long_history(turns=1), cap=1_000_000
+    )
     events = collect(engine)
     assert any(e.type == EventType.ERROR for e in events)
     assert not any(e.type == EventType.COMPACTED for e in events)
@@ -215,9 +210,7 @@ def test_set_compaction_settings_validates_and_round_trips(tmp_path):
             return ModelCapabilities()
 
     mgr = SessionManager(workspace=tmp_path, provider=Provider())
-    out = mgr.set_compaction_settings(
-        threshold_pct=0.5, cap_tokens=100_000, model="gpt-4o-mini"
-    )
+    out = mgr.set_compaction_settings(threshold_pct=0.5, cap_tokens=100_000, model="gpt-4o-mini")
     assert out["ok"] and out["threshold_pct"] == 0.5 and out["cap_tokens"] == 100_000
     assert mgr.compaction_settings()["model"] == "gpt-4o-mini"
     # validation: out-of-range % and non-numeric cap are rejected, tiny caps clamp up
@@ -270,6 +263,5 @@ def test_compacting_signal_precedes_the_compacted_marker(tmp_path):
     assert types.index(EventType.COMPACTING) < types.index(EventType.COMPACTED)
     # The signal is not persisted — only the compacted marker lands in the transcript.
     assert not any(
-        m.get("role") == "notice" and m.get("kind") == "compacting"
-        for m in engine.messages
+        m.get("role") == "notice" and m.get("kind") == "compacting" for m in engine.messages
     )

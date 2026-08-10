@@ -15,9 +15,7 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def jira_search_issues(jql: str, max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "jira", "base_url", "email", "api_token")
         if err:
@@ -84,9 +82,7 @@ def register(
                     "content": [
                         {
                             "type": "paragraph",
-                            "content": [
-                                {"type": "text", "text": description or summary}
-                            ],
+                            "content": [{"type": "text", "text": description or summary}],
                         }
                     ],
                 },

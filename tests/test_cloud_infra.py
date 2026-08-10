@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from coworker.tools.cloud_infra import cloud_infra_tools, _parse_period
 from coworker.secrets import SecretStore
+from coworker.tools.cloud_infra import _parse_period, cloud_infra_tools
 
 
 def _make_context(secrets: SecretStore) -> SimpleNamespace:
@@ -18,7 +18,9 @@ def test_cloud_infra_tools_factory(tmp_path):
     secrets = SecretStore(tmp_path / "secrets.json")
     ctx = _make_context(secrets)
     tools = cloud_infra_tools(ctx)
-    assert len(tools) >= 7  # aws_ec2_list, aws_s3_list, aws_cloudwatch_metrics, aws_cost_explorer, cf_dns_list, cf_analytics, wasabi_list, ...
+    assert (
+        len(tools) >= 7
+    )  # aws_ec2_list, aws_s3_list, aws_cloudwatch_metrics, aws_cost_explorer, cf_dns_list, cf_analytics, wasabi_list, ...
     names = {t.__name__ for t in tools}
     assert "aws_ec2_list" in names
     assert "aws_s3_list" in names

@@ -9,9 +9,7 @@ from . import _helpers
 from ._helpers import _attach, _clamp, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def discord_list_channels(guild_id: str) -> dict[str, Any]:
         profile, err = _profile(secrets, "discord", "bot_token")
         if err:

@@ -20,8 +20,8 @@ from typing import Any
 
 try:
     from cryptography.fernet import Fernet, InvalidToken
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
     from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
     _HAS_CRYPTO = True
 except ImportError:
@@ -145,17 +145,19 @@ class Vault:
         data = self._read()
         entries = []
         for key, entry in data.items():
-            entries.append({
-                "key": key,
-                "encrypted": entry.get("encrypted", False),
-                "expires": entry.get("expires", ""),
-                "rotate_days": entry.get("rotate_days", 0),
-                "linked_docs": entry.get("linked_docs", []),
-                "linked_services": entry.get("linked_services", []),
-                "created_at": entry.get("created_at", 0),
-                "updated_at": entry.get("updated_at", 0),
-                "history_count": len(entry.get("history", [])),
-            })
+            entries.append(
+                {
+                    "key": key,
+                    "encrypted": entry.get("encrypted", False),
+                    "expires": entry.get("expires", ""),
+                    "rotate_days": entry.get("rotate_days", 0),
+                    "linked_docs": entry.get("linked_docs", []),
+                    "linked_services": entry.get("linked_services", []),
+                    "created_at": entry.get("created_at", 0),
+                    "updated_at": entry.get("updated_at", 0),
+                    "history_count": len(entry.get("history", [])),
+                }
+            )
         return entries
 
     def delete(self, key: str) -> dict:
@@ -176,11 +178,13 @@ class Vault:
                 return {"ok": False, "error": f"credential '{key}' not found"}
             # Push current value to history
             history = entry.get("history", [])
-            history.append({
-                "value": entry["value"],
-                "encrypted": entry.get("encrypted", False),
-                "rotated_at": time.time(),
-            })
+            history.append(
+                {
+                    "value": entry["value"],
+                    "encrypted": entry.get("encrypted", False),
+                    "rotated_at": time.time(),
+                }
+            )
             entry["history"] = history
             entry["value"] = self._encrypt(new_value)
             entry["encrypted"] = self.is_unlocked()
@@ -200,13 +204,15 @@ class Vault:
         for key, entry in data.items():
             exp = entry.get("expires", "")
             if exp and exp <= cutoff:
-                expiring.append({
-                    "key": key,
-                    "expires": exp,
-                    "expired": exp <= datetime.now().isoformat()[:10],
-                    "linked_docs": entry.get("linked_docs", []),
-                    "linked_services": entry.get("linked_services", []),
-                })
+                expiring.append(
+                    {
+                        "key": key,
+                        "expires": exp,
+                        "expired": exp <= datetime.now().isoformat()[:10],
+                        "linked_docs": entry.get("linked_docs", []),
+                        "linked_services": entry.get("linked_services", []),
+                    }
+                )
         return expiring
 
     # ------------------------------------------------------------------

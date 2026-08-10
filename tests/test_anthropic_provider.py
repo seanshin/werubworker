@@ -257,11 +257,7 @@ def test_complete_text_turn_with_defaults():
             {"role": "user", "content": "hi"},
         ],
     )
-    assert (
-        turn.text == "hello"
-        and turn.finish_reason == "stop"
-        and not turn.has_tool_calls
-    )
+    assert turn.text == "hello" and turn.finish_reason == "stop" and not turn.has_tool_calls
     assert fake.kwargs["model"] == "claude-sonnet-4-6"
     # System rides as a block list so the last block can carry the prompt-cache
     # breakpoint (see _add_cache_breakpoints).
@@ -276,9 +272,7 @@ def test_complete_parses_tool_use_blocks():
     response = SimpleNamespace(
         content=[
             SimpleNamespace(type="text", text="on it"),
-            SimpleNamespace(
-                type="tool_use", id="c1", name="write_file", input={"path": "a.txt"}
-            ),
+            SimpleNamespace(type="tool_use", id="c1", name="write_file", input={"path": "a.txt"}),
         ],
         stop_reason="tool_use",
     )
@@ -375,22 +369,14 @@ def test_stream_yields_text_deltas_then_final_turn():
         _delta(0, type="text_delta", text="hel"),
         _delta(0, type="text_delta", text="lo"),
         SimpleNamespace(type="content_block_stop", index=0),
-        SimpleNamespace(
-            type="message_delta", delta=SimpleNamespace(stop_reason="end_turn")
-        ),
+        SimpleNamespace(type="message_delta", delta=SimpleNamespace(stop_reason="end_turn")),
         SimpleNamespace(type="message_stop"),
     ]
     provider = AnthropicProvider(client=_FakeClient(events=events))
-    chunks = list(
-        provider.stream(model="m", messages=[{"role": "user", "content": "x"}])
-    )
+    chunks = list(provider.stream(model="m", messages=[{"role": "user", "content": "x"}]))
     assert [c.text_delta for c in chunks[:-1]] == ["hel", "lo"]
     final = chunks[-1].turn
-    assert (
-        final.text == "hello"
-        and final.finish_reason == "stop"
-        and not final.has_tool_calls
-    )
+    assert final.text == "hello" and final.finish_reason == "stop" and not final.has_tool_calls
 
 
 def test_stream_accumulates_split_tool_json():
@@ -403,14 +389,10 @@ def test_stream_accumulates_split_tool_json():
         _delta(0, type="input_json_delta", partial_json='{"path": "a'),
         _delta(0, type="input_json_delta", partial_json='.txt", "content": "hi"}'),
         SimpleNamespace(type="content_block_stop", index=0),
-        SimpleNamespace(
-            type="message_delta", delta=SimpleNamespace(stop_reason="tool_use")
-        ),
+        SimpleNamespace(type="message_delta", delta=SimpleNamespace(stop_reason="tool_use")),
     ]
     provider = AnthropicProvider(client=_FakeClient(events=events))
-    chunks = list(
-        provider.stream(model="m", messages=[{"role": "user", "content": "x"}])
-    )
+    chunks = list(provider.stream(model="m", messages=[{"role": "user", "content": "x"}]))
     final = chunks[-1].turn
     assert final.finish_reason == "tool_calls"
     assert final.tool_calls[0].id == "c1"
@@ -431,14 +413,10 @@ def test_stream_mixed_text_and_tool_blocks():
             content_block=SimpleNamespace(type="tool_use", id="c1", name="f"),
         ),
         _delta(1, type="input_json_delta", partial_json=""),  # no-args tool call
-        SimpleNamespace(
-            type="message_delta", delta=SimpleNamespace(stop_reason="tool_use")
-        ),
+        SimpleNamespace(type="message_delta", delta=SimpleNamespace(stop_reason="tool_use")),
     ]
     provider = AnthropicProvider(client=_FakeClient(events=events))
-    chunks = list(
-        provider.stream(model="m", messages=[{"role": "user", "content": "x"}])
-    )
+    chunks = list(provider.stream(model="m", messages=[{"role": "user", "content": "x"}]))
     assert chunks[0].text_delta == "working"
     final = chunks[-1].turn
     assert final.text == "working"
@@ -475,9 +453,7 @@ def test_resolve_api_key_env_then_secrets(monkeypatch):
 
     class _Secrets:
         def get(self, name):
-            return (
-                {"api_key": "sk-ant-stored"} if name == "provider:anthropic" else None
-            )
+            return {"api_key": "sk-ant-stored"} if name == "provider:anthropic" else None
 
     assert resolve_api_key(_Secrets()) == "sk-ant-stored"
     assert resolve_api_key(None) is None
@@ -607,9 +583,7 @@ def test_stream_accumulates_thinking_and_signature():
             content_block=SimpleNamespace(type="text"),
         ),
         _delta(1, type="text_delta", text="done"),
-        SimpleNamespace(
-            type="message_delta", delta=SimpleNamespace(stop_reason="end_turn")
-        ),
+        SimpleNamespace(type="message_delta", delta=SimpleNamespace(stop_reason="end_turn")),
     ]
     provider = AnthropicProvider(client=_FakeClient(events=events), thinking_budget=4096)
     chunks = list(provider.stream(model="m", messages=[{"role": "user", "content": "x"}]))
@@ -652,7 +626,10 @@ def test_thinking_defaults_on_with_hidden_profile_override():
     from coworker.providers.registry import build_provider_client
 
     assert build_provider_client("anthropic", {}, None).thinking_budget == DEFAULT_THINKING_BUDGET
-    assert build_provider_client("anthropic", {"thinking_budget": "2048"}, None).thinking_budget == 2048
+    assert (
+        build_provider_client("anthropic", {"thinking_budget": "2048"}, None).thinking_budget
+        == 2048
+    )
     assert build_provider_client("anthropic", {"thinking_budget": "0"}, None).thinking_budget == 0
 
 

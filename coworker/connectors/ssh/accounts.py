@@ -22,17 +22,19 @@ def list_servers(secrets: SecretStore) -> list[dict[str, Any]]:
         profile_key = entry["profile"]
         if not profile_key.startswith(PREFIX):
             continue
-        server_id = profile_key[len(PREFIX):]
+        server_id = profile_key[len(PREFIX) :]
         data = secrets.get(profile_key) or {}
-        servers.append({
-            "server_id": server_id,
-            "host": data.get("host", ""),
-            "port": data.get("port", 22),
-            "username": data.get("username", "deploy"),
-            "label": data.get("label", ""),
-            "tags": data.get("tags", []),
-            "added_at": data.get("added_at", ""),
-        })
+        servers.append(
+            {
+                "server_id": server_id,
+                "host": data.get("host", ""),
+                "port": data.get("port", 22),
+                "username": data.get("username", "deploy"),
+                "label": data.get("label", ""),
+                "tags": data.get("tags", []),
+                "added_at": data.get("added_at", ""),
+            }
+        )
     return servers
 
 

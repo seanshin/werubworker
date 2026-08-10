@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from coworker.tools.docker_mgmt import (
-    _docker_ps,
+    _docker_images,
     _docker_logs,
+    _docker_ps,
     _docker_restart,
     _docker_stats,
-    _docker_images,
     _run_cmd,
     docker_tools,
 )
@@ -25,7 +25,9 @@ def _mock_run(stdout="", stderr="", returncode=0):
 
 @patch("coworker.tools.docker_mgmt.subprocess.run")
 def test_docker_ps_local(mock_run):
-    mock_run.return_value = _mock_run(stdout="CONTAINER ID  NAMES  IMAGE  STATUS\nabc  web  nginx  Up 2h")
+    mock_run.return_value = _mock_run(
+        stdout="CONTAINER ID  NAMES  IMAGE  STATUS\nabc  web  nginx  Up 2h"
+    )
     result = _docker_ps(server="local")
     assert result["ok"] is True
     assert "web" in result["stdout"]
@@ -55,7 +57,9 @@ def test_docker_restart_approval(mock_run):
             restart_tool = t
             break
     assert restart_tool is not None
-    meta = getattr(restart_tool, "__aisuite_tool_metadata__", None) or getattr(restart_tool, "metadata", None)
+    meta = getattr(restart_tool, "__aisuite_tool_metadata__", None) or getattr(
+        restart_tool, "metadata", None
+    )
     if meta is not None:
         assert meta.requires_approval is True
 

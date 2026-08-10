@@ -41,9 +41,7 @@ def _no_pending():
 
 
 def test_config_parses_auth_field(tmp_path, monkeypatch):
-    _state(
-        tmp_path, monkeypatch, {"granola": GRANOLA, "plain": {"url": "https://x/mcp"}}
-    )
+    _state(tmp_path, monkeypatch, {"granola": GRANOLA, "plain": {"url": "https://x/mcp"}})
     servers = {s.name: s for s in load_mcp_servers()}
     assert servers["granola"].auth == "oauth"
     assert servers["granola"].transport == "http"

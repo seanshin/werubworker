@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import aisuite as ai
+
 from coworker.conversations import ConversationStore
 from coworker.memory import Scope, SQLiteMemoryStore, format_memories, memory_tools
 from coworker.sessions import SessionRecord
@@ -18,13 +19,9 @@ def _store(tmp_path):
 
 def test_memory_round_trip(tmp_path):
     store = _store(tmp_path)
-    item = store.add(
-        "prefers tabs over spaces", scope=Scope.WORKSPACE, workspace="/proj"
-    )
+    item = store.add("prefers tabs over spaces", scope=Scope.WORKSPACE, workspace="/proj")
     assert store.get(item.id).content == "prefers tabs over spaces"
-    assert [m.content for m in store.list(workspace="/proj")] == [
-        "prefers tabs over spaces"
-    ]
+    assert [m.content for m in store.list(workspace="/proj")] == ["prefers tabs over spaces"]
 
 
 def test_workspace_scope_isolation(tmp_path):
@@ -68,10 +65,7 @@ def test_remember_tool_persists(tmp_path):
 
     result = reg.execute("remember", {"content": "deploys on Fridays are banned"})
     assert result["saved"] is True
-    assert any(
-        m.content == "deploys on Fridays are banned"
-        for m in store.list(workspace="/proj")
-    )
+    assert any(m.content == "deploys on Fridays are banned" for m in store.list(workspace="/proj"))
 
 
 def test_memory_update_and_forget_tools(tmp_path):
@@ -96,10 +90,7 @@ def test_memory_update_and_forget_unknown_id(tmp_path):
     store = _store(tmp_path)
     reg = ToolRegistry()
     reg.register_all(memory_tools(store, workspace="/proj"))
-    assert (
-        "no memory"
-        in reg.execute("memory_update", {"memory_id": 99, "content": "x"})["error"]
-    )
+    assert "no memory" in reg.execute("memory_update", {"memory_id": 99, "content": "x"})["error"]
     assert "no memory" in reg.execute("memory_forget", {"memory_id": 99})["error"]
 
 
@@ -143,24 +134,16 @@ def test_build_code_engine_injects_memory(tmp_path):
 
     workspace = str(tmp_path.resolve())
     store = SQLiteMemoryStore(tmp_path / "mem.db")
-    store.add(
-        "always run black before committing", scope=Scope.WORKSPACE, workspace=workspace
-    )
+    store.add("always run black before committing", scope=Scope.WORKSPACE, workspace=workspace)
 
-    engine = build_code_engine(
-        workspace=tmp_path, provider=_StubProvider(), memory_store=store
-    )
+    engine = build_code_engine(workspace=tmp_path, provider=_StubProvider(), memory_store=store)
     try:
-        assert {"remember", "memory_update", "memory_forget"} <= set(
-            engine.registry.names()
-        )
+        assert {"remember", "memory_update", "memory_forget"} <= set(engine.registry.names())
         assert engine.messages[0]["role"] == "system"
         assert "always run black" in engine.messages[0]["content"]
         # when-to-remember guidance rides along with the tools
         assert "memory_update" in engine.messages[0]["content"]
-        assert (
-            "Don't save what the repo already records" in engine.messages[0]["content"]
-        )
+        assert "Don't save what the repo already records" in engine.messages[0]["content"]
     finally:
         engine.executor.close()
 
@@ -168,9 +151,7 @@ def test_build_code_engine_injects_memory(tmp_path):
 def test_session_append_only_and_list(tmp_path):
     store = ConversationStore(tmp_path)
     store.save(
-        SessionRecord(
-            "s1", "/proj", "gpt-5.5", "interactive", [{"role": "user", "content": "a"}]
-        )
+        SessionRecord("s1", "/proj", "gpt-5.5", "interactive", [{"role": "user", "content": "a"}])
     )
     store.save(
         SessionRecord(

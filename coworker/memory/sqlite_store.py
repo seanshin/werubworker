@@ -15,12 +15,24 @@ class SQLiteMemoryStore(MemoryStore):
         self.path = str(path)
         if self.path != ":memory:":
             Path(self.path).expanduser().parent.mkdir(parents=True, exist_ok=True)
-        # check_same_thread=False: the server runs the WS handler on a different thread
-        # than the store was created on; a lock serializes access.
-        self._lock = threading.RLock()
-        self._conn = sqlite3.connect(self.path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("""
+        self._local = threading.local()
+        self._init_conn(self._get_conn())
+
+    def _get_conn(self) -> sqlite3.Connection:
+        """Return a thread-local connection (created on first access per thread)."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self.path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            self._local.conn = conn
+        return conn
+
+    @staticmethod
+    def _init_conn(conn: sqlite3.Connection) -> None:
+        """Create schema and indexes (idempotent)."""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS memories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 scope TEXT NOT NULL,
@@ -31,7 +43,10 @@ class SQLiteMemoryStore(MemoryStore):
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """)
-        self._conn.commit()
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories (scope)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories (workspace)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_session ON memories (session_id)")
+        conn.commit()
 
     def add(
         self,
@@ -43,22 +58,20 @@ class SQLiteMemoryStore(MemoryStore):
         session_id: Optional[str] = None,
     ) -> MemoryItem:
         scope = Scope(scope)
-        with self._lock:
-            cursor = self._conn.execute(
-                "INSERT INTO memories (scope, key, content, workspace, session_id) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (scope.value, key, content, workspace, session_id),
-            )
-            self._conn.commit()
-            item = self.get(cursor.lastrowid)
+        conn = self._get_conn()
+        cursor = conn.execute(
+            "INSERT INTO memories (scope, key, content, workspace, session_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (scope.value, key, content, workspace, session_id),
+        )
+        conn.commit()
+        item = self.get(cursor.lastrowid)
         assert item is not None
         return item
 
     def get(self, item_id: int) -> Optional[MemoryItem]:
-        with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM memories WHERE id = ?", (item_id,)
-            ).fetchone()
+        conn = self._get_conn()
+        row = conn.execute("SELECT * FROM memories WHERE id = ?", (item_id,)).fetchone()
         return _row_to_item(row) if row else None
 
     def list(
@@ -80,26 +93,27 @@ class SQLiteMemoryStore(MemoryStore):
             query += " AND session_id = ?"
             params.append(session_id)
         query += " ORDER BY id"
-        with self._lock:
-            rows = self._conn.execute(query, params).fetchall()
+        conn = self._get_conn()
+        rows = conn.execute(query, params).fetchall()
         return [_row_to_item(row) for row in rows]
 
     def update(self, item_id: int, content: str) -> Optional[MemoryItem]:
-        with self._lock:
-            self._conn.execute(
-                "UPDATE memories SET content = ? WHERE id = ?", (content, item_id)
-            )
-            self._conn.commit()
+        conn = self._get_conn()
+        conn.execute("UPDATE memories SET content = ? WHERE id = ?", (content, item_id))
+        conn.commit()
         return self.get(item_id)
 
     def delete(self, item_id: int) -> bool:
-        with self._lock:
-            cursor = self._conn.execute("DELETE FROM memories WHERE id = ?", (item_id,))
-            self._conn.commit()
+        conn = self._get_conn()
+        cursor = conn.execute("DELETE FROM memories WHERE id = ?", (item_id,))
+        conn.commit()
         return cursor.rowcount > 0
 
     def close(self) -> None:
-        self._conn.close()
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            conn.close()
+            self._local.conn = None
 
 
 def _row_to_item(row: sqlite3.Row) -> MemoryItem:

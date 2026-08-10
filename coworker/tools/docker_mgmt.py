@@ -12,10 +12,10 @@ from typing import Any
 
 import aisuite as ai
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _run_cmd(cmd: list[str], server: str = "local", timeout: int = 30) -> dict[str, Any]:
     """Run a command locally or on a remote server via SSH.
@@ -30,9 +30,12 @@ def _run_cmd(cmd: list[str], server: str = "local", timeout: int = 30) -> dict[s
         remote_cmd = " ".join(cmd)
         cmd = [
             "ssh",
-            "-o", "StrictHostKeyChecking=accept-new",
-            "-o", "ConnectTimeout=10",
-            "-o", "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "BatchMode=yes",
             server,
             remote_cmd,
         ]
@@ -58,9 +61,15 @@ def _run_cmd(cmd: list[str], server: str = "local", timeout: int = 30) -> dict[s
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _docker_ps(server: str = "local", filter: str = "") -> dict[str, Any]:
     """List running containers."""
-    cmd = ["docker", "ps", "--format", "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"]
+    cmd = [
+        "docker",
+        "ps",
+        "--format",
+        "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}",
+    ]
     if filter:
         cmd.extend(["--filter", filter])
     return _run_cmd(cmd, server=server)
@@ -95,15 +104,24 @@ def _docker_compose_up(path: str = ".", service: str = "", server: str = "local"
 
 def _docker_stats(server: str = "local") -> dict[str, Any]:
     """Container resource usage (CPU, MEM, NET)."""
-    cmd = ["docker", "stats", "--no-stream", "--format",
-           "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.PIDs}}"]
+    cmd = [
+        "docker",
+        "stats",
+        "--no-stream",
+        "--format",
+        "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.PIDs}}",
+    ]
     return _run_cmd(cmd, server=server)
 
 
 def _docker_images(server: str = "local") -> dict[str, Any]:
     """List Docker images."""
-    cmd = ["docker", "images", "--format",
-           "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}"]
+    cmd = [
+        "docker",
+        "images",
+        "--format",
+        "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}",
+    ]
     return _run_cmd(cmd, server=server)
 
 
@@ -267,6 +285,7 @@ _DOCKER_IMAGES_SCHEMA = {
 # ---------------------------------------------------------------------------
 # Public factory -- called by catalog.py
 # ---------------------------------------------------------------------------
+
 
 def docker_tools(context: Any = None) -> list:
     """Return Docker management tools: docker_ps, docker_logs, docker_restart,

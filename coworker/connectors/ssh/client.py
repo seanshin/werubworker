@@ -31,15 +31,11 @@ class SSHClient:
     def __init__(self, server: SSHServer) -> None:
         self.server = server
 
-    def execute(
-        self, command: str, *, sudo: bool = False, timeout: int = 30
-    ) -> dict:
+    def execute(self, command: str, *, sudo: bool = False, timeout: int = 30) -> dict:
         """Run *command* on the remote host and return a result dict."""
         ssh_cmd = self._build_ssh_command(command, sudo=sudo)
         try:
-            result = subprocess.run(
-                ssh_cmd, capture_output=True, text=True, timeout=timeout
-            )
+            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
             return {
                 "ok": result.returncode == 0,
                 "stdout": result.stdout,
@@ -60,14 +56,15 @@ class SSHClient:
         """Quick connectivity check (runs ``echo ok``)."""
         return self.execute("echo ok", timeout=10)
 
-    def _build_ssh_command(
-        self, command: str, *, sudo: bool = False
-    ) -> list[str]:
+    def _build_ssh_command(self, command: str, *, sudo: bool = False) -> list[str]:
         args = [
             "ssh",
-            "-o", "StrictHostKeyChecking=accept-new",
-            "-o", "ConnectTimeout=10",
-            "-o", "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "BatchMode=yes",
         ]
         if self.server.key_path:
             args.extend(["-i", os.path.expanduser(self.server.key_path)])

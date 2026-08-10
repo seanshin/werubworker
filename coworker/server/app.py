@@ -91,9 +91,7 @@ def _browser_page(
         color = _BRAND_COLORS.get(connector, "#3670b2")
         initial = _html.escape((connector[:1] or "?").upper())
         badge = f'<span class="mini" style="background:{color}">{initial}</span>'
-    icon = (
-        f'<div class="ico ok">✓{badge}</div>' if ok else '<div class="ico bad">✕</div>'
-    )
+    icon = f'<div class="ico ok">✓{badge}</div>' if ok else '<div class="ico bad">✕</div>'
     err = f'<div class="err">{_html.escape(error)}</div>' if error else ""
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
@@ -146,12 +144,13 @@ def _connector_title(name: str) -> str:
 
 
 _CONNECT_FAILED_DETAIL = (
-    "Something went wrong finishing this connection. "
-    "Close this tab and try again from WeruBWorker."
+    "Something went wrong finishing this connection. Close this tab and try again from WeruBWorker."
 )
 
 from ..attachments import (
     MAX_ATTACHMENTS as _MAX_ATTACHMENTS,
+)
+from ..attachments import (
     MAX_IMAGE_CHARS,
     MAX_PDF_CHARS,
     MAX_TEXT_CHARS,
@@ -168,9 +167,7 @@ def create_app(manager: SessionManager) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         try:
-            live = (
-                await manager.start_gateway()
-            )  # start messaging listeners (if configured)
+            live = await manager.start_gateway()  # start messaging listeners (if configured)
             if live:
                 print(f"[coworker] messaging gateway live: {', '.join(live)}")
         except Exception:  # never let a bad connector stop the server
@@ -195,12 +192,10 @@ def create_app(manager: SessionManager) -> FastAPI:
     }
 
     def _request_authenticated(request: Request) -> bool:
-        provided = request.headers.get("x-werubworker-token", "") or request.headers.get("x-openworker-token", "")
-        return bool(
-            api_token
-            and provided
-            and secrets.compare_digest(provided, api_token)
+        provided = request.headers.get("x-werubworker-token", "") or request.headers.get(
+            "x-openworker-token", ""
         )
+        return bool(api_token and provided and secrets.compare_digest(provided, api_token))
 
     def _websocket_authenticated(ws: WebSocket) -> bool:
         if not api_token:
@@ -243,10 +238,7 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.middleware("http")
     async def require_local_auth(request: Request, call_next):
-        if (
-            request.method == "OPTIONS"
-            or request.url.path in _auth_exempt_paths
-        ):
+        if request.method == "OPTIONS" or request.url.path in _auth_exempt_paths:
             return await call_next(request)
         auth_token = request.headers.get("x-werub-auth", "")
         if not manager.auth.verify(auth_token or None):
@@ -486,12 +478,8 @@ def create_app(manager: SessionManager) -> FastAPI:
         if body.get("clear"):
             manager.session_skills.clear(session_id, skill)
         else:
-            manager.session_skills.set(
-                session_id, skill, bool(body.get("enabled", False))
-            )
-        return manager.session_skills_view(
-            session_id, str(body.get("workspace", "")) or None
-        )
+            manager.session_skills.set(session_id, skill, bool(body.get("enabled", False)))
+        return manager.session_skills_view(session_id, str(body.get("workspace", "")) or None)
 
     @app.get("/v1/sessions/{session_id}/connections")
     def session_connections(session_id: str, persona: str = "") -> dict[str, Any]:
@@ -511,9 +499,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         if body.get("clear"):
             manager.session_connections.clear(session_id, connector)
         else:
-            manager.session_connections.set(
-                session_id, connector, bool(body.get("enabled", False))
-            )
+            manager.session_connections.set(session_id, connector, bool(body.get("enabled", False)))
         persona = str(body.get("persona", "")) or None
         return {
             "ok": True,
@@ -560,9 +546,9 @@ def create_app(manager: SessionManager) -> FastAPI:
             if "enabled" in body:
                 # Disable archives the persona's sessions atomically (server-side, one
                 # request) so any client gets the same semantic. See set_persona_enabled.
-                archived = manager.set_persona_enabled(
-                    persona_id, bool(body["enabled"])
-                )["archived_sessions"]
+                archived = manager.set_persona_enabled(persona_id, bool(body["enabled"]))[
+                    "archived_sessions"
+                ]
             if "surfaced" in body:
                 reg.set_surfaced(persona_id, bool(body["surfaced"]))
             if body.get("default"):
@@ -596,9 +582,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         # Dedicated §5/§8 route; delegates to the same manager toggle as POST /v1/personas/{id}
         # (so disable archives the persona's sessions here too).
         try:
-            manager.set_persona_enabled(
-                persona_id, bool((body or {}).get("enabled", True))
-            )
+            manager.set_persona_enabled(persona_id, bool((body or {}).get("enabled", True)))
         except KeyError:
             return {"ok": False, "error": f"unknown persona: {persona_id}"}
         return {"ok": True, "personas": manager.personas.list_all()}
@@ -661,9 +645,7 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.post("/v1/workspaces/open")
     def open_workspace(body: dict) -> dict[str, Any]:
-        return manager.open_workspace(
-            body.get("path", ""), create=bool(body.get("create"))
-        )
+        return manager.open_workspace(body.get("path", ""), create=bool(body.get("create")))
 
     @app.get("/v1/workspaces/trusted")
     def trusted_workspaces() -> dict[str, Any]:
@@ -741,16 +723,12 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.post("/v1/memory")
     def add_memory(body: dict) -> dict[str, Any]:
-        return manager.add_memory(
-            body.get("content", ""), body.get("scope", "workspace")
-        )
+        return manager.add_memory(body.get("content", ""), body.get("scope", "workspace"))
 
     @app.post("/v1/chat/completions")
     def chat_completions(body: dict) -> dict[str, Any]:
         model = body.get("model", manager.model)
-        turn = manager.provider_complete(
-            model, body.get("messages", []), body.get("tools")
-        )
+        turn = manager.provider_complete(model, body.get("messages", []), body.get("tools"))
         return _openai_response(model, turn)
 
     # -- MCP servers ------------------------------------------------------------
@@ -792,9 +770,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         return await manager.signout_mcp(name)
 
     @app.get("/mcp/oauth/callback")
-    async def mcp_oauth_callback(
-        code: str = "", state: str = "", error: str = ""
-    ) -> Any:
+    async def mcp_oauth_callback(code: str = "", state: str = "", error: str = "") -> Any:
         # Loopback landing for the MCP OAuth browser flow (mcp/oauth.py). Browser-facing:
         # returns the same styled page as the managed-connector callbacks.
         from fastapi.responses import HTMLResponse
@@ -856,9 +832,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         acknowledged = bool(isinstance(body, dict) and body.get("acknowledge_risk"))
         # token validation does a blocking HTTP call → keep it off the event loop
         result = await asyncio.to_thread(
-            lambda: manager.connect_connector(
-                name, fields or {}, acknowledged=acknowledged
-            )
+            lambda: manager.connect_connector(name, fields or {}, acknowledged=acknowledged)
         )
         if result.get("ok"):
             await _refresh_listeners_if_two_way(name)
@@ -1034,9 +1008,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         return hubspot_portals.set_hidden_fields(manager.secrets, fields)
 
     @app.post("/v1/connectors/{name}/unauthorized/{item_id}")
-    async def connector_unauthorized_resolve(
-        name: str, item_id: str, body: dict
-    ) -> dict[str, Any]:
+    async def connector_unauthorized_resolve(name: str, item_id: str, body: dict) -> dict[str, Any]:
         # Resolve a parked unauthorized message: dismiss / allow / allow_deliver (§19).
         action = str((body or {}).get("action", "")).strip()
         return await manager.resolve_unauthorized(name, item_id, action)
@@ -1159,9 +1131,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         )
 
     @app.post("/v1/connectors/{name}/connect-managed")
-    async def connector_connect_managed(
-        name: str, body: Optional[dict] = None
-    ) -> dict[str, Any]:
+    async def connector_connect_managed(name: str, body: Optional[dict] = None) -> dict[str, Any]:
         return {"ok": False, "error": "Cloud not configured"}
 
     @app.post("/oauth/callback")
@@ -1307,9 +1277,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         )
 
     @app.get("/v1/connectors/slack/workspaces/{team_id}/directory")
-    async def slack_directory(
-        team_id: str, q: str = "", limit: int = 25
-    ) -> dict[str, Any]:
+    async def slack_directory(team_id: str, q: str = "", limit: int = 25) -> dict[str, Any]:
         """Workspace member roster for the people picker (team_id "default" =
         the manual Socket-Mode workspace). Cached locally; never leaves this machine."""
         from ..connectors import slack_directory as roster
@@ -1319,9 +1287,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         )
 
     @app.get("/v1/connectors/slack/workspaces/{team_id}/channels")
-    async def slack_channels(
-        team_id: str, q: str = "", limit: int = 25
-    ) -> dict[str, Any]:
+    async def slack_channels(team_id: str, q: str = "", limit: int = 25) -> dict[str, Any]:
         """Channel roster for the channel typeahead: all public channels, private
         ones only where the bot is a member (Slack API constraint)."""
         from ..connectors import slack_directory as roster
@@ -1346,9 +1312,7 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.post("/v1/connectors/slack/approval-owners/remove")
     def slack_approval_owner_remove(body: dict) -> dict[str, Any]:
-        return manager.set_slack_approval_owner(
-            str(body.get("user_id", "")), add=False
-        )
+        return manager.set_slack_approval_owner(str(body.get("user_id", "")), add=False)
 
     # -- audit / browser observability ------------------------------------------
     @app.get("/v1/audit")
@@ -1408,9 +1372,7 @@ def create_app(manager: SessionManager) -> FastAPI:
     async def providers_verify(body: dict) -> dict[str, Any]:
         # Live read-only credential check (sync httpx) — run off the event loop.
         name = (body or {}).get("name", "") or "openai"
-        return await asyncio.to_thread(
-            manager.verify_provider, name, (body or {}).get("fields")
-        )
+        return await asyncio.to_thread(manager.verify_provider, name, (body or {}).get("fields"))
 
     # -- settings (model API key) -----------------------------------------------
     @app.get("/v1/settings")
@@ -1584,11 +1546,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         # Unattended → the cross-session Inbox; attended → inline in this session only. The agent
         # stays blocked until the item is resolved (live WS response, REST, or a bound channel).
         def _visibility() -> str:
-            return (
-                VIS_INBOX
-                if manager.unattended.is_unattended(session_id)
-                else VIS_INLINE
-            )
+            return VIS_INBOX if manager.unattended.is_unattended(session_id) else VIS_INLINE
 
         async def _mirror(item) -> None:
             # Unattended items mirror to a bound channel as buttons (see mirror_inbox_item).
@@ -1618,12 +1576,8 @@ def create_app(manager: SessionManager) -> FastAPI:
                 data=manager.approval_prompt_data(session_id, _request),
                 tool_call_id=getattr(_request, "tool_call_id", None),
             )
-            if (
-                item.state == "pending"
-            ):  # freshly raised (not a durable-resume re-raise)
-                manager.persist_session(
-                    session_id
-                )  # the pending tool call is now on disk
+            if item.state == "pending":  # freshly raised (not a durable-resume re-raise)
+                manager.persist_session(session_id)  # the pending tool call is now on disk
                 if item.visibility == VIS_INBOX:
                     await _mirror(item)
             resolution = await manager.inbox.wait(item.id)
@@ -1680,9 +1634,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                 manager.persist_session(session_id)
                 if item.visibility == VIS_INBOX:
                     await _mirror(item)
-            resp = _parse_json(
-                await manager.inbox.wait(item.id)
-            )  # {granted, path, writable}
+            resp = _parse_json(await manager.inbox.wait(item.id))  # {granted, path, writable}
             if not resp.get("granted"):
                 return {"granted": False, "reason": "the user declined the request"}
             path = (resp.get("path") or args.get("path") or "").strip()
@@ -1700,8 +1652,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                     r
                     for r in res.get("roots", [])
                     if r.get("path")
-                    and Path(r["path"]).expanduser().resolve()
-                    == Path(path).expanduser().resolve()
+                    and Path(r["path"]).expanduser().resolve() == Path(path).expanduser().resolve()
                 ),
                 None,
             )
@@ -1725,9 +1676,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                 manager.persist_session(session_id)
                 if item.visibility == VIS_INBOX:
                     await _mirror(item)
-            resp = _parse_json(
-                await manager.inbox.wait(item.id)
-            )  # {approved, mode, feedback}
+            resp = _parse_json(await manager.inbox.wait(item.id))  # {approved, mode, feedback}
             if not resp.get("approved"):
                 return {
                     "approved": False,
@@ -1761,9 +1710,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                 manager.inbox.resolve(pend[0].id, resolution)
 
         workspace = ws.query_params.get("workspace")
-        mcp_tools = await manager.prepare_mcp_tools(
-            session_id, workspace=workspace, agent=agent
-        )
+        mcp_tools = await manager.prepare_mcp_tools(session_id, workspace=workspace, agent=agent)
         engine = manager.get_engine(
             session_id,
             workspace=workspace,
@@ -1778,9 +1725,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             await ws.send_json(
                 {
                     "type": "error",
-                    "data": {
-                        "error": "no valid workspace — choose a project folder first"
-                    },
+                    "data": {"error": "no valid workspace — choose a project folder first"},
                 }
             )
             await ws.close()
@@ -1825,11 +1770,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             # The receive loop atomically claims this session before scheduling the task.
             # Keeping the claim outside prevents two back-to-back frames from both starting.
             try:
-                events = (
-                    engine.retry()
-                    if retry
-                    else engine.run(content, display=display)
-                )
+                events = engine.retry() if retry else engine.run(content, display=display)
                 async for event in events:
                     # Broadcast to every socket viewing this session (this socket included — it's a
                     # registered client), so a second view of the same session stays in sync too.
@@ -1841,9 +1782,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             finally:
                 manager.mark_idle(session_id)
                 manager.save(session_id, engine)
-                await manager.broadcast_session(
-                    session_id, {"type": "turn_done", "data": {}}
-                )
+                await manager.broadcast_session(session_id, {"type": "turn_done", "data": {}})
 
         # This socket is now a live view of the session; background turns (channel delivery,
         # self-wake, durable resume) broadcast here too, not just locally driven run_turns.
@@ -1872,10 +1811,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                     continue
 
                 now = asyncio.get_running_loop().time()
-                while (
-                    inbound_times
-                    and now - inbound_times[0] > _WS_RATE_LIMIT_WINDOW_SECONDS
-                ):
+                while inbound_times and now - inbound_times[0] > _WS_RATE_LIMIT_WINDOW_SECONDS:
                     inbound_times.popleft()
                 if len(inbound_times) >= _WS_RATE_LIMIT_COUNT:
                     await reject_input("Too many WebSocket messages; reconnect and try again.")
@@ -1954,8 +1890,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                         )
                     elif len(attachments) > _MAX_ATTACHMENTS:
                         reject = (
-                            f"Too many attachments ({len(attachments)}; "
-                            f"limit {_MAX_ATTACHMENTS})."
+                            f"Too many attachments ({len(attachments)}; limit {_MAX_ATTACHMENTS})."
                         )
                     elif any(not isinstance(a, dict) for a in attachments):
                         reject = "Invalid attachment: expected an object."
@@ -1989,18 +1924,13 @@ def create_app(manager: SessionManager) -> FastAPI:
                                 data = attachment.get("data_url")
                                 if (
                                     not isinstance(data, str)
-                                    or not data.startswith(
-                                        "data:application/pdf;base64,"
-                                    )
+                                    or not data.startswith("data:application/pdf;base64,")
                                     or len(data) > MAX_PDF_CHARS
                                 ):
                                     reject = "Invalid or oversized PDF attachment."
                             else:
                                 body = attachment.get("text")
-                                if (
-                                    not isinstance(body, str)
-                                    or len(body) > MAX_TEXT_CHARS
-                                ):
+                                if not isinstance(body, str) or len(body) > MAX_TEXT_CHARS:
                                     reject = "Invalid or oversized text attachment."
                             if reject is not None:
                                 break
@@ -2028,9 +1958,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                         skill = skill.strip()
                         menu = manager.effective_skill_names(session_id, workspace)
                         if skill not in menu:
-                            await reject_input(
-                                f"Skill '{skill}' is not available in this session."
-                            )
+                            await reject_input(f"Skill '{skill}' is not available in this session.")
                             continue
                         display = f"/{skill}" + (f" {text}" if text else "")
                         text = (
@@ -2077,9 +2005,9 @@ def create_app(manager: SessionManager) -> FastAPI:
     @app.get("/v1/wiki")
     def wiki_list(category: str = "", query: str = "", tags: str = "") -> dict[str, Any]:
         tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
-        return {"pages": manager.wiki_store.list_pages(
-            category=category, query=query, tags=tag_list
-        )}
+        return {
+            "pages": manager.wiki_store.list_pages(category=category, query=query, tags=tag_list)
+        }
 
     @app.get("/v1/wiki/categories")
     def wiki_categories() -> dict[str, Any]:
@@ -2103,13 +2031,15 @@ def create_app(manager: SessionManager) -> FastAPI:
     def _wiki_store_credentials(page_id: str, credentials: list, linked_service: str = ""):
         """Store credential values in the vault and sync to secrets.json."""
         from ..wiki.sync import WikiSync
-        for cred in (credentials or []):
+
+        for cred in credentials or []:
             key = cred.get("key", "")
             value = cred.get("value", "")
             if key and value:
                 vault_key = f"{page_id}:{key}"
                 manager.vault.store(
-                    vault_key, value,
+                    vault_key,
+                    value,
                     expires=cred.get("expires", ""),
                     rotate_days=int(cred.get("rotate_days", 0) or 0),
                     linked_services=[linked_service] if linked_service else [],
@@ -2128,10 +2058,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         credentials = body.get("credentials") or []
         linked_service = str(body.get("linked_service", ""))
         # Strip values from credentials before storing in wiki DB (values go to vault)
-        creds_meta = [
-            {k: v for k, v in c.items() if k != "value"}
-            for c in credentials
-        ]
+        creds_meta = [{k: v for k, v in c.items() if k != "value"} for c in credentials]
         result = manager.wiki_store.create_page(
             page_id=page_id,
             name=str(body.get("name", page_id)),
@@ -2152,10 +2079,11 @@ def create_app(manager: SessionManager) -> FastAPI:
         credentials = body.get("credentials") or []
         linked_service = body.get("linked_service")
         # Strip values before DB storage
-        creds_meta = [
-            {k: v for k, v in c.items() if k != "value"}
-            for c in credentials
-        ] if credentials else None
+        creds_meta = (
+            [{k: v for k, v in c.items() if k != "value"} for c in credentials]
+            if credentials
+            else None
+        )
         result = manager.wiki_store.update_page(
             page_id=page_id,
             content=body.get("content"),
@@ -2178,6 +2106,7 @@ def create_app(manager: SessionManager) -> FastAPI:
     def wiki_import_secrets() -> dict[str, Any]:
         """Import all existing secrets.json entries as wiki pages."""
         from ..wiki.sync import WikiSync
+
         sync = WikiSync(manager.wiki_store, manager.vault, manager.secrets)
         return sync.import_all_secrets()
 
@@ -2185,6 +2114,7 @@ def create_app(manager: SessionManager) -> FastAPI:
     def wiki_sync_to_secrets(page_id: str) -> dict[str, Any]:
         """Sync wiki page credentials to secrets.json."""
         from ..wiki.sync import WikiSync
+
         sync = WikiSync(manager.wiki_store, manager.vault, manager.secrets)
         return sync.sync_page_to_secrets(page_id)
 
@@ -2203,9 +2133,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             value = manager.vault.retrieve(vault_key)
             return {"ok": True, "key": key, "value": value}
         except KeyError:
-            return JSONResponse(
-                {"error": f"credential '{key}' not found"}, status_code=404
-            )
+            return JSONResponse({"error": f"credential '{key}' not found"}, status_code=404)
         except RuntimeError as exc:
             return JSONResponse({"error": str(exc)}, status_code=403)
 
@@ -2214,6 +2142,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         """AI-analyze free-form wiki content to extract credentials and service info.
         Returns suggested credentials, category, and linked_service for user confirmation."""
         from ..wiki.analyzer import analyze_document
+
         content = str(body.get("content", ""))
         title = str(body.get("title", ""))
         if not content:
@@ -2224,6 +2153,7 @@ def create_app(manager: SessionManager) -> FastAPI:
     def wiki_analyze_page(page_id: str) -> dict[str, Any]:
         """Analyze an existing wiki page to extract/update credentials."""
         from ..wiki.analyzer import analyze_document
+
         page = manager.wiki_store.get_page(page_id)
         if page is None:
             return JSONResponse({"error": "page not found"}, status_code=404)

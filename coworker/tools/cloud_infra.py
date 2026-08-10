@@ -83,9 +83,8 @@ def _parse_period(period: str) -> timedelta:
 # Schema helpers (mirrors ssh/tools.py pattern)
 # ---------------------------------------------------------------------------
 
-def _meta(
-    name: str, *, approval: bool = False, capabilities: list[str] | None = None
-):
+
+def _meta(name: str, *, approval: bool = False, capabilities: list[str] | None = None):
     return ai.ToolMetadata(
         name=name,
         category="cloud_infra",
@@ -131,6 +130,7 @@ def _attach(
 # Tool factory
 # ---------------------------------------------------------------------------
 
+
 def cloud_infra_tools(context: Any = None) -> list:
     """Return cloud infrastructure tools. Credentials from secrets.json."""
     secrets = _get_secrets(context) if context else SecretStore()
@@ -143,7 +143,10 @@ def cloud_infra_tools(context: Any = None) -> list:
         """List EC2 instances with status."""
         creds = _aws_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "AWS credentials not configured in secrets.json (aws:default)"}
+            return {
+                "ok": False,
+                "error": "AWS credentials not configured in secrets.json (aws:default)",
+            }
         try:
             ec2 = _boto3_client("ec2", creds, region=region or None)
             resp = ec2.describe_instances()
@@ -154,36 +157,48 @@ def cloud_infra_tools(context: Any = None) -> list:
                     for tag in inst.get("Tags", []):
                         if tag.get("Key") == "Name":
                             name = tag.get("Value", "")
-                    instances.append({
-                        "id": inst.get("InstanceId"),
-                        "name": name,
-                        "type": inst.get("InstanceType"),
-                        "state": inst.get("State", {}).get("Name"),
-                        "public_ip": inst.get("PublicIpAddress"),
-                        "private_ip": inst.get("PrivateIpAddress"),
-                        "az": inst.get("Placement", {}).get("AvailabilityZone"),
-                    })
+                    instances.append(
+                        {
+                            "id": inst.get("InstanceId"),
+                            "name": name,
+                            "type": inst.get("InstanceType"),
+                            "state": inst.get("State", {}).get("Name"),
+                            "public_ip": inst.get("PublicIpAddress"),
+                            "private_ip": inst.get("PrivateIpAddress"),
+                            "az": inst.get("Placement", {}).get("AvailabilityZone"),
+                        }
+                    )
             return {"ok": True, "instances": instances, "count": len(instances)}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        aws_ec2_list,
-        _schema(
-            "aws_ec2_list",
-            "List EC2 instances with status, type, and IPs. Optionally filter by region.",
-            {"region": {"type": "string", "description": "AWS region (default: from credentials)."}},
-            [],
-        ),
-        caps=["cloud", "read"],
-    ))
+    tools.append(
+        _attach(
+            aws_ec2_list,
+            _schema(
+                "aws_ec2_list",
+                "List EC2 instances with status, type, and IPs. Optionally filter by region.",
+                {
+                    "region": {
+                        "type": "string",
+                        "description": "AWS region (default: from credentials).",
+                    }
+                },
+                [],
+            ),
+            caps=["cloud", "read"],
+        )
+    )
 
     # -- aws_s3_list --
     def aws_s3_list(bucket: str = "") -> dict:
         """List S3 buckets or objects in a bucket."""
         creds = _aws_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "AWS credentials not configured in secrets.json (aws:default)"}
+            return {
+                "ok": False,
+                "error": "AWS credentials not configured in secrets.json (aws:default)",
+            }
         try:
             s3 = _boto3_client("s3", creds)
             if not bucket:
@@ -213,23 +228,33 @@ def cloud_infra_tools(context: Any = None) -> list:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        aws_s3_list,
-        _schema(
-            "aws_s3_list",
-            "List S3 buckets (no args) or objects in a specific bucket (first 100).",
-            {"bucket": {"type": "string", "description": "Bucket name. Empty = list all buckets."}},
-            [],
-        ),
-        caps=["cloud", "read"],
-    ))
+    tools.append(
+        _attach(
+            aws_s3_list,
+            _schema(
+                "aws_s3_list",
+                "List S3 buckets (no args) or objects in a specific bucket (first 100).",
+                {
+                    "bucket": {
+                        "type": "string",
+                        "description": "Bucket name. Empty = list all buckets.",
+                    }
+                },
+                [],
+            ),
+            caps=["cloud", "read"],
+        )
+    )
 
     # -- aws_cloudwatch_metrics --
     def aws_cloudwatch_metrics(service: str, metric: str, period: str = "1h") -> dict:
         """Query CloudWatch metrics for an AWS service."""
         creds = _aws_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "AWS credentials not configured in secrets.json (aws:default)"}
+            return {
+                "ok": False,
+                "error": "AWS credentials not configured in secrets.json (aws:default)",
+            }
         try:
             cw = _boto3_client("cloudwatch", creds)
             delta = _parse_period(period)
@@ -276,27 +301,41 @@ def cloud_infra_tools(context: Any = None) -> list:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        aws_cloudwatch_metrics,
-        _schema(
-            "aws_cloudwatch_metrics",
-            "Query CloudWatch metrics for an AWS service (e.g. EC2 CPUUtilization).",
-            {
-                "service": {"type": "string", "description": "AWS service (e.g. 'ec2', 'rds', 'lambda')."},
-                "metric": {"type": "string", "description": "Metric name (e.g. 'CPUUtilization')."},
-                "period": {"type": "string", "description": "Time period (e.g. '1h', '7d'). Default '1h'."},
-            },
-            ["service", "metric"],
-        ),
-        caps=["cloud", "read"],
-    ))
+    tools.append(
+        _attach(
+            aws_cloudwatch_metrics,
+            _schema(
+                "aws_cloudwatch_metrics",
+                "Query CloudWatch metrics for an AWS service (e.g. EC2 CPUUtilization).",
+                {
+                    "service": {
+                        "type": "string",
+                        "description": "AWS service (e.g. 'ec2', 'rds', 'lambda').",
+                    },
+                    "metric": {
+                        "type": "string",
+                        "description": "Metric name (e.g. 'CPUUtilization').",
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Time period (e.g. '1h', '7d'). Default '1h'.",
+                    },
+                },
+                ["service", "metric"],
+            ),
+            caps=["cloud", "read"],
+        )
+    )
 
     # -- aws_cost_explorer --
     def aws_cost_explorer(period: str = "7d") -> dict:
         """AWS cost analysis for a recent period."""
         creds = _aws_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "AWS credentials not configured in secrets.json (aws:default)"}
+            return {
+                "ok": False,
+                "error": "AWS credentials not configured in secrets.json (aws:default)",
+            }
         try:
             ce = _boto3_client("ce", creds, region="us-east-1")  # CE is us-east-1 only
             delta = _parse_period(period)
@@ -317,26 +356,35 @@ def cloud_infra_tools(context: Any = None) -> list:
                 for group in result_by_time.get("Groups", []):
                     svc = group["Keys"][0] if group.get("Keys") else "Unknown"
                     cost = group.get("Metrics", {}).get("UnblendedCost", {})
-                    results.append({
-                        "date": time_period.get("Start"),
-                        "service": svc,
-                        "amount": cost.get("Amount"),
-                        "unit": cost.get("Unit"),
-                    })
+                    results.append(
+                        {
+                            "date": time_period.get("Start"),
+                            "service": svc,
+                            "amount": cost.get("Amount"),
+                            "unit": cost.get("Unit"),
+                        }
+                    )
             return {"ok": True, "period": period, "costs": results, "count": len(results)}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        aws_cost_explorer,
-        _schema(
-            "aws_cost_explorer",
-            "AWS cost analysis grouped by service for a recent period.",
-            {"period": {"type": "string", "description": "Time period (e.g. '7d', '30d'). Default '7d'."}},
-            [],
-        ),
-        caps=["cloud", "read"],
-    ))
+    tools.append(
+        _attach(
+            aws_cost_explorer,
+            _schema(
+                "aws_cost_explorer",
+                "AWS cost analysis grouped by service for a recent period.",
+                {
+                    "period": {
+                        "type": "string",
+                        "description": "Time period (e.g. '7d', '30d'). Default '7d'.",
+                    }
+                },
+                [],
+            ),
+            caps=["cloud", "read"],
+        )
+    )
 
     # ===== Cloudflare tools =====
 
@@ -345,7 +393,10 @@ def cloud_infra_tools(context: Any = None) -> list:
         """List Cloudflare DNS records for a zone."""
         creds = _cf_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "Cloudflare credentials not configured in secrets.json (cloudflare:default)"}
+            return {
+                "ok": False,
+                "error": "Cloudflare credentials not configured in secrets.json (cloudflare:default)",
+            }
         try:
             import httpx
 
@@ -376,23 +427,28 @@ def cloud_infra_tools(context: Any = None) -> list:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        cf_dns_list,
-        _schema(
-            "cf_dns_list",
-            "List Cloudflare DNS records for a zone.",
-            {"zone": {"type": "string", "description": "Zone ID (default: from credentials)."}},
-            [],
-        ),
-        caps=["cloud", "read"],
-    ))
+    tools.append(
+        _attach(
+            cf_dns_list,
+            _schema(
+                "cf_dns_list",
+                "List Cloudflare DNS records for a zone.",
+                {"zone": {"type": "string", "description": "Zone ID (default: from credentials)."}},
+                [],
+            ),
+            caps=["cloud", "read"],
+        )
+    )
 
     # -- cf_dns_update --
     def cf_dns_update(zone: str, record_id: str, value: str) -> dict:
         """Update a Cloudflare DNS record value (requires approval)."""
         creds = _cf_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "Cloudflare credentials not configured in secrets.json (cloudflare:default)"}
+            return {
+                "ok": False,
+                "error": "Cloudflare credentials not configured in secrets.json (cloudflare:default)",
+            }
         try:
             import httpx
 
@@ -429,28 +485,33 @@ def cloud_infra_tools(context: Any = None) -> list:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        cf_dns_update,
-        _schema(
-            "cf_dns_update",
-            "Update a Cloudflare DNS record value. Requires approval.",
-            {
-                "zone": {"type": "string", "description": "Zone ID (or empty for default)."},
-                "record_id": {"type": "string", "description": "DNS record ID to update."},
-                "value": {"type": "string", "description": "New record value/content."},
-            },
-            ["record_id", "value"],
-        ),
-        approval=True,
-        caps=["cloud", "write"],
-    ))
+    tools.append(
+        _attach(
+            cf_dns_update,
+            _schema(
+                "cf_dns_update",
+                "Update a Cloudflare DNS record value. Requires approval.",
+                {
+                    "zone": {"type": "string", "description": "Zone ID (or empty for default)."},
+                    "record_id": {"type": "string", "description": "DNS record ID to update."},
+                    "value": {"type": "string", "description": "New record value/content."},
+                },
+                ["record_id", "value"],
+            ),
+            approval=True,
+            caps=["cloud", "write"],
+        )
+    )
 
     # -- cf_analytics --
     def cf_analytics(zone: str = "", period: str = "24h") -> dict:
         """Cloudflare traffic analytics for a zone."""
         creds = _cf_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "Cloudflare credentials not configured in secrets.json (cloudflare:default)"}
+            return {
+                "ok": False,
+                "error": "Cloudflare credentials not configured in secrets.json (cloudflare:default)",
+            }
         try:
             import httpx
 
@@ -482,26 +543,37 @@ def cloud_infra_tools(context: Any = None) -> list:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        cf_analytics,
-        _schema(
-            "cf_analytics",
-            "Cloudflare traffic analytics (requests, bandwidth, threats) for a zone.",
-            {
-                "zone": {"type": "string", "description": "Zone ID (default: from credentials)."},
-                "period": {"type": "string", "description": "Time period (e.g. '24h', '7d'). Default '24h'."},
-            },
-            [],
-        ),
-        caps=["cloud", "read"],
-    ))
+    tools.append(
+        _attach(
+            cf_analytics,
+            _schema(
+                "cf_analytics",
+                "Cloudflare traffic analytics (requests, bandwidth, threats) for a zone.",
+                {
+                    "zone": {
+                        "type": "string",
+                        "description": "Zone ID (default: from credentials).",
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Time period (e.g. '24h', '7d'). Default '24h'.",
+                    },
+                },
+                [],
+            ),
+            caps=["cloud", "read"],
+        )
+    )
 
     # -- cf_cache_purge --
     def cf_cache_purge(zone: str, urls: str = "") -> dict:
         """Purge Cloudflare cache (requires approval). Empty urls = purge everything."""
         creds = _cf_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "Cloudflare credentials not configured in secrets.json (cloudflare:default)"}
+            return {
+                "ok": False,
+                "error": "Cloudflare credentials not configured in secrets.json (cloudflare:default)",
+            }
         try:
             import httpx
 
@@ -526,20 +598,25 @@ def cloud_infra_tools(context: Any = None) -> list:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        cf_cache_purge,
-        _schema(
-            "cf_cache_purge",
-            "Purge Cloudflare cache. Empty urls = purge everything. Requires approval.",
-            {
-                "zone": {"type": "string", "description": "Zone ID (or empty for default)."},
-                "urls": {"type": "string", "description": "Comma-separated URLs to purge (empty = purge all)."},
-            },
-            [],
-        ),
-        approval=True,
-        caps=["cloud", "write"],
-    ))
+    tools.append(
+        _attach(
+            cf_cache_purge,
+            _schema(
+                "cf_cache_purge",
+                "Purge Cloudflare cache. Empty urls = purge everything. Requires approval.",
+                {
+                    "zone": {"type": "string", "description": "Zone ID (or empty for default)."},
+                    "urls": {
+                        "type": "string",
+                        "description": "Comma-separated URLs to purge (empty = purge all).",
+                    },
+                },
+                [],
+            ),
+            approval=True,
+            caps=["cloud", "write"],
+        )
+    )
 
     # ===== Wasabi tools =====
 
@@ -548,7 +625,10 @@ def cloud_infra_tools(context: Any = None) -> list:
         """List Wasabi buckets or objects in a bucket."""
         creds = _wasabi_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "Wasabi credentials not configured in secrets.json (wasabi:default)"}
+            return {
+                "ok": False,
+                "error": "Wasabi credentials not configured in secrets.json (wasabi:default)",
+            }
         try:
             s3 = _boto3_client(
                 "s3",
@@ -582,23 +662,33 @@ def cloud_infra_tools(context: Any = None) -> list:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        wasabi_list,
-        _schema(
-            "wasabi_list",
-            "List Wasabi S3-compatible buckets (no args) or objects in a bucket (first 100).",
-            {"bucket": {"type": "string", "description": "Bucket name. Empty = list all buckets."}},
-            [],
-        ),
-        caps=["cloud", "read"],
-    ))
+    tools.append(
+        _attach(
+            wasabi_list,
+            _schema(
+                "wasabi_list",
+                "List Wasabi S3-compatible buckets (no args) or objects in a bucket (first 100).",
+                {
+                    "bucket": {
+                        "type": "string",
+                        "description": "Bucket name. Empty = list all buckets.",
+                    }
+                },
+                [],
+            ),
+            caps=["cloud", "read"],
+        )
+    )
 
     # -- wasabi_upload --
     def wasabi_upload(local_path: str, bucket: str, key: str) -> dict:
         """Upload a file to Wasabi (requires approval)."""
         creds = _wasabi_creds(secrets)
         if not creds:
-            return {"ok": False, "error": "Wasabi credentials not configured in secrets.json (wasabi:default)"}
+            return {
+                "ok": False,
+                "error": "Wasabi credentials not configured in secrets.json (wasabi:default)",
+            }
         if not os.path.isfile(local_path):
             return {"ok": False, "error": f"Local file not found: {local_path}"}
         try:
@@ -619,20 +709,22 @@ def cloud_infra_tools(context: Any = None) -> list:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    tools.append(_attach(
-        wasabi_upload,
-        _schema(
-            "wasabi_upload",
-            "Upload a local file to Wasabi S3-compatible storage. Requires approval.",
-            {
-                "local_path": {"type": "string", "description": "Absolute path to local file."},
-                "bucket": {"type": "string", "description": "Destination bucket name."},
-                "key": {"type": "string", "description": "Object key (path) in the bucket."},
-            },
-            ["local_path", "bucket", "key"],
-        ),
-        approval=True,
-        caps=["cloud", "write"],
-    ))
+    tools.append(
+        _attach(
+            wasabi_upload,
+            _schema(
+                "wasabi_upload",
+                "Upload a local file to Wasabi S3-compatible storage. Requires approval.",
+                {
+                    "local_path": {"type": "string", "description": "Absolute path to local file."},
+                    "bucket": {"type": "string", "description": "Destination bucket name."},
+                    "key": {"type": "string", "description": "Object key (path) in the bucket."},
+                },
+                ["local_path", "bucket", "key"],
+            ),
+            approval=True,
+            caps=["cloud", "write"],
+        )
+    )
 
     return tools

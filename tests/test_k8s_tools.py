@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from coworker.tools.k8s_mgmt import (
-    k8s_tools,
-    _k8s_pods,
-    _k8s_logs,
     _k8s_describe,
+    _k8s_events,
+    _k8s_logs,
+    _k8s_pods,
     _k8s_restart,
     _k8s_scale,
-    _k8s_events,
     _kubectl_available,
+    k8s_tools,
 )
 
 
@@ -22,7 +22,14 @@ def test_k8s_tools_factory():
     tools = k8s_tools()
     assert len(tools) == 6
     names = {t.__coworker_schema__["function"]["name"] for t in tools}
-    assert names == {"k8s_pods", "k8s_logs", "k8s_describe", "k8s_restart", "k8s_scale", "k8s_events"}
+    assert names == {
+        "k8s_pods",
+        "k8s_logs",
+        "k8s_describe",
+        "k8s_restart",
+        "k8s_scale",
+        "k8s_events",
+    }
 
 
 @patch("coworker.tools.k8s_mgmt._kubectl_available", return_value=False)
@@ -87,7 +94,11 @@ def test_k8s_pods_success(mock_avail, mock_run):
     pods_data = {
         "items": [
             {
-                "metadata": {"name": "web-abc", "namespace": "default", "creationTimestamp": "2024-01-01T00:00:00Z"},
+                "metadata": {
+                    "name": "web-abc",
+                    "namespace": "default",
+                    "creationTimestamp": "2024-01-01T00:00:00Z",
+                },
                 "status": {
                     "phase": "Running",
                     "containerStatuses": [

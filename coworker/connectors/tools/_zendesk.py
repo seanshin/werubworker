@@ -9,9 +9,7 @@ from . import _helpers
 from ._helpers import _attach, _basic_auth, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def zendesk_search(query: str) -> dict[str, Any]:
         profile, err = _profile(secrets, "zendesk", "subdomain", "email", "api_token")
         if err:
@@ -61,9 +59,7 @@ def register(
         )
     )
 
-    def zendesk_create_ticket(
-        subject: str, body: str, requester_email: str = ""
-    ) -> dict[str, Any]:
+    def zendesk_create_ticket(subject: str, body: str, requester_email: str = "") -> dict[str, Any]:
         profile, err = _profile(secrets, "zendesk", "subdomain", "email", "api_token")
         if err:
             return err

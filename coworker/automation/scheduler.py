@@ -97,9 +97,7 @@ class Scheduler:
             run = await self.runner(task, trigger)
         except Exception as exc:
             logger.exception("task %s run failed", task.id)
-            run = TaskRun(
-                task_id=task.id, status="error", error=str(exc), trigger=trigger
-            )
+            run = TaskRun(task_id=task.id, status="error", error=str(exc), trigger=trigger)
             self.store.add_run(run)
         finally:
             self._running_ids.discard(task.id)

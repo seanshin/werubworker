@@ -19,9 +19,7 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     _PORTAL_PROP = {
         "type": "string",
         "description": "Portal (hub id or name) to use; omit for the default portal.",
@@ -54,8 +52,7 @@ def register(
             except ValueError:
                 return {"error": "filters must be a JSON array of filter objects"}
             if not isinstance(parsed, list) or not all(
-                isinstance(f, dict) and f.get("property") and f.get("operator")
-                for f in parsed
+                isinstance(f, dict) and f.get("property") and f.get("operator") for f in parsed
             ):
                 return {"error": "each filter needs at least 'property' and 'operator'"}
             body["filterGroups"] = [{"filters": parsed}]

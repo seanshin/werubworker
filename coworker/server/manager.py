@@ -20,28 +20,18 @@ from typing import Any, Optional
 
 from ..agent import build_engine
 from ..agents import get_agent
+from ..agents import list_agents as _list_agents
+from ..audit import AuditStore
 from ..auth import LocalAuth
+from ..automation import Schedule, ScheduledTask, Scheduler, TaskRun, TaskStore
+from ..config import load_config, workspace_allowed_commands
 from ..connections import (
     PersonaConnectionStore,
     SessionConnectionStore,
+)
+from ..connections import (
     effective as effective_connections,
 )
-from ..inbox import InboxStore, args_preview
-from ..inbox_routing import InboxRouting
-from ..personas import PersonaRegistry
-from ..personas.registry import set_registry as set_persona_registry
-from ..selfwake import WakeStore
-from ..mentions import MentionSessionStore
-from ..subscriptions import ChannelBuffer, SubscriptionStore
-from ..unrouted import UnroutedStore
-from ..unattended import UnattendedRegistry
-from ..audit import AuditStore
-from ..config import load_config, workspace_allowed_commands
-from ..conversations import ConversationStore, title_from
-from ..engine import ApprovalOutcome, Approver, TurnEngine
-from ..roots import RootDir
-from ..workspace_trust import WorkspaceTrustStore
-from ..automation import Schedule, ScheduledTask, Scheduler, TaskRun, TaskStore
 from ..connectors import (
     Gateway,
     MessageSource,
@@ -61,6 +51,10 @@ from ..connectors.browser_automation import (
     browser_take_screenshot,
 )
 from ..connectors.parked import ParkedStore
+from ..conversations import ConversationStore, title_from
+from ..engine import ApprovalOutcome, Approver, TurnEngine
+from ..inbox import InboxStore, args_preview
+from ..inbox_routing import InboxRouting
 from ..mcp import (
     MCPManager,
     build_callables,
@@ -71,8 +65,10 @@ from ..mcp import (
     read_global,
 )
 from ..memory import MemoryStore, Scope, SQLiteMemoryStore
+from ..mentions import MentionSessionStore
 from ..permissions import Mode
-from ..agents import list_agents as _list_agents
+from ..personas import PersonaRegistry
+from ..personas.registry import set_registry as set_persona_registry
 from ..providers import (
     ProviderClient,
     ProviderRouter,
@@ -81,9 +77,9 @@ from ..providers import (
     provider_descriptors,
     verify_provider_key,
 )
+from ..roots import RootDir
 from ..secrets import SecretStore, state_dir
-from ..wiki.store import WikiStore
-from ..wiki.vault import Vault
+from ..selfwake import WakeStore
 from ..sessions import SessionRecord
 from ..skills import (
     SessionSkillStore,
@@ -91,8 +87,15 @@ from ..skills import (
     SkillStore,
     effective_skills,
 )
+from ..subscriptions import ChannelBuffer, SubscriptionStore
+from ..unattended import UnattendedRegistry
+from ..unrouted import UnroutedStore
+from ..wiki.store import WikiStore
+from ..wiki.vault import Vault
+from ..workspace_trust import WorkspaceTrustStore
 from .automation_mixin import AutomationMixin, _epoch, _last_assistant_text, _recent_files
 from .connector_mixin import ConnectorsMixin
+from .engine_cache import EngineCache
 from .inbox_mixin import InboxMixin
 from .provider_mixin import ProviderMixin
 from .settings_mixin import SettingsMixin
@@ -119,7 +122,9 @@ def _approval_body(request) -> str:
     return "\n".join(p for p in (reason, preview) if p)
 
 
-class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMixin, InboxMixin, SkillsMixin):
+class SessionManager(
+    SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMixin, InboxMixin, SkillsMixin
+):
     def __init__(
         self,
         *,
@@ -129,9 +134,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         mode: Mode = Mode.INTERACTIVE,
         provider: Optional[ProviderClient] = None,
     ) -> None:
-        self.default_workspace = (
-            str(Path(workspace).expanduser().resolve()) if workspace else None
-        )
+        self.default_workspace = str(Path(workspace).expanduser().resolve()) if workspace else None
         self.model = model
         self.mode = mode
         self.provider = provider
@@ -150,10 +153,8 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         self.session_store.canonicalize_workspaces()  # collapse /tmp vs /private/tmp etc.
         if self.default_workspace:
             self.session_store.touch_workspace(self.default_workspace)
-        self._engines: dict[str, TurnEngine] = {}
-        self._running_sessions: set[str] = (
-            set()
-        )  # sessions with an in-flight turn (busy)
+        self._engines: EngineCache[str, TurnEngine] = EngineCache(max_size=50, ttl=3600)
+        self._running_sessions: set[str] = set()  # sessions with an in-flight turn (busy)
         # Sessions with an auto-title LLM call in flight (FB-010) — one call at a time.
         self._autotitle_inflight: set[str] = set()
         self._autotitle_tasks: set[asyncio.Task] = set()
@@ -228,18 +229,12 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         # an old parked item still gets a named chip.
         for it in self.parked.list():
             if it.get("user_name"):
-                self._people.setdefault(
-                    f"{it['platform']}:{it['user_id']}", it["user_name"]
-                )
+                self._people.setdefault(f"{it['platform']}:{it['user_id']}", it["user_name"])
         # Connection hierarchy (UI-REFRESH §4): per-persona default connector on/off (seeded from the
         # manifest, then user-editable) + per-session overrides. Resolved into the session's effective
         # connector set, which gates inbound delivery and the engine's connector tools.
-        self.persona_connections = PersonaConnectionStore(
-            base / "persona_connections.json"
-        )
-        self.session_connections = SessionConnectionStore(
-            base / "session_connections.json"
-        )
+        self.persona_connections = PersonaConnectionStore(base / "persona_connections.json")
+        self.session_connections = SessionConnectionStore(base / "session_connections.json")
         # Skills (SKILLS-SPEC §4): folder-backed CRUD + per-session mutes. The effective menu
         # gates the engine's skill catalog the same way effective_connectors gates connector
         # tools — one resolver feeds the catalog injection, the rail, and the composer popup.
@@ -287,11 +282,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                 "required": False,
             }
         canonical = WorkspaceTrustStore.canonical(path)
-        commands = (
-            workspace_allowed_commands(canonical)
-            if Path(canonical).is_dir()
-            else []
-        )
+        commands = workspace_allowed_commands(canonical) if Path(canonical).is_dir() else []
         trusted = self.workspace_trust.is_trusted(canonical)
         return {
             "workspace": canonical,
@@ -308,26 +299,20 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         """
         return bool(workspace and self.workspace_trust.is_trusted(workspace))
 
-    def set_workspace_trust(
-        self, path: str | Path, *, trusted: bool
-    ) -> dict[str, Any]:
+    def set_workspace_trust(self, path: str | Path, *, trusted: bool) -> dict[str, Any]:
         if not str(path).strip():
             return {"ok": False, "error": "workspace path is required"}
         candidate = Path(path).expanduser()
         if trusted and not candidate.is_dir():
             return {"ok": False, "error": "workspace is not a directory"}
         canonical = self.workspace_trust.set_trusted(candidate, trusted)
-        effective = load_config(
-            canonical, workspace_trusted=trusted
-        ).allowed_commands
+        effective = load_config(canonical, workspace_trusted=trusted).allowed_commands
         # Apply trust/revocation immediately to live sessions rooted at this exact path.
         for engine in self._engines.values():
             engine_workspace = str(
                 (getattr(engine, "audit_context", {}) or {}).get("workspace", "")
             )
-            if engine_workspace and WorkspaceTrustStore.canonical(
-                engine_workspace
-            ) == canonical:
+            if engine_workspace and WorkspaceTrustStore.canonical(engine_workspace) == canonical:
                 engine.permissions.allowed_commands = list(effective)
         return {
             "ok": True,
@@ -473,8 +458,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             directory_requester=directory_requester
             or self.inbox_directory_requester(session_id, agent),
             plan_approver=plan_approver or self.inbox_plan_approver(session_id, agent),
-            question_asker=question_asker
-            or self.inbox_question_asker(session_id, agent),
+            question_asker=question_asker or self.inbox_question_asker(session_id, agent),
             subscription_store=self.subscriptions,
             channel_buffer=self.channel_buffer,
             routing_targets=self._routing_targets(session_id, agent),
@@ -492,9 +476,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         # A mention-spawned session (§31) keeps its in-thread reply pre-approved across
         # rebuilds/restarts — the grant is re-derived from the durable thread map.
         for thread_target in self.mention_sessions.targets_for(session_id):
-            engine.permissions.task_rules.setdefault("send_message", set()).add(
-                thread_target
-            )
+            engine.permissions.task_rules.setdefault("send_message", set()).add(thread_target)
         if record is not None and record.grants:
             self._apply_grants(engine, record.grants)
         # Auto-compaction (OPE-27): restore the persisted view boundary and wire the live
@@ -541,9 +523,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         """The channel address(es) this session's Inbox routes OUT to — used to warn when a
         subscription (inbound) collides with Inbox routing (outbound) on the same channel.
         """
-        binding = self.inbox_routing.binding_for(
-            self.inbox_routing.route_for(session_id, agent)
-        )
+        binding = self.inbox_routing.binding_for(self.inbox_routing.route_for(session_id, agent))
         return [f"{binding.channel}:{binding.target}"] if binding.channel else []
 
     # -- connection hierarchy (UI-REFRESH §4) -----------------------------------
@@ -553,9 +533,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         record = self.session_store.load(session_id)
         return (record.agent if record else None) or self.personas.default_id()
 
-    def effective_connectors(
-        self, session_id: str, persona_id: Optional[str] = None
-    ) -> set[str]:
+    def effective_connectors(self, session_id: str, persona_id: Optional[str] = None) -> set[str]:
         """The connectors effectively enabled for this session (§4.1): connected AND not muted by
         the session override / persona default. Drives the engine's connector-tool gating; seeds the
         persona defaults from the manifest on first read using the full connected set.
@@ -608,9 +586,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         """The persona's default connector map (seeded from the manifest's connector recommends on
         first read, then user-editable) as a list, each annotated with account-connectedness.
         """
-        defaults = self.persona_connections.defaults_for(
-            persona_id, manifest, connected=connected
-        )
+        defaults = self.persona_connections.defaults_for(persona_id, manifest, connected=connected)
         return [
             {"connector": c, "enabled": bool(enabled), "connected": c in connected}
             for c, enabled in defaults.items()
@@ -686,11 +662,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         archived = 0
         if not enabled:
             for r in self.session_store.list():
-                if (
-                    r.agent == persona_id
-                    and not r.archived
-                    and not r.session_id.startswith("__")
-                ):
+                if r.agent == persona_id and not r.archived and not r.session_id.startswith("__"):
                     self.session_store.set_flags(r.session_id, archived=True)
                     archived += 1
         return {"ok": True, "archived_sessions": archived}
@@ -773,6 +745,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         ok = self.inbox.resolve(item_id, resolution)
         if not ok or item is None:
             return ok
+        await self.broadcast_event({"type": "inbox_changed", "session_id": item.session_id})
         if not self.is_running(item.session_id):
             await self._durable_resume(item)
         return ok
@@ -808,13 +781,14 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             mcp_tool_defs,
             tool_enabled,
         )
-
         from ..mcp import oauth as mcp_oauth
 
         ws = self.engine_workspace(session_id, workspace=workspace, agent=agent)
         loop = asyncio.get_running_loop()
         effective: Optional[set[str]] = None  # computed lazily, once
-        out: list[Any] = []
+
+        # Phase 1: synchronous filtering — collect eligible servers before any I/O.
+        eligible: list[tuple[Any, bool]] = []  # (server, backed)
         for server in load_mcp_servers(
             ws,
             secrets=self.secrets,
@@ -822,22 +796,11 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         ):
             if not server.enabled:
                 continue
-            if server.auth == "oauth" and not mcp_oauth.has_tokens(
-                server.name, self.secrets
-            ):
-                # NEVER start an interactive OAuth flow from a turn: a token-less
-                # server here would open a browser and block every session for the
-                # full flow timeout (owner-hit 2026-07-20 — a failed one-click's
-                # leftover config froze all new sessions). Flows start only from an
-                # explicit connect in Settings/Connectors.
+            if server.auth == "oauth" and not mcp_oauth.has_tokens(server.name, self.secrets):
                 continue
             descriptor = get_descriptor(server.name)
             backed = descriptor is not None and bool(descriptor.mcp_url)
             if backed:
-                # Connector-backed server: obey the same gates as connector tools —
-                # the session's effective connector set and the per-tool toggles.
-                # The descriptor's PIN is authoritative over whatever the config
-                # file says (drift can only ever shrink the surface).
                 if effective is None:
                     effective = self.effective_connectors(session_id, agent)
                 if server.name not in effective:
@@ -848,22 +811,32 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                     for t in mcp_tool_defs(server.name)
                     if tool_enabled(self.secrets, server.name, t.name)
                 ]
-            try:
-                conn = await self.mcp.ensure(server)
-            except Exception as exc:
-                if mcp_oauth.is_auth_required(exc):
-                    # Stored tokens no longer refresh (vendor rotated/expired
-                    # them) — the non-interactive connect refused to open a
-                    # browser. Record it so the MCP page shows WHY the server is
-                    # dark; the session just runs without its tools.
+            eligible.append((server, backed))
+
+        if not eligible:
+            return []
+
+        # Phase 2: connect all servers in parallel (10s timeout per server).
+        async def _connect(server):
+            return await asyncio.wait_for(self.mcp.ensure(server), timeout=10)
+
+        results = await asyncio.gather(
+            *(_connect(srv) for srv, _ in eligible), return_exceptions=True
+        )
+
+        # Phase 3: build callables from successful connections.
+        out: list[Any] = []
+        for (server, backed), result in zip(eligible, results):
+            if isinstance(result, BaseException):
+                if mcp_oauth.is_auth_required(result):
                     self._mcp_errors[server.name] = (
                         "sign-in required — reconnect this server from its page"
                     )
-                    logger.info(
-                        "mcp %s needs re-auth; skipped for this session", server.name
-                    )
-                # else: bad command / unreachable url — skip, don't break the session
+                    logger.info("mcp %s needs re-auth; skipped for this session", server.name)
+                else:
+                    logger.debug("mcp %s connect failed: %s", server.name, result)
                 continue
+            conn = result
             callables = build_callables(
                 server,
                 conn.tools,
@@ -871,9 +844,6 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                 loop,
             )
             if backed:
-                # Per-tool approval from the pinned read/write classification
-                # (server-level requires_approval is off for backed servers);
-                # anything unclassified stays approval-gated — fail closed.
                 for fn in callables:
                     fn.__aisuite_tool_metadata__.requires_approval = approval_for_tool(
                         fn.__aisuite_tool_metadata__.name, default=True
@@ -883,9 +853,8 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
 
     def list_mcp(self) -> list[dict[str, Any]]:
         """Servers from the global config + connection status (does not connect)."""
-        from ..mcp import oauth as mcp_oauth
-
         from ..connectors.descriptors import get_descriptor
+        from ..mcp import oauth as mcp_oauth
 
         out = []
         for name, raw in read_global().items():
@@ -923,9 +892,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                     "auth": "oauth" if is_oauth else None,
                     "status": status,
                     "last_error": self._mcp_errors.get(name),
-                    "tool_count": (
-                        len(self.mcp._conns[name].tools) if connected else None
-                    ),
+                    "tool_count": (len(self.mcp._conns[name].tools) if connected else None),
                     "config": _redact(raw),
                 }
             )
@@ -981,9 +948,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         result = await self.connect_mcp(name)
         if result.get("ok"):
             profile = self.secrets.get(f"{name}:default") or {}
-            self.secrets.put(
-                f"{name}:default", {**profile, "mode": "mcp", "enabled": True}
-            )
+            self.secrets.put(f"{name}:default", {**profile, "mode": "mcp", "enabled": True})
         else:
             # A failed connect must take its seeded config with it: an enabled
             # oauth entry with no tokens lingers forever (nothing owns it once
@@ -1151,9 +1116,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         if target.is_dir():
             entries: list[dict[str, Any]] = []
             try:
-                children = sorted(
-                    target.iterdir(), key=lambda c: (c.is_file(), c.name.lower())
-                )
+                children = sorted(target.iterdir(), key=lambda c: (c.is_file(), c.name.lower()))
             except OSError as exc:
                 return {"ok": False, "error": str(exc)}
             for child in children[:500]:
@@ -1205,9 +1168,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             "truncated": len(text) > 500000,
         }
 
-    def reveal_artifact(
-        self, session_id: str, path: str, mode: str = "reveal"
-    ) -> dict[str, Any]:
+    def reveal_artifact(self, session_id: str, path: str, mode: str = "reveal") -> dict[str, Any]:
         """Show the file in the OS file manager (`reveal`) or open it with its default app
         (`open`). The server runs on the user's machine in both desktop and browser builds, so
         this is local. Cross-platform: macOS `open`, Windows Explorer/ShellExecute, Linux
@@ -1228,9 +1189,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                     if mode == "reveal" and not is_dir
                     else ["open", str(target)]
                 )
-                subprocess.Popen(
-                    args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
+                subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             elif sys.platform == "win32":
                 if mode == "reveal" and not is_dir:
                     # Explorer wants the path glued to the switch: /select,<path>
@@ -1300,9 +1259,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         from ..config import load_config
 
         await asyncio.to_thread(
-            lambda: cloud.slack_disconnect_workspace(
-                self.secrets, load_config(), team_id
-            )
+            lambda: cloud.slack_disconnect_workspace(self.secrets, load_config(), team_id)
         )
         self.secrets.delete(profile_key)
         remaining = [
@@ -1332,9 +1289,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         await self.refresh_gateway()
         return {"ok": True, "remaining_workspaces": len(remaining)}
 
-    async def disconnect_github_installation(
-        self, installation_id: str
-    ) -> dict[str, Any]:
+    async def disconnect_github_installation(self, installation_id: str) -> dict[str, Any]:
         """Stop relaying ONE GitHub installation: delete the cloud routing rows
         (best-effort), drop the local profile, hot-reload the gateway. The Slack
         per-workspace disconnect, GitHub flavour — a manual PAT stays untouched."""
@@ -1343,9 +1298,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         from ..config import load_config
         from ..connectors import github_installs
 
-        if not installation_id or not self.secrets.get(
-            github_installs.PREFIX + installation_id
-        ):
+        if not installation_id or not self.secrets.get(github_installs.PREFIX + installation_id):
             return {"ok": False, "error": "installation not connected"}
         await asyncio.to_thread(
             lambda: cloud.github_disconnect_installation(
@@ -1450,9 +1403,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             text=event.text or "",
         )
 
-    async def resolve_unauthorized(
-        self, name: str, item_id: str, action: str
-    ) -> dict[str, Any]:
+    async def resolve_unauthorized(self, name: str, item_id: str, action: str) -> dict[str, Any]:
         """Resolve one parked message: "dismiss" throws it away; "allow" adds the sender to the
         allow-list (future messages flow); "allow_deliver" also re-injects the parked message
         through the NORMAL inbound path — buffer + subscriptions — as if it just arrived.
@@ -1550,8 +1501,8 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             # Scheduled runs respect the same per-session connection hierarchy as live sessions:
             # expose only the persona's effective-enabled connectors' tools (§4.3).
             connector_filter=self.effective_connectors(session_id, task.agent),
-            skill_filter=lambda sid=session_id, w=task.workspace: (
-                self.effective_skill_names(sid, w)
+            skill_filter=lambda sid=session_id, w=task.workspace: self.effective_skill_names(
+                sid, w
             ),
         )
         self._seed_task_permissions(engine, task)
@@ -1563,6 +1514,9 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         options) render as BUTTONS — the item id rides in each, so a click resolves it
         unambiguously. Free-text answers aren't offered over messaging (open the app).
         """
+        # Notify event clients so the GUI inbox badge updates without polling.
+        await self.broadcast_event({"type": "inbox_changed", "session_id": item.session_id})
+
         from ..interactions import buttons_for
 
         binding = self.inbox_routing.binding_for(item.inbox)
@@ -1603,10 +1557,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         if item is None:
             return
         protected_kinds = {"approval", "directory", "plan"}
-        if (
-            getattr(event, "platform", "") == "slack"
-            and item.kind in protected_kinds
-        ):
+        if getattr(event, "platform", "") == "slack" and item.kind in protected_kinds:
             actor_id = str(getattr(event, "user_id", "") or "")
             if not self._slack_actor_owns_item(
                 item,
@@ -1664,6 +1615,8 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
 
     def mark_idle(self, session_id: str) -> None:
         self._running_sessions.discard(session_id)
+        # Notify all event clients that the session list may have changed (title, status).
+        asyncio.ensure_future(self.broadcast_event({"type": "sessions_changed"}))
         # Every turn path (WS, background delivery, durable resume) marks idle when it
         # finishes — the one shared post-turn moment, so auto-titling hooks in here and
         # can never add latency to the response itself.
@@ -1702,19 +1655,13 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                 # tool failure would otherwise vanish. Log it and park it in the dead-letter store.
                 if event.type.value == "error":
                     reason = (event.data or {}).get("error", "unknown error")
-                    logger.warning(
-                        "background turn failed for %s: %s", session_id, reason
-                    )
+                    logger.warning("background turn failed for %s: %s", session_id, reason)
                     self.unrouted.record(session_id, "-", message, reason=reason)
             self.save(session_id, engine)
-        except (
-            Exception
-        ) as exc:  # an unexpected raise out of the turn must not be swallowed
+        except Exception as exc:  # an unexpected raise out of the turn must not be swallowed
             logger.warning("background turn crashed for %s: %s", session_id, exc)
             self.unrouted.record(session_id, "-", message, reason=str(exc))
-            await self.broadcast_session(
-                session_id, {"type": "error", "data": {"error": str(exc)}}
-            )
+            await self.broadcast_session(session_id, {"type": "error", "data": {"error": str(exc)}})
         finally:
             self.mark_idle(session_id)
             await self.broadcast_session(session_id, {"type": "turn_done", "data": {}})
@@ -1766,14 +1713,10 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                 for sub in subs:
                     # Per-session connection hierarchy (§4.3): a session that has muted this
                     # connector skips delivery — the message is still buffered (above) for catch-up.
-                    if not self._inbound_connector_allowed(
-                        sub.session_id, src.platform
-                    ):
+                    if not self._inbound_connector_allowed(sub.session_id, src.platform):
                         continue
                     try:
-                        await self.deliver_to_session(
-                            sub.session_id, msg, source=ms.to_dict()
-                        )
+                        await self.deliver_to_session(sub.session_id, msg, source=ms.to_dict())
                     except Exception:
                         pass
                 return
@@ -1784,13 +1727,9 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             await self.deliver_to_session(dm, event.tagged_text(), source=ms.to_dict())
         elif dm:
             # Designated, but this session has muted the connector → park rather than deliver.
-            self.unrouted.record(
-                src.target, who, text, reason="connector muted for DM session"
-            )
+            self.unrouted.record(src.target, who, text, reason="connector muted for DM session")
         else:
-            self.unrouted.record(
-                src.target, who, text, reason="no DM session designated"
-            )
+            self.unrouted.record(src.target, who, text, reason="no DM session designated")
 
     # -- mention router (§31) ----------------------------------------------------
     async def _route_mention(self, event, ms: MessageSource, subs) -> None:
@@ -1818,9 +1757,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                 if not self._inbound_connector_allowed(sub.session_id, src.platform):
                     continue
                 try:
-                    await self.deliver_to_session(
-                        sub.session_id, msg, source=ms.to_dict()
-                    )
+                    await self.deliver_to_session(sub.session_id, msg, source=ms.to_dict())
                 except Exception:
                     pass
             return
@@ -1836,9 +1773,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             return
         await self._spawn_mention_session(event, ms, thread_target)
 
-    async def _spawn_mention_session(
-        self, event, ms: MessageSource, thread_target: str
-    ) -> None:
+    async def _spawn_mention_session(self, event, ms: MessageSource, thread_target: str) -> None:
         """First tag in a thread: a NEW visible coworker session that owns the thread. Its
         in-thread replies carry a standing grant (§25 shape, exact-target match) so the
         conversation never stalls on an approval nobody in Slack can see; everything else
@@ -1857,12 +1792,8 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             return
         # Durable mapping FIRST (a fast follow-up tag mid-turn dedupes into steering),
         # then the live grant; get_engine re-derives it from the store on any rebuild.
-        self.mention_sessions.set(
-            thread_target, sid, channel=f"{src.platform}:{src.chat_id}"
-        )
-        engine.permissions.task_rules.setdefault("send_message", set()).add(
-            thread_target
-        )
+        self.mention_sessions.set(thread_target, sid, channel=f"{src.platform}:{src.chat_id}")
+        engine.permissions.task_rules.setdefault("send_message", set()).add(thread_target)
         self.save(sid, engine)  # the sessions row must exist before rename/set_origin
         # Title = the ASK first, channel last (owner call 2026-07-14): the text is what
         # varies between sessions, so it gets the truncation budget; the mention token is
@@ -1881,8 +1812,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             f'with target "{thread_target}" — replies to this thread are pre-approved and '
             f"never prompt the user. Anything else (other channels, files, external "
             f"actions) asks for approval as usual. Keep replies concise and "
-            f"Slack-appropriate."
-            + (f"\n\nRecent channel context:\n{context}" if context else "")
+            f"Slack-appropriate." + (f"\n\nRecent channel context:\n{context}" if context else "")
         )
         try:
             await self.deliver_to_session(sid, opening, source=ms.to_dict())
@@ -1902,14 +1832,10 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                 f"⏰ Wake — the event `{wake.event_key}` you were waiting on has fired{note}. "
                 "Continue where you left off."
             )
-        return (
-            f"⏰ Wake — the timer you set has fired{note}. Continue where you left off."
-        )
+        return f"⏰ Wake — the timer you set has fired{note}. Continue where you left off."
 
     async def _run_scheduled_task(self, task, trigger: str) -> TaskRun:
-        run = TaskRun(
-            task_id=task.id, trigger=trigger
-        )  # __post_init__ sets run.session_id
+        run = TaskRun(task_id=task.id, trigger=trigger)  # __post_init__ sets run.session_id
         self.task_store.add_run(run)  # mark "running"
         # UX-026: tell every open app window a SCHEDULED run just started (the 5s
         # top-right toast). Manual runs never come through here — the user is
@@ -2035,8 +1961,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         """Added folders = the engine's roots minus the primary scratch (index 0)."""
         roots = getattr(engine, "roots", None) or []
         return [
-            {"path": str(r.path), "writable": bool(r.writable), "label": r.label}
-            for r in roots[1:]
+            {"path": str(r.path), "writable": bool(r.writable), "label": r.label} for r in roots[1:]
         ]
 
     # -- LLM auto-titles (FB-010) -------------------------------------------------
@@ -2079,9 +2004,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         ][:2]
         if not openers:
             return
-        self._autotitle_attempts[session_id] = (
-            self._autotitle_attempts.get(session_id, 0) + 1
-        )
+        self._autotitle_attempts[session_id] = self._autotitle_attempts.get(session_id, 0) + 1
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -2165,9 +2088,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             ]
         record = self.session_store.load(session_id)
         primary = (
-            record.workspace
-            if record and record.workspace
-            else self._provision_scratch(session_id)
+            record.workspace if record and record.workspace else self._provision_scratch(session_id)
         )
         extra = (record.extra_roots if record else []) or []
         out = [
@@ -2192,9 +2113,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             )
         return out
 
-    def add_root(
-        self, session_id: str, path: str, writable: bool = False
-    ) -> dict[str, Any]:
+    def add_root(self, session_id: str, path: str, writable: bool = False) -> dict[str, Any]:
         """Grant the session access to another folder (read-only or read-write). Mutates the live
         engine in place when running (file tools + permissions + context see it immediately) and
         persists it so a later resume still has it."""
@@ -2263,19 +2182,13 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             self.session_store.set_extra_roots(session_id, self._extra_roots_of(engine))
         else:
             current = self.get_roots(session_id)
-            if (
-                current
-                and current[0]["primary"]
-                and Path(current[0]["path"]).resolve() == resolved
-            ):
+            if current and current[0]["primary"] and Path(current[0]["path"]).resolve() == resolved:
                 return {
                     "ok": False,
                     "error": "cannot remove the primary scratch directory",
                 }
             extra = [
-                r
-                for r in current
-                if not r["primary"] and Path(r["path"]).resolve() != resolved
+                r for r in current if not r["primary"] and Path(r["path"]).resolve() != resolved
             ]
             self.session_store.set_extra_roots(
                 session_id,
@@ -2353,11 +2266,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
             ws = Path(record.workspace)
             try:
                 resolved = ws.resolve()
-                if (
-                    resolved.is_relative_to(scratch)
-                    and resolved != scratch
-                    and resolved.is_dir()
-                ):
+                if resolved.is_relative_to(scratch) and resolved != scratch and resolved.is_dir():
                     shutil.rmtree(resolved)
             except OSError:
                 pass  # a stale/foreign path must not fail the delete
@@ -2389,9 +2298,7 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
                 "liveness": self._session_liveness(r.session_id),
                 # Channels this session listens to (inbound subscriptions) — drives the per-session
                 # "connections" indicator.
-                "subscriptions": [
-                    s.channel for s in self.subscriptions.for_session(r.session_id)
-                ],
+                "subscriptions": [s.channel for s in self.subscriptions.for_session(r.session_id)],
             }
             for r in self.session_store.list(workspace=ws)
             if not r.session_id.startswith("__")  # hide internal threads
@@ -2420,8 +2327,6 @@ class SessionManager(SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMi
         ws = self.resolve_workspace(workspace) if chosen is Scope.WORKSPACE else None
         item = self.memory_store.add(content, scope=chosen, workspace=ws)
         return {"id": item.id, "scope": item.scope.value, "content": item.content}
-
-
 
 
 # A Slack message ts looks like "1700000001.000001" (epoch seconds + microseconds). Other

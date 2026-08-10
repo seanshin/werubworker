@@ -10,12 +10,8 @@ from . import _helpers
 from ._helpers import _attach, _clamp, _gitlab_api, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
-    def gitlab_search(
-        query: str, scope: str = "issues", max_results: int = 10
-    ) -> dict[str, Any]:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
+    def gitlab_search(query: str, scope: str = "issues", max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "gitlab", "token")
         if err:
             return err
@@ -93,9 +89,7 @@ def register(
         )
     )
 
-    def gitlab_create_issue(
-        project: str, title: str, description: str = ""
-    ) -> dict[str, Any]:
+    def gitlab_create_issue(project: str, title: str, description: str = "") -> dict[str, Any]:
         profile, err = _profile(secrets, "gitlab", "token")
         if err:
             return err

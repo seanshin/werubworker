@@ -18,15 +18,11 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def outlook_search_messages(
         query: str = "", max_results: int = 10, account: str = ""
     ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "outlook", account, "access_token"
-        )
+        aid, profile, err = _account_profile(secrets, "outlook", account, "access_token")
         if err:
             return err
         params = {"$top": max(1, min(int(max_results or 10), 20))}
@@ -60,12 +56,8 @@ def register(
         )
     )
 
-    def outlook_send_mail(
-        to: str, subject: str, body: str, account: str = ""
-    ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "outlook", account, "access_token"
-        )
+    def outlook_send_mail(to: str, subject: str, body: str, account: str = "") -> dict[str, Any]:
+        aid, profile, err = _account_profile(secrets, "outlook", account, "access_token")
         if err:
             return err
         payload = {
@@ -108,9 +100,7 @@ def register(
     def outlook_list_events(
         start: str = "", end: str = "", max_results: int = 10, account: str = ""
     ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "outlook", account, "access_token"
-        )
+        aid, profile, err = _account_profile(secrets, "outlook", account, "access_token")
         if err:
             return err
         # calendarView expands recurrences and takes a window; /me/events does
@@ -165,9 +155,7 @@ def register(
         teams_meeting: bool = False,
         account: str = "",
     ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "outlook", account, "access_token"
-        )
+        aid, profile, err = _account_profile(secrets, "outlook", account, "access_token")
         if err:
             return err
         payload: dict[str, Any] = {
@@ -234,9 +222,7 @@ def register(
         location: str = "",
         account: str = "",
     ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "outlook", account, "access_token"
-        )
+        aid, profile, err = _account_profile(secrets, "outlook", account, "access_token")
         if err:
             return err
         # PATCH semantics: only the provided fields change.
@@ -287,9 +273,7 @@ def register(
     )
 
     def outlook_delete_event(event_id: str, account: str = "") -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "outlook", account, "access_token"
-        )
+        aid, profile, err = _account_profile(secrets, "outlook", account, "access_token")
         if err:
             return err
         return _acct_result(
@@ -319,9 +303,7 @@ def register(
     def outlook_respond_event(
         event_id: str, response: str, comment: str = "", account: str = ""
     ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "outlook", account, "access_token"
-        )
+        aid, profile, err = _account_profile(secrets, "outlook", account, "access_token")
         if err:
             return err
         actions = {

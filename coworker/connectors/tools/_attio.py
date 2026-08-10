@@ -18,9 +18,7 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def attio_list_objects(account: str = "") -> dict[str, Any]:
         aid, profile, err = _account_profile(secrets, "attio", account, "access_token")
         if err:
@@ -89,9 +87,7 @@ def register(
         )
     )
 
-    def attio_get_record(
-        object_type: str, record_id: str, account: str = ""
-    ) -> dict[str, Any]:
+    def attio_get_record(object_type: str, record_id: str, account: str = "") -> dict[str, Any]:
         aid, profile, err = _account_profile(secrets, "attio", account, "access_token")
         if err:
             return err

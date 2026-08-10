@@ -66,9 +66,7 @@ async def test_title_set_after_first_turn(tmp_path):
 
     assert len(provider.title_calls) == 1
     assert provider.title_calls[0][-1]["content"] == "help me plan a trip to japan"
-    assert mgr.session_store.title_state("s1")["auto_title"] == (
-        "Japan Trip Planning Help"
-    )
+    assert mgr.session_store.title_state("s1")["auto_title"] == ("Japan Trip Planning Help")
     # display precedence: the auto title wins over the title_from snapshot everywhere
     assert mgr.session_store.load("s1").title == "Japan Trip Planning Help"
     row = next(s for s in mgr.list_sessions() if s["session_id"] == "s1")

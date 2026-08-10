@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 pytestmark = pytest.mark.skip(reason="Cloud managed OAuth removed")
 
 """Managed GitHub relay, desktop side (github-relay-spec §13 Step 3, MG3a).
@@ -93,11 +95,7 @@ def test_managed_callback_installs_and_hot_reloads(client, monkeypatch):
     assert client.manager.secrets.get("github:default")["mode"] == "relay"
     assert refreshes  # hot-add, like a Slack workspace
 
-    gh = [
-        c
-        for c in client.get("/v1/connectors").json()["connectors"]
-        if c["name"] == "github"
-    ][0]
+    gh = [c for c in client.get("/v1/connectors").json()["connectors"] if c["name"] == "github"][0]
     assert gh["connected"] is True
     assert [i["installation_id"] for i in gh["installations"]] == ["101"]
     assert gh["installations"][0]["account_login"] == "acme"
@@ -293,9 +291,7 @@ def test_addressing_roundtrip():
 
 async def test_send_posts_comment_with_minted_token(monkeypatch):
     """Replies mint the right installation's token and post as the bot."""
-    hub = RelayHub(
-        "wss://x", lambda: "jwt", transport_factory=lambda: FakeTransport([])
-    )
+    hub = RelayHub("wss://x", lambda: "jwt", transport_factory=lambda: FakeTransport([]))
     minted: list[str] = []
 
     async def token_client(installation_id: str) -> str:
@@ -422,9 +418,7 @@ def test_managed_tools_use_minted_token_by_owner(tmp_path, monkeypatch):
     monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
     secrets = SecretStore()
     github_installs.managed_connect_install(secrets, _install_form("101"))
-    github_installs.managed_connect_install(
-        secrets, _install_form("202", account="hooli")
-    )
+    github_installs.managed_connect_install(secrets, _install_form("202", account="hooli"))
     seen = _capture_requests(monkeypatch)
     minted = []
 

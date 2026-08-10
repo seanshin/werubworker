@@ -36,8 +36,7 @@ class ConnectorsMixin:
             # Per-workspace allow-lists (managed relay) — a sender is judged against
             # ITS workspace's list; the flat list only governs team-less (socket) events.
             team_allowed = {
-                w["team_id"]: set(w.get("allowed_users") or [])
-                for w in (c.get("workspaces") or [])
+                w["team_id"]: set(w.get("allowed_users") or []) for w in (c.get("workspaces") or [])
             }
             recent = self.gateway.recent_senders(c["name"]) if self.gateway else []
             for r in recent:
@@ -53,17 +52,14 @@ class ConnectorsMixin:
             c["unauthorized"] = self.parked.list(c["name"])
             # Allow-list display names from the people directory (ids stay the source of truth).
             c["allowed_user_names"] = {
-                u: self._people.get(f"{c['name']}:{u}")
-                for u in (c.get("allowed_users") or [])
+                u: self._people.get(f"{c['name']}:{u}") for u in (c.get("allowed_users") or [])
             }
             c["approval_owner_names"] = {
-                u: self._people.get(f"{c['name']}:{u}")
-                for u in (c.get("approval_owner_ids") or [])
+                u: self._people.get(f"{c['name']}:{u}") for u in (c.get("approval_owner_ids") or [])
             }
             for w in c.get("workspaces") or []:
                 w["allowed_user_names"] = {
-                    u: self._people.get(f"{c['name']}:{u}")
-                    for u in (w.get("allowed_users") or [])
+                    u: self._people.get(f"{c['name']}:{u}") for u in (w.get("allowed_users") or [])
                 }
                 w["approval_owner_names"] = {
                     u: self._people.get(f"{c['name']}:{u}")
@@ -87,9 +83,7 @@ class ConnectorsMixin:
             conn.shutdown.set()
         return disconnect_connector(self.secrets, name)
 
-    def update_connector_tools(
-        self, name: str, enabled: dict[str, Any]
-    ) -> dict[str, Any]:
+    def update_connector_tools(self, name: str, enabled: dict[str, Any]) -> dict[str, Any]:
         return update_connector_tools(self.secrets, name, enabled)
 
     # -- audit ------------------------------------------------------------------
@@ -160,12 +154,8 @@ class ConnectorsMixin:
             "last_error": "",
         }
         teams: dict[str, Any] = {}
-        adapter = (
-            self.gateway._adapters.get("slack") if self.gateway is not None else None
-        )
-        snapshot = getattr(
-            adapter, "status", None
-        )  # relay adapter only; Socket Mode has none
+        adapter = self.gateway._adapters.get("slack") if self.gateway is not None else None
+        snapshot = getattr(adapter, "status", None)  # relay adapter only; Socket Mode has none
         if callable(snapshot):
             relay = snapshot()
             teams = relay.pop("teams", {})
@@ -192,9 +182,7 @@ class ConnectorsMixin:
         }
         installs: dict[str, Any] = {}
         missed: dict[str, Any] = {}
-        adapter = (
-            self.gateway._adapters.get("github") if self.gateway is not None else None
-        )
+        adapter = self.gateway._adapters.get("github") if self.gateway is not None else None
         snapshot = getattr(adapter, "status", None)
         if callable(snapshot):
             relay = snapshot()
@@ -210,9 +198,7 @@ class ConnectorsMixin:
         }
 
     # -- people directory -------------------------------------------------------
-    def _note_person(
-        self, platform: str, user_id: Optional[str], name: Optional[str]
-    ) -> None:
+    def _note_person(self, platform: str, user_id: Optional[str], name: Optional[str]) -> None:
         """Remember a sender's display name (persisted) so ID-keyed surfaces — the allow-list
         chips above all — can show who a U07JK… actually is. Best-effort, newest name wins.
         """

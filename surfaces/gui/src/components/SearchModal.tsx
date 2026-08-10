@@ -50,7 +50,7 @@ export function SearchModal({
   const filtered = real.filter(match);
   const pinned = filtered.filter((s) => s.pinned).sort(byRecent);
   const recent = filtered.filter((s) => !s.pinned).sort(byRecent);
-  const ordered = [...pinned, ...recent]; // flat order drives keyboard nav + ⌘N
+  const ordered = [...pinned, ...recent].slice(0, 100); // flat order drives keyboard nav + ⌘N; cap DOM nodes
 
   // Reset the highlight whenever the result set changes.
   useEffect(() => {

@@ -18,14 +18,12 @@ from ...secrets import SecretStore
 from ...web.guard import get_checked
 from ..tool_defs import approval_for_tool, connector_for_tool
 
-
 # ---------------------------------------------------------------------------
 # Tool decorator infrastructure
 # ---------------------------------------------------------------------------
 
-def _meta(
-    name: str, *, approval: bool = False, capabilities: Optional[list[str]] = None
-):
+
+def _meta(name: str, *, approval: bool = False, capabilities: Optional[list[str]] = None):
     return ai.ToolMetadata(
         name=name,
         category="connector",
@@ -73,6 +71,7 @@ def _attach(
 # ---------------------------------------------------------------------------
 # Credential helpers
 # ---------------------------------------------------------------------------
+
 
 def _profile(
     secrets: SecretStore, name: str, *keys: str
@@ -142,6 +141,7 @@ _GEN_ACCOUNT_PROP = {
 # Gmail profile helpers
 # ---------------------------------------------------------------------------
 
+
 def _gmail_profile(
     secrets: SecretStore, account: str = ""
 ) -> tuple[str, Optional[dict[str, Any]], Optional[dict[str, str]]]:
@@ -151,11 +151,7 @@ def _gmail_profile(
 
     email, key, profile = gmail_accounts.resolve(secrets, account)
     if profile is None:
-        hint = (
-            f"no gmail account matching {account!r}"
-            if account
-            else "gmail is not connected"
-        )
+        hint = f"no gmail account matching {account!r}" if account else "gmail is not connected"
         return "", None, {"error": hint}
     if profile.get("managed"):
         from ...cloud import ensure_fresh_connector_token
@@ -171,6 +167,7 @@ def _gmail_profile(
 # ---------------------------------------------------------------------------
 # Google Calendar profile helper
 # ---------------------------------------------------------------------------
+
 
 def _gcal_profile(
     secrets: SecretStore, account: str = ""
@@ -192,9 +189,7 @@ def _gcal_profile(
         from ...cloud import ensure_fresh_connector_token
         from ...config import load_config
 
-        ensure_fresh_connector_token(
-            secrets, load_config(), "google_calendar", profile_key=key
-        )
+        ensure_fresh_connector_token(secrets, load_config(), "google_calendar", profile_key=key)
         profile = secrets.get(key) or profile
     if not profile.get("access_token"):
         return (
@@ -228,11 +223,7 @@ def _hubspot_profile(
 
     hub_id, key, profile = hubspot_portals.resolve(secrets, portal)
     if profile is None:
-        hint = (
-            f"no hubspot portal matching {portal!r}"
-            if portal
-            else "hubspot is not connected"
-        )
+        hint = f"no hubspot portal matching {portal!r}" if portal else "hubspot is not connected"
         return "", "", {"error": hint}
     if profile.get("managed"):
         from ...cloud import ensure_fresh_connector_token
@@ -268,6 +259,7 @@ def _hubspot_result(secrets: SecretStore, portal_name: str, result: dict) -> dic
 # ---------------------------------------------------------------------------
 # Gmail filter helpers ("Never show agents" enforcement)
 # ---------------------------------------------------------------------------
+
 
 def _gmail_filters(secrets: SecretStore) -> Optional[dict[str, list[str]]]:
     from .. import gmail_accounts
@@ -305,17 +297,12 @@ def _gmail_is_hidden(
 ) -> bool:
     from ..gmail_accounts import sender_matches
 
-    if filters["senders"] and sender_matches(
-        _gmail_from_address(message), filters["senders"]
-    ):
+    if filters["senders"] and sender_matches(_gmail_from_address(message), filters["senders"]):
         return True
     if filters["labels"]:
         wanted = {name.lower() for name in filters["labels"]}
         for lid in message.get("labelIds") or []:
-            if (
-                label_map.get(str(lid), "").lower() in wanted
-                or str(lid).lower() in wanted
-            ):
+            if label_map.get(str(lid), "").lower() in wanted or str(lid).lower() in wanted:
                 return True
     return False
 
@@ -323,6 +310,7 @@ def _gmail_is_hidden(
 # ---------------------------------------------------------------------------
 # HTTP client
 # ---------------------------------------------------------------------------
+
 
 def _request(
     method: str,
@@ -344,9 +332,7 @@ def _request(
     try:
         import httpx
 
-        with httpx.Client(
-            timeout=30.0, follow_redirects=not check_addresses
-        ) as client:
+        with httpx.Client(timeout=30.0, follow_redirects=not check_addresses) as client:
             if check_addresses:
                 if method.upper() != "GET":
                     return {"error": "address-checked requests must be GET"}
@@ -370,6 +356,7 @@ def _request(
 # ---------------------------------------------------------------------------
 # HTML parsing
 # ---------------------------------------------------------------------------
+
 
 class _TextExtractor(HTMLParser):
     _SKIP = {"script", "style", "noscript", "svg", "head"}
@@ -407,6 +394,7 @@ def _html_to_text(html: str) -> str:
 # Auth header helpers
 # ---------------------------------------------------------------------------
 
+
 def _google_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
@@ -435,6 +423,7 @@ def _atlassian_base(profile: dict[str, Any]) -> str:
 # Utilities
 # ---------------------------------------------------------------------------
 
+
 def _clamp(n: Any, default: int = 10, ceiling: int = 20) -> int:
     return max(1, min(int(n or default), ceiling))
 
@@ -442,6 +431,7 @@ def _clamp(n: Any, default: int = 10, ceiling: int = 20) -> int:
 # ---------------------------------------------------------------------------
 # GitHub helpers
 # ---------------------------------------------------------------------------
+
 
 def _github_headers(token: str) -> dict[str, str]:
     return {
@@ -478,9 +468,7 @@ def _github_auth(
             installation_id, _prof = github_installs.resolve(secrets, "")
         if not installation_id:
             return None, {"error": "github is not connected; no App installation"}
-        token = github_installation_token(
-            secrets, load_config(), installation_id, force=force
-        )
+        token = github_installation_token(secrets, load_config(), installation_id, force=force)
         if not token:
             return None, {
                 "error": "github installation token unavailable "
@@ -508,9 +496,7 @@ def _github_git_auth_args(secrets: SecretStore, owner: str) -> list[str]:
     ]
 
 
-def _run_git(
-    args: list[str], *, cwd: Any = None, timeout: int = 600
-) -> tuple[str, str]:
+def _run_git(args: list[str], *, cwd: Any = None, timeout: int = 600) -> tuple[str, str]:
     """(stdout, error). Never raises; the error string is capped and carries no
     auth material (git never echoes header values)."""
     import subprocess
@@ -556,6 +542,7 @@ def _github_call(
 # Linear helper
 # ---------------------------------------------------------------------------
 
+
 def _linear_gql(api_key: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
     return _request(
         "POST",
@@ -569,6 +556,7 @@ def _linear_gql(api_key: str, query: str, variables: dict[str, Any]) -> dict[str
 # GitLab helper
 # ---------------------------------------------------------------------------
 
+
 def _gitlab_api(profile: dict[str, Any]) -> str:
     base = str(profile.get("base_url") or "https://gitlab.com").rstrip("/")
     return f"{base}/api/v4"
@@ -577,6 +565,7 @@ def _gitlab_api(profile: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # QuickBooks helper
 # ---------------------------------------------------------------------------
+
 
 def _qbo_base(profile: dict[str, Any]) -> str:
     env = str(profile.get("environment", "")).lower()

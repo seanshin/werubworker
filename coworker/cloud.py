@@ -20,6 +20,7 @@ TELEMETRY_PROFILE = "cloud:telemetry"
 
 # --- status -------------------------------------------------------------------
 
+
 def status(secrets: SecretStore) -> dict[str, Any]:
     """Always signed out — Cloud is not configured."""
     return {"signed_in": False, "account": "", "user_id": ""}
@@ -31,6 +32,7 @@ def logout(secrets: SecretStore) -> dict[str, Any]:
 
 
 # --- telemetry (no-ops) -------------------------------------------------------
+
 
 def telemetry_enabled(secrets: SecretStore) -> bool:
     return False
@@ -54,6 +56,7 @@ def emit_session_created(
 
 # --- connector token refresh (no-op) ------------------------------------------
 
+
 def ensure_fresh_connector_token(
     secrets: SecretStore,
     config: Any,
@@ -68,6 +71,7 @@ def ensure_fresh_connector_token(
 
 
 # --- managed connect stubs (all return errors) ---------------------------------
+
 
 def begin_managed_connect(
     secrets: SecretStore,
@@ -88,6 +92,7 @@ def managed_profile_from_callback(form: dict[str, str]) -> dict[str, Any]:
     """Build a profile dict from callback form data. Kept because the
     /oauth/callback route still references it for any in-flight callbacks."""
     import time
+
     profile = {
         "type": "oauth",
         "enabled": True,
@@ -118,6 +123,7 @@ def refresh_managed_token(
 
 # --- cloud disconnect stubs ---------------------------------------------------
 
+
 def cloud_disconnect(
     secrets: SecretStore,
     config: Any,
@@ -131,13 +137,12 @@ def cloud_disconnect(
 
 # --- sign-in stubs ------------------------------------------------------------
 
+
 def begin_login(config: Any) -> dict[str, Any]:
     return {"ok": False, "error": "Cloud not configured", "authorize_url": ""}
 
 
-def complete_login(
-    secrets: SecretStore, config: Any, code: str, state: str
-) -> dict[str, Any]:
+def complete_login(secrets: SecretStore, config: Any, code: str, state: str) -> dict[str, Any]:
     return {"ok": False, "error": "Cloud not configured"}
 
 
@@ -155,6 +160,7 @@ def fetch_me(secrets: SecretStore, config: Any) -> Optional[dict]:
 
 # --- GitHub token stubs -------------------------------------------------------
 
+
 def github_installation_token(
     secrets: SecretStore, config: Any, installation_id: str, *, force: bool = False
 ) -> str:
@@ -165,21 +171,19 @@ def clear_github_token(installation_id: str) -> None:
     pass
 
 
-def github_disconnect_installation(
-    secrets: SecretStore, config: Any, installation_id: str
-) -> None:
+def github_disconnect_installation(secrets: SecretStore, config: Any, installation_id: str) -> None:
     pass
 
 
 # --- Slack disconnect stub ----------------------------------------------------
 
-def slack_disconnect_workspace(
-    secrets: SecretStore, config: Any, team_id: str
-) -> None:
+
+def slack_disconnect_workspace(secrets: SecretStore, config: Any, team_id: str) -> None:
     pass
 
 
 # --- gallery stubs ------------------------------------------------------------
+
 
 def gallery_list(secrets: SecretStore, config: Any) -> Optional[dict]:
     return None

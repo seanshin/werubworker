@@ -171,15 +171,11 @@ async def _refuse_browser(url: str) -> None:
     the GUI's "reopen sign-in page" affordance still works after the refusal."""
     global last_authorize_url
     last_authorize_url = url
-    raise InteractiveAuthRequired(
-        "sign-in required — reconnect this server from its page"
-    )
+    raise InteractiveAuthRequired("sign-in required — reconnect this server from its page")
 
 
 async def _refuse_callback() -> tuple[str, Optional[str]]:
-    raise InteractiveAuthRequired(
-        "sign-in required — reconnect this server from its page"
-    )
+    raise InteractiveAuthRequired("sign-in required — reconnect this server from its page")
 
 
 async def _wait_for_callback() -> tuple[str, Optional[str]]:

@@ -66,9 +66,7 @@ class InboxItem:
     title: str
     body: str = ""
     state: str = STATE_PENDING
-    resolution: Optional[str] = (
-        None  # approval: "allow"/"deny"/"always"; question: answer text
-    )
+    resolution: Optional[str] = None  # approval: "allow"/"deny"/"always"; question: answer text
     inbox: str = "default"  # named inbox / delivery binding (Phase 3 routing)
     created_at: str = field(default_factory=_now)
     resolved_at: Optional[str] = None
@@ -79,9 +77,7 @@ class InboxItem:
     # Question metadata (ask_user): optional quick-reply choices + a free-text escape, mirroring
     # the structured-but-always-answerable shape of Claude Code's AskUserQuestion.
     options: list[str] = field(default_factory=list)
-    allow_text: bool = (
-        True  # accept a typed answer even when options exist (the "Other" escape)
-    )
+    allow_text: bool = True  # accept a typed answer even when options exist (the "Other" escape)
     multi: bool = False  # allow choosing more than one option
     # Kind-specific payload (directory: suggested path/writable; plan: the plan text; …).
     data: dict[str, Any] = field(default_factory=dict)
@@ -104,13 +100,13 @@ class InboxStore:
                 self._items[item.id] = item
 
     def _save(self) -> None:
+        """Persist current state. Serialization happens under the lock (already held by
+        callers) to get a consistent snapshot; the actual I/O runs outside."""
         if not self.path:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps({"items": [asdict(i) for i in self._items.values()]}, indent=2),
-            encoding="utf-8",
-        )
+        payload = json.dumps({"items": [asdict(i) for i in self._items.values()]}, indent=2)
+        self.path.write_text(payload, encoding="utf-8")
 
     # -- adding -----------------------------------------------------------------
     def add(
@@ -308,9 +304,7 @@ class InboxStore:
             waiter.set()
         return True
 
-    def resolve_session(
-        self, session_id: str, resolution: str = "session deleted"
-    ) -> int:
+    def resolve_session(self, session_id: str, resolution: str = "session deleted") -> int:
         """Resolve every still-pending item of a session (called when the session is deleted —
         an orphaned approval/question can never be meaningfully answered). Releases any waiter
         the usual way; returns how many items were closed."""

@@ -9,9 +9,7 @@ from . import _helpers
 from ._helpers import _attach, _bearer_headers, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def whatsapp_send_message(to: str, text: str) -> dict[str, Any]:
         profile, err = _profile(secrets, "whatsapp", "access_token", "phone_number_id")
         if err:

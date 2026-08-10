@@ -10,9 +10,7 @@ from . import _helpers
 from ._helpers import _attach, _bearer_headers, _clamp, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def _dropbox_path(path: str) -> str:
         path = (path or "").strip()
         if path and not path.startswith("/"):

@@ -126,9 +126,7 @@ def _api_post(
 # ---------------------------------------------------------------------------
 
 
-def _ci_status(
-    token: Optional[str], repo: str = "", branch: str = "main"
-) -> dict[str, Any]:
+def _ci_status(token: Optional[str], repo: str = "", branch: str = "main") -> dict[str, Any]:
     """Check CI pipeline status (GitHub Actions workflow runs)."""
     if not repo:
         return {"ok": False, "error": "repo is required (e.g. 'owner/repo')"}
@@ -144,17 +142,19 @@ def _ci_status(
     runs = result["data"].get("workflow_runs", [])
     summary = []
     for run in runs:
-        summary.append({
-            "id": run.get("id"),
-            "name": run.get("name"),
-            "status": run.get("status"),
-            "conclusion": run.get("conclusion"),
-            "branch": run.get("head_branch"),
-            "event": run.get("event"),
-            "created_at": run.get("created_at"),
-            "updated_at": run.get("updated_at"),
-            "url": run.get("html_url"),
-        })
+        summary.append(
+            {
+                "id": run.get("id"),
+                "name": run.get("name"),
+                "status": run.get("status"),
+                "conclusion": run.get("conclusion"),
+                "branch": run.get("head_branch"),
+                "event": run.get("event"),
+                "created_at": run.get("created_at"),
+                "updated_at": run.get("updated_at"),
+                "url": run.get("html_url"),
+            }
+        )
     return {"ok": True, "repo": f"{owner}/{name}", "branch": branch, "runs": summary}
 
 
@@ -181,8 +181,7 @@ def _ci_trigger(
             "ok": False,
             "error": "workflow is required",
             "available_workflows": [
-                {"id": w["id"], "name": w["name"], "path": w["path"]}
-                for w in workflows
+                {"id": w["id"], "name": w["name"], "path": w["path"]} for w in workflows
             ],
         }
 
@@ -198,9 +197,7 @@ def _ci_trigger(
     return result
 
 
-def _ci_logs(
-    token: Optional[str], repo: str, run_id: str = ""
-) -> dict[str, Any]:
+def _ci_logs(token: Optional[str], repo: str, run_id: str = "") -> dict[str, Any]:
     """View CI build logs (latest or specific run)."""
     if not repo:
         return {"ok": False, "error": "repo is required (e.g. 'owner/repo')"}
@@ -210,9 +207,7 @@ def _ci_logs(
 
     # If no run_id, get the latest run
     if not run_id:
-        result = _api_get(
-            f"/repos/{owner}/{name}/actions/runs", token, {"per_page": 1}
-        )
+        result = _api_get(f"/repos/{owner}/{name}/actions/runs", token, {"per_page": 1})
         if not result.get("ok"):
             return result
         runs = result["data"].get("workflow_runs", [])
@@ -231,21 +226,25 @@ def _ci_logs(
     for job in jobs:
         steps = []
         for step in job.get("steps", []):
-            steps.append({
-                "name": step.get("name"),
-                "status": step.get("status"),
-                "conclusion": step.get("conclusion"),
-                "number": step.get("number"),
-            })
-        job_summaries.append({
-            "id": job.get("id"),
-            "name": job.get("name"),
-            "status": job.get("status"),
-            "conclusion": job.get("conclusion"),
-            "started_at": job.get("started_at"),
-            "completed_at": job.get("completed_at"),
-            "steps": steps,
-        })
+            steps.append(
+                {
+                    "name": step.get("name"),
+                    "status": step.get("status"),
+                    "conclusion": step.get("conclusion"),
+                    "number": step.get("number"),
+                }
+            )
+        job_summaries.append(
+            {
+                "id": job.get("id"),
+                "name": job.get("name"),
+                "status": job.get("status"),
+                "conclusion": job.get("conclusion"),
+                "started_at": job.get("started_at"),
+                "completed_at": job.get("completed_at"),
+                "steps": steps,
+            }
+        )
     return {
         "ok": True,
         "repo": f"{owner}/{name}",
@@ -254,9 +253,7 @@ def _ci_logs(
     }
 
 
-def _deploy_status(
-    token: Optional[str], repo: str = "", service: str = ""
-) -> dict[str, Any]:
+def _deploy_status(token: Optional[str], repo: str = "", service: str = "") -> dict[str, Any]:
     """Check deployment status via GitHub Deployments API."""
     if not repo and not service:
         return {
@@ -270,9 +267,7 @@ def _deploy_status(
         return {"ok": False, "error": "repo must be 'owner/repo'"}
 
     # Fetch recent deployments
-    result = _api_get(
-        f"/repos/{owner}/{name}/deployments", token, {"per_page": 10}
-    )
+    result = _api_get(f"/repos/{owner}/{name}/deployments", token, {"per_page": 10})
     if not result.get("ok"):
         return result
 
@@ -296,15 +291,17 @@ def _deploy_status(
                     "created_at": statuses[0].get("created_at"),
                     "environment_url": statuses[0].get("environment_url"),
                 }
-        summaries.append({
-            "id": dep_id,
-            "environment": dep.get("environment"),
-            "ref": dep.get("ref"),
-            "sha": dep.get("sha", "")[:12],
-            "creator": dep.get("creator", {}).get("login"),
-            "created_at": dep.get("created_at"),
-            "status": latest_status,
-        })
+        summaries.append(
+            {
+                "id": dep_id,
+                "environment": dep.get("environment"),
+                "ref": dep.get("ref"),
+                "sha": dep.get("sha", "")[:12],
+                "creator": dep.get("creator", {}).get("login"),
+                "created_at": dep.get("created_at"),
+                "status": latest_status,
+            }
+        )
     return {
         "ok": True,
         "repo": f"{owner}/{name}",
@@ -333,9 +330,7 @@ def _deploy_rollback(
 
     # If no version, find previous deployment ref
     if not version:
-        result = _api_get(
-            f"/repos/{owner}/{name}/deployments", token, {"per_page": 5}
-        )
+        result = _api_get(f"/repos/{owner}/{name}/deployments", token, {"per_page": 5})
         if not result.get("ok"):
             return result
         deps = result["data"] if isinstance(result["data"], list) else []
@@ -350,9 +345,7 @@ def _deploy_rollback(
             return {"ok": False, "error": "Could not determine previous version ref"}
 
     # Determine environment from latest deployment
-    env_result = _api_get(
-        f"/repos/{owner}/{name}/deployments", token, {"per_page": 1}
-    )
+    env_result = _api_get(f"/repos/{owner}/{name}/deployments", token, {"per_page": 1})
     environment = "production"
     if env_result.get("ok"):
         deps = env_result["data"] if isinstance(env_result["data"], list) else []
@@ -482,9 +475,7 @@ _DEPLOY_STATUS_SCHEMA = {
             "properties": {
                 "service": {
                     "type": "string",
-                    "description": (
-                        "Repository in 'owner/repo' format (alias for repo)."
-                    ),
+                    "description": ("Repository in 'owner/repo' format (alias for repo)."),
                 },
             },
         },
@@ -510,8 +501,7 @@ _DEPLOY_ROLLBACK_SCHEMA = {
                 "version": {
                     "type": "string",
                     "description": (
-                        "Git ref or SHA to roll back to. Omit to use the "
-                        "previous deployment's ref."
+                        "Git ref or SHA to roll back to. Omit to use the previous deployment's ref."
                     ),
                 },
             },

@@ -48,9 +48,7 @@ except ImportError:
 _PREFIX = "database:"
 
 # Statements that are safe to run without approval.
-_READONLY_PREFIXES = re.compile(
-    r"^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|PRAGMA)\b", re.IGNORECASE
-)
+_READONLY_PREFIXES = re.compile(r"^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|PRAGMA)\b", re.IGNORECASE)
 
 
 def _is_readonly(query: str) -> bool:
@@ -61,6 +59,7 @@ def _is_readonly(query: str) -> bool:
 # ---------------------------------------------------------------------------
 # SecretStore helpers
 # ---------------------------------------------------------------------------
+
 
 def _resolve_config(context: Any, database: str) -> Optional[dict[str, Any]]:
     """Look up ``database:<name>`` in the SecretStore attached to *context*."""
@@ -80,15 +79,17 @@ def _list_databases(context: Any) -> list[dict[str, Any]]:
         profile_key = entry["profile"]
         if not profile_key.startswith(_PREFIX):
             continue
-        db_name = profile_key[len(_PREFIX):]
+        db_name = profile_key[len(_PREFIX) :]
         data = secrets.get(profile_key) or {}
-        databases.append({
-            "name": db_name,
-            "type": data.get("type", ""),
-            "host": data.get("host", ""),
-            "port": data.get("port", ""),
-            "database": data.get("name", data.get("path", "")),
-        })
+        databases.append(
+            {
+                "name": db_name,
+                "type": data.get("type", ""),
+                "host": data.get("host", ""),
+                "port": data.get("port", ""),
+                "database": data.get("name", data.get("path", "")),
+            }
+        )
     return databases
 
 
@@ -147,13 +148,18 @@ def _remove_database(context: Any, name: str) -> dict[str, Any]:
 # Execution backends
 # ---------------------------------------------------------------------------
 
+
 def _run_cli(cmd: list[str], timeout: int = 30, env: Optional[dict] = None) -> str:
     """Run a CLI command and return stdout. Raises on failure."""
     run_env = dict(os.environ)
     if env:
         run_env.update(env)
     r = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=timeout, env=run_env,
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=run_env,
     )
     if r.returncode != 0:
         raise RuntimeError(r.stderr.strip() or f"command failed with exit code {r.returncode}")
@@ -161,6 +167,7 @@ def _run_cli(cmd: list[str], timeout: int = 30, env: Optional[dict] = None) -> s
 
 
 # -- PostgreSQL -------------------------------------------------------------
+
 
 def _pg_python(cfg: dict, query: str) -> list[dict]:
     import psycopg2 as pg
@@ -190,17 +197,26 @@ def _pg_cli(cfg: dict, query: str) -> str:
     if cfg.get("password"):
         env["PGPASSWORD"] = cfg["password"]
     cmd = [
-        "psql", "-h", cfg.get("host", "localhost"),
-        "-p", str(cfg.get("port", 5432)),
-        "-U", cfg.get("user", ""),
-        "-d", cfg.get("name", ""),
-        "-c", query,
-        "--no-psqlrc", "-P", "pager=off",
+        "psql",
+        "-h",
+        cfg.get("host", "localhost"),
+        "-p",
+        str(cfg.get("port", 5432)),
+        "-U",
+        cfg.get("user", ""),
+        "-d",
+        cfg.get("name", ""),
+        "-c",
+        query,
+        "--no-psqlrc",
+        "-P",
+        "pager=off",
     ]
     return _run_cli(cmd, env=env)
 
 
 # -- MySQL ------------------------------------------------------------------
+
 
 def _mysql_python(cfg: dict, query: str) -> list[dict]:
     import pymysql as pm
@@ -229,11 +245,15 @@ def _mysql_python(cfg: dict, query: str) -> list[dict]:
 def _mysql_cli(cfg: dict, query: str) -> str:
     cmd = [
         "mysql",
-        "-h", cfg.get("host", "localhost"),
-        "-P", str(cfg.get("port", 3306)),
-        "-u", cfg.get("user", ""),
+        "-h",
+        cfg.get("host", "localhost"),
+        "-P",
+        str(cfg.get("port", 3306)),
+        "-u",
+        cfg.get("user", ""),
         cfg.get("name", ""),
-        "-e", query,
+        "-e",
+        query,
     ]
     # Pass password via environment (avoids ps exposure)
     env = dict(os.environ, MYSQL_PWD=cfg.get("password", ""))
@@ -244,6 +264,7 @@ def _mysql_cli(cfg: dict, query: str) -> str:
 
 
 # -- SQLite -----------------------------------------------------------------
+
 
 def _sqlite_query(cfg: dict, query: str) -> list[dict]:
     path = cfg.get("path", "")
@@ -265,6 +286,7 @@ def _sqlite_query(cfg: dict, query: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Unified dispatcher
 # ---------------------------------------------------------------------------
+
 
 def _execute_query(cfg: dict, query: str) -> dict[str, Any]:
     """Execute *query* against the database described by *cfg*."""
@@ -300,7 +322,7 @@ def _get_status(cfg: dict) -> dict[str, Any]:
             conns = _execute_query(cfg, "SELECT count(*) AS connections FROM pg_stat_activity;")
             size = _execute_query(
                 cfg,
-                f"SELECT pg_size_pretty(pg_database_size(current_database())) AS size;",
+                "SELECT pg_size_pretty(pg_database_size(current_database())) AS size;",
             )
             return {
                 "ok": True,
@@ -380,7 +402,7 @@ def _get_tables(cfg: dict) -> dict[str, Any]:
                 # Validate table name to prevent SQL injection
                 if not tname or not all(c.isalnum() or c in "_-." for c in tname):
                     continue
-                count_result = _execute_query(cfg, f"SELECT count(*) AS row_count FROM \"{tname}\";")
+                count_result = _execute_query(cfg, f'SELECT count(*) AS row_count FROM "{tname}";')
                 count = _extract_scalar(count_result) if count_result.get("ok") else "?"
                 table_info.append({"table_name": tname, "row_count": count})
             return {"ok": True, "rows": table_info, "driver": "sqlite3"}
@@ -409,11 +431,16 @@ def _do_backup(cfg: dict, output_path: str) -> dict[str, Any]:
                 env["PGPASSWORD"] = cfg["password"]
             cmd = [
                 "pg_dump",
-                "-h", cfg.get("host", "localhost"),
-                "-p", str(cfg.get("port", 5432)),
-                "-U", cfg.get("user", ""),
-                "-d", cfg.get("name", ""),
-                "-f", output_path,
+                "-h",
+                cfg.get("host", "localhost"),
+                "-p",
+                str(cfg.get("port", 5432)),
+                "-U",
+                cfg.get("user", ""),
+                "-d",
+                cfg.get("name", ""),
+                "-f",
+                output_path,
             ]
             _run_cli(cmd, timeout=300, env=env)
             return {"ok": True, "path": output_path}
@@ -423,10 +450,14 @@ def _do_backup(cfg: dict, output_path: str) -> dict[str, Any]:
                 return {"ok": False, "error": "mysqldump not found on PATH"}
             cmd = [
                 "mysqldump",
-                "-h", cfg.get("host", "localhost"),
-                "-P", str(cfg.get("port", 3306)),
-                "-u", cfg.get("user", ""),
-                "--result-file", output_path,
+                "-h",
+                cfg.get("host", "localhost"),
+                "-P",
+                str(cfg.get("port", 3306)),
+                "-u",
+                cfg.get("user", ""),
+                "--result-file",
+                output_path,
                 cfg.get("name", ""),
             ]
             env = dict(os.environ, MYSQL_PWD=cfg.get("password", ""))
@@ -490,9 +521,7 @@ _DB_STATUS_SCHEMA = {
     "type": "function",
     "function": {
         "name": "db_status",
-        "description": (
-            "Get database status: connection count, size, and version."
-        ),
+        "description": ("Get database status: connection count, size, and version."),
         "parameters": {
             "type": "object",
             "properties": {
@@ -550,6 +579,7 @@ _DB_BACKUP_SCHEMA = {
 # ---------------------------------------------------------------------------
 # Public factory — called by catalog.py
 # ---------------------------------------------------------------------------
+
 
 def db_tools(context: Any = None) -> list:
     """Return database management tools. DB config from secrets.json database:* profiles.

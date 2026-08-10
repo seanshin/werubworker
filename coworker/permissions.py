@@ -24,6 +24,7 @@ _SHELL_OPERATORS = (";", "&", "|", ">", "<", "`", "$(", "(", "\n", "\r")
 def _has_shell_operators(command: str) -> bool:
     return any(op in command for op in _SHELL_OPERATORS)
 
+
 from .risk import (  # re-exported for back-compat (manager.py imports WRITE_TOOLS)
     SHELL_TOOL,
     WRITE_TOOLS,
@@ -36,9 +37,7 @@ from .risk import (  # re-exported for back-compat (manager.py imports WRITE_TOO
 
 class Mode(str, Enum):
     DISCUSS = "discuss"  # read-only conversation: no edits, no planning workflow
-    PLAN = (
-        "plan"  # read-only + the planning contract (explore → propose_plan → execute)
-    )
+    PLAN = "plan"  # read-only + the planning contract (explore → propose_plan → execute)
     INTERACTIVE = "interactive"  # ask for approval (default)
     AUTO = "auto"  # full access
     CUSTOM = "custom"  # interactive + auto-allow the config's `auto_allow` tools
@@ -117,9 +116,7 @@ class PermissionEngine:
             out.append((Path(p).expanduser().resolve(), w))
         return out
 
-    def evaluate(
-        self, tool_name: str, arguments: dict[str, Any], metadata: Any = None
-    ) -> Decision:
+    def evaluate(self, tool_name: str, arguments: dict[str, Any], metadata: Any = None) -> Decision:
         arguments = arguments or {}
         is_connector = getattr(metadata, "category", "") == "connector"
         risk = classify(tool_name, metadata, self.risk_overrides)
@@ -129,9 +126,7 @@ class PermissionEngine:
 
         # Discuss / plan modes: read-only.
         if self.mode in READ_ONLY_MODES and consequential:
-            return Decision(
-                False, f"{self.mode.value} mode is read-only", needs_user=False
-            )
+            return Decision(False, f"{self.mode.value} mode is read-only", needs_user=False)
 
         # Path scoping for writes that name a path (all modes): must land in a writable root.
         if is_write:
@@ -163,9 +158,7 @@ class PermissionEngine:
         # (candidate extraction is external-risk-only), and additive on top of the mode:
         # read-only modes already returned before this point.
         if tool_name in self.task_rules:
-            target = standing_rule_candidate(
-                tool_name, arguments, metadata, self.risk_overrides
-            )
+            target = standing_rule_candidate(tool_name, arguments, metadata, self.risk_overrides)
             if target and target in self.task_rules[tool_name]:
                 rule = f"{tool_name} → {target}"
                 return Decision(True, f"allowed by standing rule: {rule}", rule=rule)

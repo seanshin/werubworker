@@ -37,7 +37,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio", "httpx"]
+dev = ["pytest>=8", "pytest-asyncio", "pytest-xdist>=3", "httpx", "ruff>=0.5"]
 # Inbound messaging listeners (outbound send_message needs only httpx, already a core dep).
 # aiohttp is slack-bolt's Socket Mode transport at runtime (and the FakeSlack test harness
 # drives the real handler) — declare it so CI installs it, not just transitively.
@@ -62,3 +62,20 @@ coworker = ["personas/builtin/*.md"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # line length — handled by formatter
+    "E402",  # module-import-not-at-top — intentional lazy imports
+    "E702",  # multiple-statements — compact test helpers
+    "E731",  # lambda-assignment — used in tool definitions
+    "E741",  # ambiguous variable name — single-char vars in context
+    "F401",  # unused-import — many re-exports from __init__
+    "F811",  # redefined-while-unused — monkeypatch patterns in tests
+    "F841",  # unused-variable — assigned for side effects
+]

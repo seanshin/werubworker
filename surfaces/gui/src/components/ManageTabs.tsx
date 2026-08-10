@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   addMcpServer,
@@ -76,7 +76,7 @@ const EXAMPLE = `{
 // surfaces can't drift. Settings-only extras: per-card "used Nh ago", a "Remove
 // key…" affordance, the global composer-picker card (gallery view), and the
 // per-provider ModelChecklist / read-only model preview (form view).
-export function ModelsTab() {
+export const ModelsTab = memo(function ModelsTab() {
   const { t } = useTranslation(["settings"]);
   const [settings, setSettings] = useState<ModelSettings | null>(null);
   const refreshSettings = () => getSettings().then(setSettings).catch(() => setSettings(null));
@@ -171,7 +171,7 @@ export function ModelsTab() {
       )}
     </div>
   );
-}
+});
 
 // The gallery view's "In the composer's picker" card: every curated model across providers,
 // with its provider tag. Unticking removes it from the picker; adding happens from a
@@ -245,7 +245,7 @@ const MCP_PRESETS: { name: string; label: string; blurb: string; config: Record<
   },
 ];
 
-export function McpTab() {
+export const McpTab = memo(function McpTab() {
   const { t } = useTranslation(["settings"]);
   const [servers, setServers] = useState<McpServer[]>([]);
   const [adding, setAdding] = useState(false);
@@ -350,7 +350,7 @@ export function McpTab() {
       {error && <div className="text-[12.5px] text-danger">{error}</div>}
     </div>
   );
-}
+});
 
 function McpRow({
   server,

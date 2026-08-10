@@ -23,9 +23,7 @@ class ScriptedProvider(ProviderClient):
 def _dm(text, chat_id="D1", user="bob"):
     return MessageEvent(
         text=text,
-        source=SessionSource(
-            platform="slack", chat_id=chat_id, user_name=user, chat_type="dm"
-        ),
+        source=SessionSource(platform="slack", chat_id=chat_id, user_name=user, chat_type="dm"),
     )
 
 
@@ -52,9 +50,7 @@ def test_dm_with_designated_session_delivers(tmp_path, monkeypatch):
 
     asyncio.run(mgr._dispatch_inbound(_dm("ping")))
     assert delivered[0][0] == "sDM"
-    assert (
-        "ping" in delivered[0][1]
-    )  # the tagged text carries the message + a reply handle
+    assert "ping" in delivered[0][1]  # the tagged text carries the message + a reply handle
     assert mgr.unrouted.list() == []
 
 
@@ -75,18 +71,13 @@ def test_dm_route_endpoints(tmp_path):
 
     assert client.get("/v1/messaging/dm-route").json()["dm_session"] is None
     assert (
-        client.post("/v1/messaging/dm-route", json={"session_id": "sX"}).json()[
-            "dm_session"
-        ]
+        client.post("/v1/messaging/dm-route", json={"session_id": "sX"}).json()["dm_session"]
         == "sX"
     )
     assert client.get("/v1/messaging/dm-route").json()["dm_session"] == "sX"
     # a falsy id clears it
     assert (
-        client.post("/v1/messaging/dm-route", json={"session_id": ""}).json()[
-            "dm_session"
-        ]
-        is None
+        client.post("/v1/messaging/dm-route", json={"session_id": ""}).json()["dm_session"] is None
     )
 
 

@@ -9,9 +9,7 @@ from . import _helpers
 from ._helpers import _attach, _bearer_headers, _clamp, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def box_search(query: str, max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "box", "access_token")
         if err:

@@ -16,9 +16,7 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def _apollo_headers(profile: dict[str, Any]) -> dict[str, str]:
         return {"X-Api-Key": profile["api_key"], "Content-Type": "application/json"}
 
@@ -83,8 +81,7 @@ def register(
             apollo_enrich_company,
             _schema(
                 "apollo_enrich_company",
-                "Enrich a company from Apollo by domain: size, industry, funding, "
-                "tech stack.",
+                "Enrich a company from Apollo by domain: size, industry, funding, tech stack.",
                 {"domain": {"type": "string"}, "account": _GEN_ACCOUNT_PROP},
                 ["domain"],
             ),
@@ -125,9 +122,7 @@ def register(
         )
     )
 
-    def _hunter_get(
-        profile: dict[str, Any], path: str, params: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _hunter_get(profile: dict[str, Any], path: str, params: dict[str, Any]) -> dict[str, Any]:
         return _helpers._request(
             "GET",
             f"https://api.hunter.io/v2/{path}",
@@ -200,9 +195,7 @@ def register(
         aid, profile, err = _account_profile(secrets, "hunter", account, "api_key")
         if err:
             return err
-        return _acct_result(
-            aid, _hunter_get(profile, "email-verifier", {"email": email})
-        )
+        return _acct_result(aid, _hunter_get(profile, "email-verifier", {"email": email}))
 
     hunter_verify_email.__name__ = "hunter_verify_email"
     tools.append(

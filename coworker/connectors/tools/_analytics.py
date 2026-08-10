@@ -18,16 +18,12 @@ from ._helpers import (
 )
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def _posthog_base(profile: dict[str, Any]) -> str:
         return str(profile.get("base_url") or "https://us.posthog.com").rstrip("/")
 
     def posthog_query(hogql: str, account: str = "") -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "posthog", account, "api_key", "project_id"
-        )
+        aid, profile, err = _account_profile(secrets, "posthog", account, "api_key", "project_id")
         if err:
             return err
         result = _helpers._request(
@@ -57,9 +53,7 @@ def register(
     def posthog_list_insights(
         query: str = "", max_results: int = 10, account: str = ""
     ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "posthog", account, "api_key", "project_id"
-        )
+        aid, profile, err = _account_profile(secrets, "posthog", account, "api_key", "project_id")
         if err:
             return err
         params: dict[str, Any] = {"limit": _clamp(max_results)}
@@ -109,9 +103,7 @@ def register(
             "event": event,
             "from_date": from_date,
             "to_date": to_date,
-            "unit": (
-                unit if unit in ("minute", "hour", "day", "week", "month") else "day"
-            ),
+            "unit": (unit if unit in ("minute", "hour", "day", "week", "month") else "day"),
         }
         if where:
             params["where"] = where
@@ -180,9 +172,7 @@ def register(
     def amplitude_active_users(
         start: str, end: str, metric: str = "active", account: str = ""
     ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "amplitude", account, "api_key", "secret_key"
-        )
+        aid, profile, err = _account_profile(secrets, "amplitude", account, "api_key", "secret_key")
         if err:
             return err
         result = _helpers._request(
@@ -204,8 +194,7 @@ def register(
             amplitude_active_users,
             _schema(
                 "amplitude_active_users",
-                "Amplitude daily active or new users between two dates (YYYYMMDD "
-                "or YYYY-MM-DD).",
+                "Amplitude daily active or new users between two dates (YYYYMMDD or YYYY-MM-DD).",
                 {
                     "start": {"type": "string"},
                     "end": {"type": "string"},
@@ -221,9 +210,7 @@ def register(
     def amplitude_event_totals(
         event_type: str, start: str, end: str, account: str = ""
     ) -> dict[str, Any]:
-        aid, profile, err = _account_profile(
-            secrets, "amplitude", account, "api_key", "secret_key"
-        )
+        aid, profile, err = _account_profile(secrets, "amplitude", account, "api_key", "secret_key")
         if err:
             return err
         result = _helpers._request(

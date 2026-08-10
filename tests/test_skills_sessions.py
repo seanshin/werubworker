@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from coworker.providers import ModelCapabilities, ProviderClient
+from coworker.server.manager import SessionManager
 from coworker.skills import (
     SessionSkillStore,
     SkillLoader,
@@ -20,7 +21,6 @@ from coworker.skills import (
     skill_catalog_text,
     skill_tools,
 )
-from coworker.server.manager import SessionManager
 
 
 class ScriptedProvider(ProviderClient):
@@ -59,9 +59,7 @@ def test_project_copy_wins_merge(tmp_path):
 
 
 def test_disabled_absent_everywhere():
-    assert effective_skills(
-        names={"a", "b"}, disabled={"a"}, session_overrides={}
-    ) == {"b"}
+    assert effective_skills(names={"a", "b"}, disabled={"a"}, session_overrides={}) == {"b"}
 
 
 def test_mute_hides_in_that_session_only(tmp_path):
@@ -81,21 +79,15 @@ def test_removed_session_inherits_clean(tmp_path):
 
 
 def test_mute_of_unknown_skill_is_noop():
-    out = effective_skills(
-        names={"real"}, disabled=set(), session_overrides={"ghost": False}
-    )
+    out = effective_skills(names={"real"}, disabled=set(), session_overrides={"ghost": False})
     assert out == {"real"}
 
 
 def test_any_off_wins_both_directions():
     # enabled in Settings + muted in session → out
-    assert effective_skills(
-        names={"a"}, disabled=set(), session_overrides={"a": False}
-    ) == set()
+    assert effective_skills(names={"a"}, disabled=set(), session_overrides={"a": False}) == set()
     # disabled in Settings + explicit session-on → STILL out (no resurrection)
-    assert effective_skills(
-        names={"a"}, disabled={"a"}, session_overrides={"a": True}
-    ) == set()
+    assert effective_skills(names={"a"}, disabled={"a"}, session_overrides={"a": True}) == set()
 
 
 def test_override_store_survives_reload(tmp_path):
@@ -162,9 +154,7 @@ def test_live_load_skill_semantics(manager):
     assert "Available skills" not in engine.messages[0]["content"]
 
     # created after build → in the menu from the next turn AND loadable
-    manager.create_skill(
-        {"name": "late", "description": "d", "instructions": "late body"}
-    )
+    manager.create_skill({"name": "late", "description": "d", "instructions": "late body"})
     assert "late" in engine.context_provider()
     loaded = engine.registry.execute("load_skill", {"name": "late"})
     assert loaded["instructions"] == "late body"
@@ -185,10 +175,7 @@ def test_live_load_skill_semantics(manager):
     # re-enable → back next turn, files untouched all along (OFF is parking, not deletion)
     manager.skill_store.set_enabled("early", True)
     assert "early" in engine.context_provider()
-    assert (
-        engine.registry.execute("load_skill", {"name": "early"})["instructions"]
-        == "early body"
-    )
+    assert engine.registry.execute("load_skill", {"name": "early"})["instructions"] == "early body"
 
 
 def test_disable_countermand_for_loaded_skills(manager):

@@ -38,6 +38,7 @@ _IS_LINUX = sys.platform.startswith("linux")
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _run(cmd: list[str], timeout: int = 10) -> str:
     """Run a command and return its stdout (best-effort, never raises)."""
     try:
@@ -50,6 +51,7 @@ def _run(cmd: list[str], timeout: int = 10) -> str:
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 def _server_status() -> dict[str, Any]:
     """Check local server status: CPU, memory, disk usage, uptime, platform info."""
@@ -66,14 +68,14 @@ def _server_status() -> dict[str, Any]:
         info["cpu_count"] = _ps.cpu_count()
         mem = _ps.virtual_memory()
         info["memory"] = {
-            "total_gb": round(mem.total / (1024 ** 3), 2),
-            "used_gb": round(mem.used / (1024 ** 3), 2),
+            "total_gb": round(mem.total / (1024**3), 2),
+            "used_gb": round(mem.used / (1024**3), 2),
             "percent": mem.percent,
         }
         disk = _ps.disk_usage("/")
         info["disk_root"] = {
-            "total_gb": round(disk.total / (1024 ** 3), 2),
-            "used_gb": round(disk.used / (1024 ** 3), 2),
+            "total_gb": round(disk.total / (1024**3), 2),
+            "used_gb": round(disk.used / (1024**3), 2),
             "percent": disk.percent,
         }
         boot = _ps.boot_time()
@@ -171,9 +173,9 @@ def _disk_usage(path: str = "/") -> dict[str, Any]:
             usage = _ps.disk_usage(path)
             return {
                 "path": path,
-                "total_gb": round(usage.total / (1024 ** 3), 2),
-                "used_gb": round(usage.used / (1024 ** 3), 2),
-                "free_gb": round(usage.free / (1024 ** 3), 2),
+                "total_gb": round(usage.total / (1024**3), 2),
+                "used_gb": round(usage.used / (1024**3), 2),
+                "free_gb": round(usage.free / (1024**3), 2),
                 "percent": usage.percent,
             }
         except OSError as e:
@@ -192,7 +194,12 @@ def _system_logs(service: str = "", lines: int = 50) -> dict[str, Any]:
         if service:
             cmd += ["-u", service]
         out = _run(cmd, timeout=15)
-        return {"source": "journalctl", "service": service or "(all)", "lines": n, "output": out[:10000]}
+        return {
+            "source": "journalctl",
+            "service": service or "(all)",
+            "lines": n,
+            "output": out[:10000],
+        }
     elif _IS_DARWIN:
         cmd = ["log", "show", "--last", "1h", "--style", "compact"]
         if service:
@@ -311,8 +318,7 @@ _SYSTEM_LOGS_SCHEMA = {
     "function": {
         "name": "system_logs",
         "description": (
-            "Read system or service logs. Uses journalctl on Linux, 'log show' on macOS. "
-            "Read-only."
+            "Read system or service logs. Uses journalctl on Linux, 'log show' on macOS. Read-only."
         ),
         "parameters": {
             "type": "object",
@@ -334,6 +340,7 @@ _SYSTEM_LOGS_SCHEMA = {
 # ---------------------------------------------------------------------------
 # Public factory — called by catalog.py
 # ---------------------------------------------------------------------------
+
 
 def server_monitor_tools(context: Any = None) -> list:
     """Return the server monitoring toolset: server_status, service_status, check_ports,

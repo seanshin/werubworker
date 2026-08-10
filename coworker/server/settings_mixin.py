@@ -21,9 +21,7 @@ class SettingsMixin:
             return {}
 
     def _save_prefs(self) -> None:
-        self._prefs_path().write_text(
-            json.dumps(self._prefs, indent=2), encoding="utf-8"
-        )
+        self._prefs_path().write_text(json.dumps(self._prefs, indent=2), encoding="utf-8")
 
     # -- get_settings -----------------------------------------------------------
     def get_settings(self) -> dict[str, Any]:
@@ -85,8 +83,7 @@ class SettingsMixin:
             "nav_layout": self._nav_layout(),
             "sessions_peek": self.sessions_peek(),
             "context_bar": self.context_bar(),
-            "scratch_base": self._prefs.get("scratch_base")
-            or self.DEFAULT_SCRATCH_BASE,
+            "scratch_base": self._prefs.get("scratch_base") or self.DEFAULT_SCRATCH_BASE,
             # Real on-disk secrets location, so the UI shows the OS-native path instead of a
             # hardcoded POSIX one (Windows -> %APPDATA%\coworker, macOS/Linux -> ~/.config).
             "secrets_path": str(self.secrets.path),
@@ -220,9 +217,7 @@ class SettingsMixin:
             "threshold_pct": float(
                 self._prefs.get("compaction_threshold_pct") or DEFAULT_THRESHOLD_PCT
             ),
-            "cap_tokens": int(
-                self._prefs.get("compaction_cap_tokens") or DEFAULT_CAP_TOKENS
-            ),
+            "cap_tokens": int(self._prefs.get("compaction_cap_tokens") or DEFAULT_CAP_TOKENS),
             # "" → the session's own model (engine falls back to self.model).
             "model": str(self._prefs.get("compaction_model") or ""),
         }
@@ -259,9 +254,7 @@ class SettingsMixin:
             self._prefs["compaction_threshold_pct"] = pct
         if cap_tokens is not None:
             try:
-                self._prefs["compaction_cap_tokens"] = max(
-                    10_000, min(int(cap_tokens), 2_000_000)
-                )
+                self._prefs["compaction_cap_tokens"] = max(10_000, min(int(cap_tokens), 2_000_000))
             except (TypeError, ValueError):
                 return {"ok": False, "error": "compaction_cap_tokens must be a number"}
         if model is not None:
@@ -395,6 +388,7 @@ class SettingsMixin:
             return [], {}
         try:
             import httpx
+
             resp = httpx.get(
                 base_url + "/models",
                 headers={"Authorization": f"Bearer {api_key}"},
@@ -453,18 +447,14 @@ class SettingsMixin:
         from ..web import provider_names
 
         profile = self.secrets.get("web_search:default") or {}
-        provider = (
-            profile.get("provider") or load_config().web_search_provider or "duckduckgo"
-        )
+        provider = profile.get("provider") or load_config().web_search_provider or "duckduckgo"
         return {
             "provider": provider,
             "has_key": bool(profile.get("api_key")),
             "providers": provider_names(),
         }
 
-    def set_web_search(
-        self, provider: str, api_key: Optional[str] = None
-    ) -> dict[str, Any]:
+    def set_web_search(self, provider: str, api_key: Optional[str] = None) -> dict[str, Any]:
         from ..web import provider_names
 
         if provider not in provider_names():

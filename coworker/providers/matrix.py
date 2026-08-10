@@ -28,9 +28,7 @@ from typing import Optional
 
 from .base import ModelCapabilities
 
-_AGENTIC = ModelCapabilities(
-    tools=True, vision=False, parallel_tool_calls=True, streaming=True
-)
+_AGENTIC = ModelCapabilities(tools=True, vision=False, parallel_tool_calls=True, streaming=True)
 # The native three (OpenAI, Anthropic, Gemini) all take PDFs directly; every
 # OpenAI-compatible vendor and reseller in the matrix does not (their chat APIs have
 # no inline file part — checked 2026-07-17), so those fall back via pdf_support.py.
@@ -76,39 +74,25 @@ MATRIX: dict[str, ModelEntry] = {
     "gemini:gemini-3.1-pro-preview": ModelEntry(
         "Gemini 3.1 Pro · Google", _AGENTIC_VISION, 1_048_576
     ),
-    "gemini:gemini-3.6-flash": ModelEntry(
-        "Gemini 3.6 Flash · Google", _AGENTIC_VISION, 1_048_576
-    ),
-    "gemini:gemini-2.5-pro": ModelEntry(
-        "Gemini 2.5 Pro · Google", _AGENTIC_VISION, 1_048_576
-    ),
-    "gemini:gemini-2.5-flash": ModelEntry(
-        "Gemini 2.5 Flash · Google", _AGENTIC_VISION, 1_048_576
-    ),
+    "gemini:gemini-3.6-flash": ModelEntry("Gemini 3.6 Flash · Google", _AGENTIC_VISION, 1_048_576),
+    "gemini:gemini-2.5-pro": ModelEntry("Gemini 2.5 Pro · Google", _AGENTIC_VISION, 1_048_576),
+    "gemini:gemini-2.5-flash": ModelEntry("Gemini 2.5 Flash · Google", _AGENTIC_VISION, 1_048_576),
     # -- direct OpenAI-compatible vendors ----------------------------------------
     # Muse Spark (Meta Model API, public preview 2026-07-09): multimodal + tools via
     # their OpenAI-compat surface. Vision yes; PDFs unverified over compat — falls
     # back via pdf_support.py like the other compat vendors.
     "meta:muse-spark-1.1": ModelEntry(
         "Muse Spark 1.1 · Meta",
-        ModelCapabilities(
-            tools=True, vision=True, parallel_tool_calls=True, streaming=True
-        ),
+        ModelCapabilities(tools=True, vision=True, parallel_tool_calls=True, streaming=True),
     ),
     "zai:glm-5.2": ModelEntry("GLM-5.2 · Z AI", _AGENTIC, 128_000),
-    "deepseek:deepseek-v4-flash": ModelEntry(
-        "DeepSeek V4 Flash · DeepSeek", _AGENTIC, 128_000
-    ),
-    "deepseek:deepseek-v4-pro": ModelEntry(
-        "DeepSeek V4 Pro · DeepSeek", _AGENTIC, 128_000
-    ),
+    "deepseek:deepseek-v4-flash": ModelEntry("DeepSeek V4 Flash · DeepSeek", _AGENTIC, 128_000),
+    "deepseek:deepseek-v4-pro": ModelEntry("DeepSeek V4 Pro · DeepSeek", _AGENTIC, 128_000),
     "kimi:kimi-k2.6": ModelEntry("Kimi K2.6 · Moonshot", _AGENTIC, 256_000),
     "minimax:MiniMax-M2.5": ModelEntry("MiniMax M2.5 · MiniMax"),
     "qwen:qwen3-max": ModelEntry("Qwen3 Max · Alibaba", _AGENTIC, 256_000),
     "xai:grok-4.3": ModelEntry("Grok 4.3 · xAI", _AGENTIC, 256_000),
-    "mistral:mistral-large-latest": ModelEntry(
-        "Mistral Large · Mistral", _AGENTIC, 128_000
-    ),
+    "mistral:mistral-large-latest": ModelEntry("Mistral Large · Mistral", _AGENTIC, 128_000),
     # -- resellers (their model namespaces, verbatim) -----------------------------
     "together:thinkingmachines/Inkling": ModelEntry("Inkling · via Together"),
     "together:zai-org/GLM-5.2": ModelEntry("GLM-5.2 · via Together", _AGENTIC, 128_000),
@@ -116,17 +100,13 @@ MATRIX: dict[str, ModelEntry] = {
     # unverified over the compat surface (falls back via pdf_support.py, like Muse Spark).
     "together:moonshotai/Kimi-K3": ModelEntry(
         "Kimi K3 · via Together",
-        ModelCapabilities(
-            tools=True, vision=True, parallel_tool_calls=True, streaming=True
-        ),
+        ModelCapabilities(tools=True, vision=True, parallel_tool_calls=True, streaming=True),
         1_000_000,
     ),
     "together:moonshotai/Kimi-K2.7-Code": ModelEntry(
         "Kimi K2.7 Code · via Together", _AGENTIC, 256_000
     ),
-    "together:moonshotai/Kimi-K2.6": ModelEntry(
-        "Kimi K2.6 · via Together", _AGENTIC, 256_000
-    ),
+    "together:moonshotai/Kimi-K2.6": ModelEntry("Kimi K2.6 · via Together", _AGENTIC, 256_000),
     "together:deepseek-ai/DeepSeek-V4-Pro": ModelEntry(
         "DeepSeek V4 Pro · via Together", _AGENTIC, 128_000
     ),
@@ -148,9 +128,7 @@ MATRIX: dict[str, ModelEntry] = {
     # OpenRouter slugs are lowercase `<lab>/<model>` (checked against their catalog
     # 2026-07-25); same labs as above, one key for all of them.
     "openrouter:z-ai/glm-5.2": ModelEntry("GLM-5.2 · via OpenRouter", _AGENTIC, 128_000),
-    "openrouter:moonshotai/kimi-k2.6": ModelEntry(
-        "Kimi K2.6 · via OpenRouter", _AGENTIC, 256_000
-    ),
+    "openrouter:moonshotai/kimi-k2.6": ModelEntry("Kimi K2.6 · via OpenRouter", _AGENTIC, 256_000),
     "openrouter:deepseek/deepseek-v4-pro": ModelEntry(
         "DeepSeek V4 Pro · via OpenRouter", _AGENTIC, 128_000
     ),
@@ -180,9 +158,7 @@ MATRIX: dict[str, ModelEntry] = {
     # two tool calls it emits them one at a time, so parallel stays off.
     "bedrock:other/nvidia.nemotron-super-3-120b": ModelEntry(
         "Nemotron Super 3 120B · AWS Bedrock",
-        ModelCapabilities(
-            tools=True, vision=False, parallel_tool_calls=False, streaming=True
-        ),
+        ModelCapabilities(tools=True, vision=False, parallel_tool_calls=False, streaming=True),
     ),
     # Vertex ids carry a family segment too (gemini/ and claude/ → native paths,
     # openweight/ → the MaaS OpenAI-compat endpoint, keeping the publisher segment).
@@ -218,9 +194,7 @@ def model_labels() -> dict[str, str]:
 
 def model_context_windows() -> dict[str, int]:
     """Full-id → context-window map (verified entries only), for the GUI's fill meter."""
-    return {
-        mid: e.context_window for mid, e in MATRIX.items() if e.context_window
-    }
+    return {mid: e.context_window for mid, e in MATRIX.items() if e.context_window}
 
 
 def models_for_provider(provider: str) -> list[str]:

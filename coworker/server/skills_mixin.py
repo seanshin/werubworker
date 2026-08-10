@@ -16,9 +16,7 @@ class SkillsMixin:
         adds that project's skills, with project copies shadowing same-named global ones."""
         return self.skill_store.rows(workspace or None)
 
-    def reveal_skill(
-        self, name: str, workspace: Optional[str] = None
-    ) -> dict[str, Any]:
+    def reveal_skill(self, name: str, workspace: Optional[str] = None) -> dict[str, Any]:
         """Open the skill's folder in the OS file manager (§6 "Show folder" — the power-user
         window into folder-is-truth). Same local-machine rationale as reveal_artifact."""
         import subprocess

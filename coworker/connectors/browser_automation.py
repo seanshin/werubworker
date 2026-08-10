@@ -6,11 +6,11 @@ tools return a clear setup error instead of breaking engine construction.
 
 from __future__ import annotations
 
+import base64
 import re
 import tempfile
 import threading
 import time
-import base64
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -20,9 +20,7 @@ import aisuite as ai
 from ..web.guard import check_url
 
 
-def _meta(
-    name: str, *, approval: bool = False, capabilities: Optional[list[str]] = None
-):
+def _meta(name: str, *, approval: bool = False, capabilities: Optional[list[str]] = None):
     return ai.ToolMetadata(
         name=name,
         category="connector",
@@ -69,9 +67,7 @@ class _BrowserController:
         self._context = None
         self._page = None
         self._error: Optional[str] = None
-        self._executor = ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="coworker-browser"
-        )
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="coworker-browser")
         self._state: dict[str, Any] = {
             "open": False,
             "url": "",
@@ -125,13 +121,9 @@ class _BrowserController:
 
                 self._playwright = sync_playwright().start()
                 self._browser = self._playwright.chromium.launch(headless=False)
-                self._context = self._browser.new_context(
-                    viewport={"width": 1280, "height": 900}
-                )
+                self._context = self._browser.new_context(viewport={"width": 1280, "height": 900})
                 self._page = self._context.new_page()
-                self._touch(
-                    open=True, status="open", last_action="open browser", last_error=""
-                )
+                self._touch(open=True, status="open", last_action="open browser", last_error="")
                 return self._page, None
             except Exception as exc:
                 self._touch(open=False, status="error", last_error=str(exc))
@@ -180,9 +172,7 @@ class _BrowserController:
                 return err
             try:
                 png = page.screenshot(full_page=False)
-                data_url = "data:image/png;base64," + base64.b64encode(png).decode(
-                    "ascii"
-                )
+                data_url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
                 self._touch(
                     screenshot_data_url=data_url,
                     last_action="screenshot",
@@ -192,9 +182,7 @@ class _BrowserController:
                 self._refresh_page_state()
                 return {"ok": True, **dict(self._state)}
             except Exception as exc:
-                self._touch(
-                    last_action="screenshot", last_result="error", last_error=str(exc)
-                )
+                self._touch(last_action="screenshot", last_result="error", last_error=str(exc))
                 return {"error": str(exc)}
 
     def call(self, action: str, fn: Callable[[Any], dict[str, Any]]) -> dict[str, Any]:
@@ -329,9 +317,7 @@ def _snapshot(page, max_chars: int) -> dict[str, Any]:
 def make_browser_automation_tools() -> list[Callable[..., Any]]:
     tools: list[Callable[..., Any]] = []
 
-    def browser_open_url(
-        url: str, wait_until: str = "domcontentloaded"
-    ) -> dict[str, Any]:
+    def browser_open_url(url: str, wait_until: str = "domcontentloaded") -> dict[str, Any]:
         if not url.lower().startswith(("http://", "https://")):
             return {"error": "url must start with http:// or https://"}
         # Same address guard as web_fetch. This is approval gated, so it is defense in
@@ -381,9 +367,7 @@ def make_browser_automation_tools() -> list[Callable[..., Any]]:
 
     def browser_get_text(max_chars: int = 20000) -> dict[str, Any]:
         def run(page):
-            text = re.sub(
-                r"\n{3,}", "\n\n", page.locator("body").inner_text(timeout=5000)
-            )
+            text = re.sub(r"\n{3,}", "\n\n", page.locator("body").inner_text(timeout=5000))
             cap = _cap(max_chars)
             return {
                 "url": page.url,
@@ -490,9 +474,7 @@ def make_browser_automation_tools() -> list[Callable[..., Any]]:
         return _BROWSER.call(
             "upload_file",
             lambda page: (
-                _target_locator(page, target).set_input_files(
-                    str(file_path), timeout=10000
-                ),
+                _target_locator(page, target).set_input_files(str(file_path), timeout=10000),
                 {"ok": True, "path": str(file_path)},
             )[1],
         )
@@ -514,9 +496,7 @@ def make_browser_automation_tools() -> list[Callable[..., Any]]:
     def browser_wait(milliseconds: int = 1000, target: str = "") -> dict[str, Any]:
         def run(page):
             if target:
-                _target_locator(page, target).wait_for(
-                    timeout=max(1, int(milliseconds or 1000))
-                )
+                _target_locator(page, target).wait_for(timeout=max(1, int(milliseconds or 1000)))
             else:
                 page.wait_for_timeout(max(1, min(int(milliseconds or 1000), 30000)))
             return {"ok": True, "url": page.url}

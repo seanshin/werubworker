@@ -17,9 +17,7 @@ class InboxMixin:
         Also the default for background/self-wake runs (no live socket). Mirrors to a bound channel
         like the approver does."""
 
-        async def ask(
-            args: dict[str, Any], tool_call_id: Optional[str] = None
-        ) -> dict[str, Any]:
+        async def ask(args: dict[str, Any], tool_call_id: Optional[str] = None) -> dict[str, Any]:
             question = str(args.get("question", "")).strip()
             if not question:
                 return {"answer": "", "error": "no question"}
@@ -33,9 +31,7 @@ class InboxMixin:
                 multi=bool(args.get("multi", False)),
                 tool_call_id=tool_call_id,
             )
-            if (
-                item.state != "pending"
-            ):  # durable resume re-raised an already-answered prompt
+            if item.state != "pending":  # durable resume re-raised an already-answered prompt
                 return {"answer": item.resolution or ""}
             self.persist_session(session_id)  # the pending tool call is now on disk
             await self.mirror_inbox_item(item)
@@ -368,9 +364,7 @@ class InboxMixin:
         if display_name:
             self._note_person("slack", user_id, display_name)
         if self.gateway is not None and "slack" in self.gateway.settings:
-            self.gateway.settings["slack"].allowed_users = set(
-                profile.get("allowed_users") or []
-            )
+            self.gateway.settings["slack"].allowed_users = set(profile.get("allowed_users") or [])
         return {
             "ok": True,
             "approval_owner_ids": sorted(owners),
@@ -394,9 +388,7 @@ class InboxMixin:
         if not profile:
             return {
                 "ok": False,
-                "error": (
-                    "workspace not connected" if team_id else "connector not connected"
-                ),
+                "error": ("workspace not connected" if team_id else "connector not connected"),
             }
         allowed = set(profile.get("allowed_users") or [])
         allowed.add(user_id) if add else allowed.discard(user_id)
@@ -427,10 +419,11 @@ class InboxMixin:
             item = self.inbox.get(item_id)
             if item is None:
                 return False
-            if (
-                getattr(event.source, "platform", "") == "slack"
-                and item.kind in {"approval", "directory", "plan"}
-            ):
+            if getattr(event.source, "platform", "") == "slack" and item.kind in {
+                "approval",
+                "directory",
+                "plan",
+            }:
                 actor_id = str(getattr(event.source, "user_id", "") or "")
                 if not self._slack_actor_owns_item(
                     item,

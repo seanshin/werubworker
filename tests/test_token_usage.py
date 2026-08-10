@@ -10,6 +10,7 @@ import asyncio
 from types import SimpleNamespace
 
 import aisuite as ai
+
 from coworker.engine import TurnEngine
 from coworker.events import EventType
 from coworker.permissions import PermissionEngine
@@ -114,9 +115,7 @@ def test_anthropic_complete_captures_usage():
 def test_anthropic_stream_without_usage_leaves_none():
     events = [
         SimpleNamespace(type="message_start"),  # no message/usage attrs
-        SimpleNamespace(
-            type="message_delta", delta=SimpleNamespace(stop_reason="end_turn")
-        ),
+        SimpleNamespace(type="message_delta", delta=SimpleNamespace(stop_reason="end_turn")),
     ]
     provider = AnthropicProvider(client=_FakeAnthropicClient(events))
     turn = _final_turn(
@@ -193,9 +192,7 @@ def test_openai_complete_captures_usage_without_cache_details():
                 finish_reason="stop",
             )
         ],
-        usage=SimpleNamespace(
-            prompt_tokens=30, completion_tokens=4, prompt_tokens_details=None
-        ),
+        usage=SimpleNamespace(prompt_tokens=30, completion_tokens=4, prompt_tokens_details=None),
     )
     fake = _FakeOpenAIClient(response)
     provider = OpenAIProvider(client=fake)
@@ -226,9 +223,7 @@ def _gemini_response(text, usage_metadata=None):
     return SimpleNamespace(
         candidates=[
             SimpleNamespace(
-                content=SimpleNamespace(
-                    parts=[SimpleNamespace(text=text, function_call=None)]
-                ),
+                content=SimpleNamespace(parts=[SimpleNamespace(text=text, function_call=None)]),
                 finish_reason=SimpleNamespace(name="STOP"),
             )
         ],
@@ -289,9 +284,7 @@ def test_bedrock_converse_stream_captures_metadata_usage():
         }
     )
     client = _BedrockConverseClient(client=fake)
-    turn = _final_turn(
-        list(client.stream(model="m", messages=[{"role": "user", "content": "x"}]))
-    )
+    turn = _final_turn(list(client.stream(model="m", messages=[{"role": "user", "content": "x"}])))
     assert turn.usage == TokenUsage(input=11, output=3, cache_read=8, cache_write=2)
 
 

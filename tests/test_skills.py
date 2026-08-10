@@ -63,14 +63,10 @@ def _make_skill(skills_dir, name, desc, body):
 
 def test_skill_loader_catalog_and_load(tmp_path):
     skills_dir = tmp_path / "skills"
-    _make_skill(
-        skills_dir, "pdf", "extract text from PDFs", "Use pdfplumber to extract text."
-    )
+    _make_skill(skills_dir, "pdf", "extract text from PDFs", "Use pdfplumber to extract text.")
     loader = SkillLoader([skills_dir])
 
-    assert loader.catalog() == [
-        {"name": "pdf", "description": "extract text from PDFs"}
-    ]
+    assert loader.catalog() == [{"name": "pdf", "description": "extract text from PDFs"}]
     assert "pdf: extract text from PDFs" in skill_catalog_text(loader)
 
     reg = ToolRegistry()

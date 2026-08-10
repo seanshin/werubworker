@@ -9,9 +9,9 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import aisuite as ai
 import pytest
 
-import aisuite as ai
 from coworker.engine import TurnEngine
 from coworker.events import EventType
 from coworker.permissions import Decision, Mode, PermissionEngine
@@ -94,9 +94,7 @@ def _meta(reg, name):
 def test_permissions_write_blocked_in_readonly_root(tmp_path):
     scratch, ro, rw = _roots(tmp_path)
     reg = ToolRegistry()
-    reg.register_all(
-        ai.toolkits.files(roots=[{"path": str(scratch), "writable": True}])
-    )
+    reg.register_all(ai.toolkits.files(roots=[{"path": str(scratch), "writable": True}]))
     eng = PermissionEngine(
         workspace_root=scratch,
         roots=[
@@ -112,9 +110,7 @@ def test_permissions_write_blocked_in_readonly_root(tmp_path):
     )
     assert not d.allowed and not d.needs_user
     # write to the writable scratch -> needs approval (interactive), not denied
-    d = eng.evaluate(
-        "write_file", {"path": "x.txt", "content": "x"}, _meta(reg, "write_file")
-    )
+    d = eng.evaluate("write_file", {"path": "x.txt", "content": "x"}, _meta(reg, "write_file"))
     assert not d.allowed and d.needs_user
 
 
@@ -232,10 +228,7 @@ def test_add_and_remove_roots_live_and_persisted(tmp_path):
     mgr.save(sid, engine)
     mgr2 = _cowork_manager(tmp_path)
     persisted = {r["path"]: r for r in mgr2.get_roots(sid)}
-    assert (
-        str(rw.resolve()) in persisted
-        and persisted[str(rw.resolve())]["writable"] is True
-    )
+    assert str(rw.resolve()) in persisted and persisted[str(rw.resolve())]["writable"] is True
     assert str(ro.resolve()) not in persisted
 
 
@@ -287,9 +280,7 @@ def test_request_directory_emits_prompt_and_returns_grant():
     kinds = [e.type for e in events]
     assert EventType.DIRECTORY_REQUESTED in kinds
     prompt = next(e for e in events if e.type == EventType.DIRECTORY_REQUESTED)
-    assert (
-        prompt.data["reason"] == "need the report" and prompt.data["writable"] is True
-    )
+    assert prompt.data["reason"] == "need the report" and prompt.data["writable"] is True
     finished = next(e for e in events if e.type == EventType.TOOL_FINISHED)
     assert finished.data["status"] == "ok"
     assert captured["reason"] == "need the report"  # the requester saw the agent's args
@@ -304,10 +295,7 @@ def test_request_directory_denied_returns_denied_status():
     eng = _bare_engine(directory_requester=requester)
     tc = ToolCall(id="c1", name="request_directory", arguments={"reason": "x"})
     events = asyncio.run(_collect(eng._handle_directory_request(tc)))
-    assert (
-        next(e for e in events if e.type == EventType.TOOL_FINISHED).data["status"]
-        == "denied"
-    )
+    assert next(e for e in events if e.type == EventType.TOOL_FINISHED).data["status"] == "denied"
 
 
 def test_request_directory_without_requester_is_safe_noop():
@@ -316,7 +304,4 @@ def test_request_directory_without_requester_is_safe_noop():
     events = asyncio.run(_collect(eng._handle_directory_request(tc)))
     # no prompt is emitted, and the tool reports it isn't available
     assert EventType.DIRECTORY_REQUESTED not in [e.type for e in events]
-    assert (
-        next(e for e in events if e.type == EventType.TOOL_FINISHED).data["status"]
-        == "denied"
-    )
+    assert next(e for e in events if e.type == EventType.TOOL_FINISHED).data["status"] == "denied"

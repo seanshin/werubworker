@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { Attachment, SessionUsage } from "../types";
 import { isPdfFile, readFile } from "../attach";
@@ -93,7 +93,7 @@ interface Props {
   contextBar?: boolean;
 }
 
-export function Composer(props: Props) {
+export const Composer = memo(function Composer(props: Props) {
   const { t } = useTranslation(["session", "common"]);
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -683,7 +683,7 @@ export function Composer(props: Props) {
       </span>
     </div>
   );
-}
+});
 
 // Token-usage chip + popover (OPE-42). Trigger: a tiny context-fill meter (only when the
 // active model's window is known) + the session's total token count. Click → per-model

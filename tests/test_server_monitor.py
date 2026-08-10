@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from coworker.tools.server_monitor import (
+    _check_ports,
+    _disk_usage,
+    _process_list,
     _server_status,
     _service_status,
-    _check_ports,
-    _process_list,
-    _disk_usage,
     _system_logs,
     server_monitor_tools,
 )
@@ -62,7 +62,9 @@ def test_check_ports_invalid_port():
 def test_check_ports_caps_at_20():
     """At most 20 ports should be checked."""
     ports = ",".join(str(p) for p in range(10000, 10030))
-    with patch("coworker.tools.server_monitor.socket.create_connection", side_effect=ConnectionRefusedError):
+    with patch(
+        "coworker.tools.server_monitor.socket.create_connection", side_effect=ConnectionRefusedError
+    ):
         result = _check_ports("localhost", ports)
     assert len(result["results"]) == 20
 

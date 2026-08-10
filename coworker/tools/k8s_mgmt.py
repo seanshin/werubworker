@@ -13,10 +13,10 @@ from typing import Any
 
 import aisuite as ai
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _kubectl_available() -> bool:
     """Check if kubectl is on PATH."""
@@ -53,6 +53,7 @@ def _parse_json_or_text(stdout: str) -> Any:
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _k8s_pods(namespace: str = "default", label: str = "") -> dict[str, Any]:
     """List pods with status, restarts, age. Optional label selector filter."""
     if not _kubectl_available():
@@ -76,19 +77,25 @@ def _k8s_pods(namespace: str = "default", label: str = "") -> dict[str, Any]:
         status = item.get("status", {})
         container_statuses = status.get("containerStatuses", [])
         restarts = sum(cs.get("restartCount", 0) for cs in container_statuses)
-        pods.append({
-            "name": meta.get("name"),
-            "namespace": meta.get("namespace"),
-            "phase": status.get("phase"),
-            "restarts": restarts,
-            "creation": meta.get("creationTimestamp"),
-            "containers": [cs.get("name") for cs in container_statuses],
-            "ready": all(cs.get("ready", False) for cs in container_statuses) if container_statuses else False,
-        })
+        pods.append(
+            {
+                "name": meta.get("name"),
+                "namespace": meta.get("namespace"),
+                "phase": status.get("phase"),
+                "restarts": restarts,
+                "creation": meta.get("creationTimestamp"),
+                "containers": [cs.get("name") for cs in container_statuses],
+                "ready": all(cs.get("ready", False) for cs in container_statuses)
+                if container_statuses
+                else False,
+            }
+        )
     return {"namespace": namespace, "count": len(pods), "pods": pods}
 
 
-def _k8s_logs(pod: str, namespace: str = "default", container: str = "", lines: int = 50) -> dict[str, Any]:
+def _k8s_logs(
+    pod: str, namespace: str = "default", container: str = "", lines: int = 50
+) -> dict[str, Any]:
     """View pod logs. Optionally specify container for multi-container pods."""
     if not _kubectl_available():
         return {"error": "kubectl is not installed or not on PATH"}
@@ -195,14 +202,16 @@ def _k8s_events(namespace: str = "default", type: str = "Warning") -> dict[str, 
 
     events = []
     for item in data.get("items", []):
-        events.append({
-            "type": item.get("type"),
-            "reason": item.get("reason"),
-            "message": item.get("message"),
-            "object": f"{item.get('involvedObject', {}).get('kind', '')}/{item.get('involvedObject', {}).get('name', '')}",
-            "count": item.get("count"),
-            "last_seen": item.get("lastTimestamp"),
-        })
+        events.append(
+            {
+                "type": item.get("type"),
+                "reason": item.get("reason"),
+                "message": item.get("message"),
+                "object": f"{item.get('involvedObject', {}).get('kind', '')}/{item.get('involvedObject', {}).get('name', '')}",
+                "count": item.get("count"),
+                "last_seen": item.get("lastTimestamp"),
+            }
+        )
     return {"namespace": namespace, "type": type, "count": len(events), "events": events[-100:]}
 
 
@@ -379,6 +388,7 @@ _K8S_EVENTS_SCHEMA = {
 # Public factory — called by catalog.py
 # ---------------------------------------------------------------------------
 
+
 def k8s_tools(context: Any = None) -> list:
     """Return Kubernetes management tools. Uses kubectl CLI via subprocess.
 
@@ -390,7 +400,9 @@ def k8s_tools(context: Any = None) -> list:
         """List pods with status, restarts, age. Optional label selector filter."""
         return _k8s_pods(namespace, label)
 
-    def k8s_logs(pod: str, namespace: str = "default", container: str = "", lines: int = 50) -> dict:
+    def k8s_logs(
+        pod: str, namespace: str = "default", container: str = "", lines: int = 50
+    ) -> dict:
         """View pod logs. Optionally specify container for multi-container pods."""
         return _k8s_logs(pod, namespace, container, lines)
 

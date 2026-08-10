@@ -43,9 +43,7 @@ class _FakeClient:
 
 
 def _response(output, status="completed", incomplete_details=None):
-    return SimpleNamespace(
-        output=output, status=status, incomplete_details=incomplete_details
-    )
+    return SimpleNamespace(output=output, status=status, incomplete_details=incomplete_details)
 
 
 def _message_item(text):
@@ -182,9 +180,7 @@ def test_convert_replays_openai_sidecar_verbatim():
             {
                 "role": "assistant",
                 "content": "on it",
-                "tool_calls": [
-                    {"id": "call_1", "function": {"name": "f", "arguments": "{}"}}
-                ],
+                "tool_calls": [{"id": "call_1", "function": {"name": "f", "arguments": "{}"}}],
                 "_openai": {"items": sidecar_items},
             },
             {"role": "tool", "tool_call_id": "call_1", "content": "done"},
@@ -216,9 +212,7 @@ def test_convert_empty_assistant_tool_turn_emits_no_message_item():
             {
                 "role": "assistant",
                 "content": "",
-                "tool_calls": [
-                    {"id": "c1", "function": {"name": "f", "arguments": "{}"}}
-                ],
+                "tool_calls": [{"id": "c1", "function": {"name": "f", "arguments": "{}"}}],
             },
         ]
     )
@@ -480,9 +474,7 @@ def test_stream_final_turn_carries_tool_calls_and_sidecar():
     )
     events = [SimpleNamespace(type="response.completed", response=final)]
     provider = OpenAIResponsesProvider(client=_FakeClient(events=events))
-    turn = list(
-        provider.stream(model="m", messages=[{"role": "user", "content": "x"}])
-    )[-1].turn
+    turn = list(provider.stream(model="m", messages=[{"role": "user", "content": "x"}]))[-1].turn
     assert turn.finish_reason == "tool_calls"
     assert turn.tool_calls[0].arguments == {"x": 1}
     assert [i["type"] for i in turn.extras["_openai"]["items"]] == [
@@ -494,9 +486,7 @@ def test_stream_final_turn_carries_tool_calls_and_sidecar():
 def test_stream_without_terminal_event_keeps_accumulated_text():
     events = [SimpleNamespace(type="response.output_text.delta", delta="partial")]
     provider = OpenAIResponsesProvider(client=_FakeClient(events=events))
-    turn = list(
-        provider.stream(model="m", messages=[{"role": "user", "content": "x"}])
-    )[-1].turn
+    turn = list(provider.stream(model="m", messages=[{"role": "user", "content": "x"}]))[-1].turn
     assert turn.text == "partial" and turn.finish_reason is None
 
 
@@ -565,9 +555,7 @@ def test_registry_routes_blank_endpoint_to_responses():
     from coworker.providers import OpenAIProvider
     from coworker.providers.registry import build_provider_client
 
-    assert isinstance(
-        build_provider_client("openai", {}, None), OpenAIResponsesProvider
-    )
+    assert isinstance(build_provider_client("openai", {}, None), OpenAIResponsesProvider)
     assert isinstance(
         build_provider_client("openai", {"base_url": "   "}, None),
         OpenAIResponsesProvider,
@@ -579,6 +567,4 @@ def test_registry_routes_blank_endpoint_to_responses():
     assert isinstance(custom, OpenAIProvider)
     # …and so do Ollama and every compat vendor (their own descriptors).
     assert isinstance(build_provider_client("ollama", {}, None), OpenAIProvider)
-    assert isinstance(
-        build_provider_client("deepseek", {"api_key": "sk-x"}, None), OpenAIProvider
-    )
+    assert isinstance(build_provider_client("deepseek", {"api_key": "sk-x"}, None), OpenAIProvider)

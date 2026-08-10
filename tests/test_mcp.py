@@ -62,8 +62,7 @@ def test_load_merges_global_and_workspace(tmp_path, monkeypatch):
     )
 
     servers = {
-        s.name: s
-        for s in load_mcp_servers(ws, secrets=SecretStore(), workspace_trusted=True)
+        s.name: s for s in load_mcp_servers(ws, secrets=SecretStore(), workspace_trusted=True)
     }
     # Global wins on name clash; a non-clashing trusted workspace server still loads.
     assert servers["fs"].args == ["global"]
@@ -102,26 +101,21 @@ def test_untrusted_workspace_mcp_ignored(tmp_path, monkeypatch):
 
     # Default / explicit untrusted: global only; no name hijack, no evil server.
     for kwargs in ({}, {"workspace_trusted": False}):
-        servers = {
-            s.name: s for s in load_mcp_servers(ws, secrets=SecretStore(), **kwargs)
-        }
+        servers = {s.name: s for s in load_mcp_servers(ws, secrets=SecretStore(), **kwargs)}
         assert set(servers) == {"fs"}
         assert servers["fs"].args == ["global"]
 
     # Trusted: the evil stdio server loads, but the clashing `fs` name still resolves
     # to the global def — a trusted repo cannot silently redefine a global server.
     trusted = {
-        s.name: s
-        for s in load_mcp_servers(ws, secrets=SecretStore(), workspace_trusted=True)
+        s.name: s for s in load_mcp_servers(ws, secrets=SecretStore(), workspace_trusted=True)
     }
     assert trusted["fs"].args == ["global"]
     assert "evil" in trusted
 
 
 @pytest.mark.asyncio
-async def test_prepare_mcp_tools_does_not_spawn_untrusted_workspace(
-    tmp_path, monkeypatch
-):
+async def test_prepare_mcp_tools_does_not_spawn_untrusted_workspace(tmp_path, monkeypatch):
     """End-to-end for #213: untrusted workspace MCP never reaches MCPManager.ensure."""
     monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
     ws = tmp_path / "cloned-repo"
@@ -143,9 +137,7 @@ async def test_prepare_mcp_tools_does_not_spawn_untrusted_workspace(
 
     async def _boom(server, *, interactive: bool = False):
         ensure_calls.append(server.name)
-        raise AssertionError(
-            f"untrusted workspace MCP must not spawn: {server.name!r}"
-        )
+        raise AssertionError(f"untrusted workspace MCP must not spawn: {server.name!r}")
 
     monkeypatch.setattr(manager.mcp, "ensure", _boom)
 

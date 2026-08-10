@@ -10,14 +10,12 @@ from typing import Any, Callable
 
 import aisuite as ai
 
-
 # ---------------------------------------------------------------------------
 # Schema helpers (same pattern as cloud_infra.py)
 # ---------------------------------------------------------------------------
 
-def _meta(
-    name: str, *, approval: bool = False, capabilities: list[str] | None = None
-):
+
+def _meta(name: str, *, approval: bool = False, capabilities: list[str] | None = None):
     return ai.ToolMetadata(
         name=name,
         category="wiki",
@@ -62,6 +60,7 @@ def _attach(
 # ---------------------------------------------------------------------------
 # Tool factory
 # ---------------------------------------------------------------------------
+
 
 def wiki_tools(context: Any = None) -> list:
     """Return wiki & credential management tools."""
@@ -198,6 +197,7 @@ def wiki_tools(context: Any = None) -> list:
         Provide either page_id (to analyze existing page) or content (to analyze new text).
         Returns extracted hosts, passwords, tokens, API keys with suggested service mapping."""
         from .analyzer import analyze_document
+
         if page_id:
             page = wiki_store.get_page(page_id)
             if page is None:
@@ -215,7 +215,10 @@ def wiki_tools(context: Any = None) -> list:
             "Returns extracted items with context for user confirmation.",
             {
                 "page_id": {"type": "string", "description": "Wiki page ID to analyze (optional)"},
-                "content": {"type": "string", "description": "Free-form text to analyze (optional)"},
+                "content": {
+                    "type": "string",
+                    "description": "Free-form text to analyze (optional)",
+                },
             },
             [],
         ),

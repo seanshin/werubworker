@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  announceInboxUnlock,
   finalizeAutomationRun,
   getArtifacts,
   getHealth,
@@ -12,29 +11,22 @@ import {
   connectEvents,
   getSettings,
   getPersonas,
-  getInbox,
   getUnattended,
   PERSONAS_CHANGED,
-  resolveInboxItem,
   deleteSession,
   renameSession,
   runAutomation,
   setSessionFlags,
-  setUnattended,
   Session,
-  type InboxItem,
   type MessageSource,
   type Persona,
   type RecentWorkspace,
-  type WorkspaceCommandTrust,
 } from "./api";
 import type {
   ApprovalDecision,
   Attachment,
   Item,
   SessionInfo,
-  SessionUsage,
-  TodoItem,
   WsEvent,
 } from "./types";
 import { isProjectScoped } from "./personaScope";
@@ -54,19 +46,21 @@ import { SessionIntro } from "./components/SessionIntro";
 import { FolderGate } from "./components/FolderGate";
 import { Onboarding } from "./components/Onboarding";
 import { UpdateBanner } from "./components/UpdateBanner";
-import { ScheduledView } from "./components/ScheduledView";
 import { RightRail } from "./components/RightRail";
-import { IntegrationsView } from "./components/IntegrationsView";
-import { SettingsView } from "./components/SettingsView";
-import { PersonaView } from "./components/PersonaView";
-import { AuditView } from "./components/AuditView";
-import { InboxView } from "./components/InboxView";
-import { AboutView } from "./components/AboutView";
-import { OpsView } from "./components/OpsView";
-import { DevView } from "./components/DevView";
-import { DatabaseView } from "./components/DatabaseView";
-import { ServiceConfigView } from "./components/ServiceConfigView";
-import { WikiView } from "./components/WikiView";
+
+// Lazy-loaded views — only fetched when the user navigates to that surface.
+const ScheduledView = lazy(() => import("./components/ScheduledView").then(m => ({ default: m.ScheduledView })));
+const IntegrationsView = lazy(() => import("./components/IntegrationsView").then(m => ({ default: m.IntegrationsView })));
+const SettingsView = lazy(() => import("./components/SettingsView").then(m => ({ default: m.SettingsView })));
+const PersonaView = lazy(() => import("./components/PersonaView").then(m => ({ default: m.PersonaView })));
+const AuditView = lazy(() => import("./components/AuditView").then(m => ({ default: m.AuditView })));
+const InboxView = lazy(() => import("./components/InboxView").then(m => ({ default: m.InboxView })));
+const AboutView = lazy(() => import("./components/AboutView").then(m => ({ default: m.AboutView })));
+const OpsView = lazy(() => import("./components/OpsView").then(m => ({ default: m.OpsView })));
+const DevView = lazy(() => import("./components/DevView").then(m => ({ default: m.DevView })));
+const DatabaseView = lazy(() => import("./components/DatabaseView").then(m => ({ default: m.DatabaseView })));
+const ServiceConfigView = lazy(() => import("./components/ServiceConfigView").then(m => ({ default: m.ServiceConfigView })));
+const WikiView = lazy(() => import("./components/WikiView").then(m => ({ default: m.WikiView })));
 import { ApprovalCard } from "./components/ApprovalCard";
 import { DirectoryRequestCard } from "./components/DirectoryRequestCard";
 import { PlanCard } from "./components/PlanCard";
@@ -86,6 +80,10 @@ import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
 import { UIProvider, useUI } from "./contexts/UIContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { LoginView } from "./components/LoginView";
+import { useStreamState } from "./hooks/useStreamState";
+import { useInboxState } from "./hooks/useInboxState";
+import { useVisibleInterval } from "./hooks/useVisibleInterval";
+import { useSessionState } from "./hooks/useSessionState";
 
 export function App() {
   return (
@@ -144,49 +142,31 @@ function AppInner() {
     [setSettingsTab, setSurface],
   );
 
-  const [workspace, setWorkspace] = useState<string | null>(null);
-  const [branch, setBranch] = useState<string | null>(null);
-  const [showGate, setShowGate] = useState(false);
-  const [workspaceTrustRequest, setWorkspaceTrustRequest] =
-    useState<WorkspaceCommandTrust | null>(null);
-  const [agent, setAgent] = useState("cowork");
-  // Per-session token usage (OPE-42): rebuilt from the transcript on session load,
-  // accumulated live from assistant_message events, reset with the transcript.
-  const [usage, setUsage] = useState<SessionUsage>(emptyUsage());
-  const [mode, setMode] = useState("interactive");
-  const [connected, setConnected] = useState(false);
-  const [running, setRunning] = useState(false);
-  // Transient "Compacting context…" indicator (OPE-27): set by the `compacting` event,
-  // cleared by whatever the engine emits next — the summarizer call is otherwise a
-  // multi-second silent stall mid-turn.
-  const [compacting, setCompacting] = useState(false);
+  const {
+    workspace, setWorkspace,
+    branch, setBranch,
+    agent, setAgent,
+    mode, setMode,
+    connected, setConnected,
+    running, setRunning,
+    sessionId, setSessionId,
+    usage, setUsage,
+    todo, setTodo,
+    showGate, setShowGate,
+    workspaceTrustRequest, setWorkspaceTrustRequest,
+    runContext, setRunContext,
+    composerPrefill, setComposerPrefill,
+  } = useSessionState();
   const [items, setItems] = useState<Item[]>([]);
-  const [streaming, setStreamingState] = useState("");
-  // Ref mirror of `streaming`: the WS handler closure is built once per socket and can't read
-  // fresh state — the interrupted/error flush below needs the live buffer at event time.
-  const streamingRef = useRef("");
-  const setStreaming = (value: string | ((s: string) => string)) => {
-    streamingRef.current = typeof value === "function" ? value(streamingRef.current) : value;
-    setStreamingState(streamingRef.current);
-  };
-  // The turn's live thinking text (reasoning_delta events) — same ref-mirror pattern.
-  // Folded onto the assistant item when the message finalizes; cleared on turn_start.
-  const [reasoningStream, setReasoningStreamState] = useState("");
-  const reasoningRef = useRef("");
-  const setReasoningStream = (value: string) => {
-    reasoningRef.current = value;
-    setReasoningStreamState(value);
-  };
-  const [todo, setTodo] = useState<TodoItem[]>([]);
+  const {
+    streaming, setStreaming,
+    reasoning: reasoningStream, setReasoning: setReasoningStream, reasoningRef,
+    compacting, setCompacting,
+    appendDelta, appendReasoningDelta,
+    flush: flushStream,
+  } = useStreamState();
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [projects, setProjects] = useState<RecentWorkspace[]>([]);
-  const [sessionId, setSessionId] = useState<string>(newId());
-  // Automation-run context (§ owner ask 2026-07-04): which task an open __run__ session belongs
-  // to, driving the banner + "Back to runs". Best-effort — a run session without context still
-  // shows a generic banner (detected by its __run__ id).
-  const [runContext, setRunContext] = useState<{ id: string; title: string } | null>(null);
-  // A pending composer prefill (text + attachments) pushed from the session start panel.
-  const [composerPrefill, setComposerPrefill] = useState<{ text: string; attachments?: Attachment[]; nonce: number }>();
 
   // Persona metadata drives workspace behavior by FAMILY, not by hardcoded id (so a DevOps/SecOps
   // code-family persona gates a folder like Code, and a knowledge persona starts orphan like Cowork).
@@ -196,31 +176,6 @@ function AppInner() {
   }, []);
   const personaOf = (a: string) => personas?.find((p) => p.id === a);
 
-  // Pending Inbox items for the ACTIVE session — surfaced inline above the composer so an
-  // unattended session's blocking question/approval can be answered in context (resolving the
-  // same item the Inbox shows; first responder wins).
-  const [sessionInbox, setSessionInbox] = useState<InboxItem[]>([]);
-  // Whether the active session is Unattended — when true, the agent's prompts route to the Inbox,
-  // so we suppress the inline live cards (the Inbox / answer-in-context path shows them instead).
-  // A ref too, because the WS event handler closes over stale state.
-  const [unattended, setUnattendedState] = useState(false);
-  const unattendedRef = useRef(false);
-  const markUnattended = useCallback((on: boolean) => {
-    unattendedRef.current = on;
-    setUnattendedState(on);
-  }, []);
-  // The Mode menu's "Send approvals to Inbox" toggle (§22 — the old InboxControl, folded in).
-  const toggleUnattended = async (on: boolean) => {
-    await setUnattended(sessionId, on);
-    markUnattended(on);
-    // First Unattended enable = Inbox machinery engaged → the account row's chip unlocks (§26).
-    if (on) announceInboxUnlock();
-  };
-  const resolveSessionInbox = async (id: string, resolution: string) => {
-    await resolveInboxItem(id, resolution);
-    getInbox(sessionId, "pending").then(setSessionInbox).catch(() => setSessionInbox([]));
-    refreshSessions(); // attention badge should drop right away
-  };
   // Shows a working-area chip / project grouping. Persona's needs_workspace; fallback before load.
   const needsWorkspace = (a: string) => personaOf(a)?.needs_workspace ?? needsWorkspaceFallback(a);
   // MUST pick a folder before starting — project-scoped personas (git-bound Code, project-bound
@@ -259,6 +214,12 @@ function AppInner() {
     getSessions().then(setSessions).catch(() => setSessions([]));
     getRecentWorkspaces().then(setProjects).catch(() => setProjects([]));
   }, []);
+
+  const {
+    sessionInbox, setSessionInbox,
+    unattended, unattendedRef, markUnattended,
+    toggleUnattended, resolveSessionInbox, refreshInbox,
+  } = useInboxState(sessionId, refreshSessions);
 
   // initial: adopt the server's seed workspace if any, else force the gate.
   // Retry health for a while: the desktop shell starts its sidecar in parallel, so the
@@ -393,12 +354,9 @@ function AppInner() {
     loadSettings(); // selectable models + which session surfaces are visible
   }, [refreshSessions, loadSettings]);
 
-  // Poll the session list so the attention/liveness badges stay live and sessions created
-  // out-of-band (unattended work, messaging, automations) appear without a manual refresh.
-  useEffect(() => {
-    const t = setInterval(refreshSessions, 5000);
-    return () => clearInterval(t);
-  }, [refreshSessions]);
+  // The session list is now primarily updated via server push (sessions_changed event).
+  // This slow poll (30s) is a fallback for missed pushes or edge cases.
+  useVisibleInterval(refreshSessions, 30000);
 
   // Persona toggles can archive sessions server-side (disable-archives, §18): refetch on the
   // personas-changed event so the sidebar section disappears immediately, not on the next poll.
@@ -433,20 +391,8 @@ function AppInner() {
       // (owner-hit 2026-07-22). Promote it to a durable transcript item — the engine persists
       // the same text server-side, so the live view and a session reload now agree.
       const flushPartialStream = () => {
-        const partial = streamingRef.current;
-        const thinking = reasoningRef.current;
-        if (!partial && !thinking) return;
-        setStreaming("");
-        setReasoningStream("");
-        setItems((p) => [
-          ...p,
-          {
-            kind: "assistant",
-            text: partial,
-            ts: Date.now() / 1000,
-            ...(thinking ? { reasoning: thinking } : {}),
-          },
-        ]);
+        const flushed = flushStream();
+        if (flushed) setItems((p) => [...p, flushed]);
       };
       // Any engine event after `compacting` means the summarizer finished (compacted /
       // silent no-op / failure prompt) — the transient must never outlive it.
@@ -489,10 +435,10 @@ function AppInner() {
           }
           break;
         case "assistant_delta":
-          setStreaming((s) => s + (d.text || ""));
+          appendDelta(d.text || "");
           break;
         case "reasoning_delta":
-          setReasoningStream(reasoningRef.current + (d.text || ""));
+          appendReasoningDelta(d.text || "");
           break;
         case "assistant_message": {
           if (d.usage) setUsage((u) => addTurnUsage(u, d.usage));
@@ -720,13 +666,14 @@ function AppInner() {
   useEffect(() => {
     if (surface !== "session") return;
     const load = () => {
-      getInbox(sessionId, "pending").then(setSessionInbox).catch(() => setSessionInbox([]));
+      if (document.hidden) return; // skip poll when tab is hidden
+      refreshInbox();
       getUnattended(sessionId).then(markUnattended).catch(() => markUnattended(false));
     };
     load();
-    const t = setInterval(load, 4000);
+    const t = setInterval(load, 15000); // push-first; slow poll as fallback
     return () => clearInterval(t);
-  }, [surface, sessionId, browserRefreshKey, markUnattended]);
+  }, [surface, sessionId, browserRefreshKey, markUnattended, refreshInbox]);
 
   const send = (text: string, attachments?: Attachment[], skill?: string) => {
     // Force-run shows exactly what the user typed: "/name rest". Must match the server's
@@ -817,6 +764,14 @@ function AppInner() {
   } | null>(null);
   useEffect(() => {
     const stop = connectEvents((msg) => {
+      if (msg.type === "sessions_changed") {
+        refreshSessions();
+        return;
+      }
+      if (msg.type === "inbox_changed") {
+        refreshInbox();
+        return;
+      }
       if (msg.type !== "automation_run_started") return;
       const d = (msg.data ?? {}) as Record<string, string>;
       setRunToast({
@@ -829,7 +784,7 @@ function AppInner() {
       announceAutomationsChanged(); // the Scheduled band's badge is now stale
     });
     return stop;
-  }, []);
+  }, [refreshSessions, refreshInbox]);
   useEffect(() => {
     if (!runToast) return;
     const t = window.setTimeout(() => setRunToast(null), 5000);
@@ -1220,6 +1175,7 @@ function AppInner() {
         onPeekLeave={() => setNavPeek(false)}
       />
       </ErrorBoundary>
+      <Suspense fallback={<div className="surface-loading" />}>
       {surface === "scheduled" ? (
         <ScheduledView
           onOpenRun={openRunSession}
@@ -1269,7 +1225,9 @@ function AppInner() {
           }
           onOpenIntegrations={() => setSurface("integrations")}
         />
-      ) : (
+      ) : null}
+      </Suspense>
+      {surface === "session" && (
       <ErrorBoundary>
       <div className={"main" + (surface === "session" && agent !== "chat" && !railHidden ? " rail-open" : "")}>
         <div className="main-topbar">

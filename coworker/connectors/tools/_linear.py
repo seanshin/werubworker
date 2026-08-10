@@ -8,9 +8,7 @@ from ...secrets import SecretStore
 from ._helpers import _attach, _clamp, _linear_gql, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def linear_search_issues(query: str, max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "linear", "api_key")
         if err:
@@ -20,9 +18,7 @@ def register(
             " searchIssues(term: $term, first: $first) {"
             " nodes { identifier title url state { name } assignee { name } } } }"
         )
-        return _linear_gql(
-            profile["api_key"], gql, {"term": query, "first": _clamp(max_results)}
-        )
+        return _linear_gql(profile["api_key"], gql, {"term": query, "first": _clamp(max_results)})
 
     linear_search_issues.__name__ = "linear_search_issues"
     tools.append(
@@ -67,9 +63,7 @@ def register(
         profile, err = _profile(secrets, "linear", "api_key")
         if err:
             return err
-        return _linear_gql(
-            profile["api_key"], "{ teams { nodes { id key name } } }", {}
-        )
+        return _linear_gql(profile["api_key"], "{ teams { nodes { id key name } } }", {})
 
     linear_list_teams.__name__ = "linear_list_teams"
     tools.append(
@@ -85,9 +79,7 @@ def register(
         )
     )
 
-    def linear_create_issue(
-        team_id: str, title: str, description: str = ""
-    ) -> dict[str, Any]:
+    def linear_create_issue(team_id: str, title: str, description: str = "") -> dict[str, Any]:
         profile, err = _profile(secrets, "linear", "api_key")
         if err:
             return err

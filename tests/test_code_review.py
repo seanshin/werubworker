@@ -7,9 +7,9 @@ import tempfile
 from pathlib import Path
 
 from coworker.tools.code_review import (
-    code_review_tools,
     _review_security,
     _review_test_coverage,
+    code_review_tools,
 )
 
 
@@ -25,7 +25,9 @@ def test_review_security_scan(tmp_path):
     """Security scan should find hardcoded API keys."""
     # Write a file with a fake secret
     src = tmp_path / "config.py"
-    src.write_text('API_KEY = "sk-abcdefghij1234567890abcdefghij"\nSECRET = "my_super_secret_password_123"\n')
+    src.write_text(
+        'API_KEY = "sk-abcdefghij1234567890abcdefghij"\nSECRET = "my_super_secret_password_123"\n'
+    )
 
     result = _review_security(str(tmp_path))
     assert result["files_scanned"] >= 1

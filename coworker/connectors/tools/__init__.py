@@ -6,13 +6,13 @@ that appends its tool closures to *tools*.
 
 from __future__ import annotations
 
-# Re-export from the original connectors/tools.py (now _send_tools.py) so
-# existing `from .tools import make_send_message_tool` continues to work.
-from .._send_tools import make_send_file_tool, make_send_message_tool  # noqa: F401
-
 from typing import Any, Callable, Optional
 
 from ...secrets import SecretStore
+
+# Re-export from the original connectors/tools.py (now _send_tools.py) so
+# existing `from .tools import make_send_message_tool` continues to work.
+from .._send_tools import make_send_file_tool, make_send_message_tool  # noqa: F401
 from ..browser_automation import make_browser_automation_tools
 from ..email_tools import make_email_tools
 from ..tool_defs import connector_for_tool
@@ -93,9 +93,7 @@ def make_integration_tools(
         mod.register(secrets, tools, roots=roots)
 
     if enabled_connectors is not None:
-        tools = [
-            t for t in tools if connector_for_tool(t.__name__) in enabled_connectors
-        ]
+        tools = [t for t in tools if connector_for_tool(t.__name__) in enabled_connectors]
     if enabled_tools is not None:
         tools = [t for t in tools if t.__name__ in enabled_tools]
     return tools

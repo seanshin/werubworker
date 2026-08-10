@@ -10,9 +10,7 @@ from . import _helpers
 from ._helpers import _attach, _bearer_headers, _clamp, _profile, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def _docusign_ctx(
         profile: dict[str, Any],
     ) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
@@ -50,9 +48,7 @@ def register(
             "base": f"{str(base_uri).rstrip('/')}/restapi/v2.1/accounts/{account_id}",
         }, None
 
-    def docusign_list_envelopes(
-        status: str = "", since_days: int = 30
-    ) -> dict[str, Any]:
+    def docusign_list_envelopes(status: str = "", since_days: int = 30) -> dict[str, Any]:
         profile, err = _profile(secrets, "docusign", "access_token")
         if err:
             return err

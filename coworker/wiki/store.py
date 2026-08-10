@@ -80,7 +80,9 @@ class WikiStore:
         conn.execute("PRAGMA journal_mode=WAL")
         if is_new:
             try:
-                import os; os.chmod(self._db, 0o600)
+                import os
+
+                os.chmod(self._db, 0o600)
             except OSError:
                 pass
         return conn
@@ -118,9 +120,7 @@ class WikiStore:
     def get_page(self, page_id: str) -> dict | None:
         """Get full page with content and credentials metadata (values masked)."""
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM wiki_pages WHERE page_id = ?", (page_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM wiki_pages WHERE page_id = ?", (page_id,)).fetchone()
         if row is None:
             return None
         d = dict(row)
@@ -177,8 +177,18 @@ class WikiStore:
                 "(page_id, name, category, content, credentials, linked_service, "
                 "tags, version, created_at, updated_at, updated_by) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)",
-                (page_id, name, category, content, creds_json, linked_service,
-                 tags_json, now, now, updated_by),
+                (
+                    page_id,
+                    name,
+                    category,
+                    content,
+                    creds_json,
+                    linked_service,
+                    tags_json,
+                    now,
+                    now,
+                    updated_by,
+                ),
             )
             # Initial history entry
             conn.execute(
@@ -186,8 +196,17 @@ class WikiStore:
                 "(page_id, version, content, credentials, name, category, tags, "
                 "linked_service, change_note, updated_by, created_at) "
                 "VALUES (?, 1, ?, ?, ?, ?, ?, ?, 'Initial version', ?, ?)",
-                (page_id, content, creds_json, name, category, tags_json,
-                 linked_service, updated_by, now),
+                (
+                    page_id,
+                    content,
+                    creds_json,
+                    name,
+                    category,
+                    tags_json,
+                    linked_service,
+                    updated_by,
+                    now,
+                ),
             )
         return {"ok": True, "page_id": page_id, "version": 1}
 
@@ -205,9 +224,7 @@ class WikiStore:
     ) -> dict:
         """Update page and save history."""
         with self._lock, self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM wiki_pages WHERE page_id = ?", (page_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM wiki_pages WHERE page_id = ?", (page_id,)).fetchone()
             if row is None:
                 return {"ok": False, "error": f"page '{page_id}' not found"}
             current = dict(row)
@@ -216,7 +233,9 @@ class WikiStore:
 
             # Merge: only update fields that were explicitly provided
             new_content = content if content is not None else current["content"]
-            new_creds = json.dumps(credentials) if credentials is not None else current["credentials"]
+            new_creds = (
+                json.dumps(credentials) if credentials is not None else current["credentials"]
+            )
             new_name = name if name is not None else current["name"]
             new_category = category if category is not None else current["category"]
             new_tags = json.dumps(tags) if tags is not None else current["tags"]
@@ -226,16 +245,37 @@ class WikiStore:
                 "UPDATE wiki_pages SET content=?, credentials=?, name=?, category=?, "
                 "tags=?, linked_service=?, version=?, updated_at=?, updated_by=? "
                 "WHERE page_id=?",
-                (new_content, new_creds, new_name, new_category, new_tags,
-                 new_linked, new_version, now, updated_by, page_id),
+                (
+                    new_content,
+                    new_creds,
+                    new_name,
+                    new_category,
+                    new_tags,
+                    new_linked,
+                    new_version,
+                    now,
+                    updated_by,
+                    page_id,
+                ),
             )
             conn.execute(
                 "INSERT INTO wiki_history "
                 "(page_id, version, content, credentials, name, category, tags, "
                 "linked_service, change_note, updated_by, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (page_id, new_version, new_content, new_creds, new_name,
-                 new_category, new_tags, new_linked, change_note, updated_by, now),
+                (
+                    page_id,
+                    new_version,
+                    new_content,
+                    new_creds,
+                    new_name,
+                    new_category,
+                    new_tags,
+                    new_linked,
+                    change_note,
+                    updated_by,
+                    now,
+                ),
             )
         return {"ok": True, "page_id": page_id, "version": new_version}
 
@@ -307,9 +347,7 @@ class WikiStore:
 
     def ack_alert(self, alert_id: int) -> dict:
         with self._lock, self._connect() as conn:
-            conn.execute(
-                "UPDATE wiki_alerts SET acknowledged = 1 WHERE id = ?", (alert_id,)
-            )
+            conn.execute("UPDATE wiki_alerts SET acknowledged = 1 WHERE id = ?", (alert_id,))
         return {"ok": True, "alert_id": alert_id}
 
     # ------------------------------------------------------------------

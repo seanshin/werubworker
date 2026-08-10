@@ -30,6 +30,19 @@ export default defineConfig(({ command }) => {
     plugins: [react()],
     server: { port: 1420, strictPort: true },
     define: { __COWORKER_DEV_TOKEN__: JSON.stringify(devToken) },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            "vendor-react": ["react", "react-dom"],
+            "vendor-pdf": ["pdfjs-dist"],
+            "vendor-xlsx": ["xlsx"],
+            "vendor-markdown": ["react-markdown", "remark-gfm"],
+            "vendor-i18n": ["i18next", "react-i18next"],
+          },
+        },
+      },
+    },
     // Tauri CLI looks for these; harmless for the browser build.
     clearScreen: false,
     envPrefix: ["VITE_", "TAURI_"],

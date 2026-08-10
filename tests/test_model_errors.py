@@ -75,12 +75,7 @@ def test_unrelated_errors_pass_through_raw():
     )
     # a 404 from a wrong base_url isn't an access problem
     assert (
-        friendly_model_error(
-            "gpt-5.6-sol", RuntimeError("Error code: 404 - no route /v2/chat")
-        )
+        friendly_model_error("gpt-5.6-sol", RuntimeError("Error code: 404 - no route /v2/chat"))
         is None
     )
-    assert (
-        friendly_model_error("gpt-5.6-sol", RuntimeError("connection reset by peer"))
-        is None
-    )
+    assert friendly_model_error("gpt-5.6-sol", RuntimeError("connection reset by peer")) is None

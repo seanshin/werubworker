@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from coworker.agents.base import Agent, AgentContext
 from coworker.agents.ops import (
-    ops_agent,
-    ops_tool_factory,
     OPS_CAPABILITIES,
     OPS_INSTRUCTIONS,
+    ops_agent,
+    ops_tool_factory,
 )
-from coworker.agents.base import Agent, AgentContext
 
 
 def test_ops_agent_definition():
@@ -39,7 +39,9 @@ def test_ops_capabilities():
 
 def test_ops_instructions_content():
     assert "DevOps" in OPS_INSTRUCTIONS or "SRE" in OPS_INSTRUCTIONS
-    assert "server monitoring" in OPS_INSTRUCTIONS.lower() or "Server monitoring" in OPS_INSTRUCTIONS
+    assert (
+        "server monitoring" in OPS_INSTRUCTIONS.lower() or "Server monitoring" in OPS_INSTRUCTIONS
+    )
     assert "Docker" in OPS_INSTRUCTIONS
     assert "database" in OPS_INSTRUCTIONS.lower() or "Database" in OPS_INSTRUCTIONS
 

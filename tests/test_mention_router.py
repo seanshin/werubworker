@@ -25,11 +25,7 @@ class CapturingProvider(ProviderClient):
 
     def complete(self, *, model, messages, tools=None, **settings):
         self.calls.append([dict(m) for m in messages])
-        return (
-            self._turns.pop(0)
-            if self._turns
-            else AssistantTurn(text="ok", finish_reason="stop")
-        )
+        return self._turns.pop(0) if self._turns else AssistantTurn(text="ok", finish_reason="stop")
 
     def capabilities(self, model):
         return ModelCapabilities()
@@ -48,7 +44,7 @@ def _mention_event(
     chat_id="C1",
     ts="1700000010.000100",
     thread_ts=None,
-    team_id=None
+    team_id=None,
 ):
     return MessageEvent(
         text=text,
@@ -95,12 +91,8 @@ def _capture_deliveries(mgr, monkeypatch):
 def test_slack_mapper_computes_mentions_me():
     base = {"channel": "C1", "user": "U1", "ts": "1.2", "channel_type": "channel"}
     assert slack_event_to_event({**base, "text": "<@UBOT> hi"}, "UBOT").mentions_me
-    assert slack_event_to_event(
-        {**base, "text": "hey <@UBOT|ocw> hi"}, "UBOT"
-    ).mentions_me
-    assert not slack_event_to_event(
-        {**base, "text": "<@UOTHER> hi"}, "UBOT"
-    ).mentions_me
+    assert slack_event_to_event({**base, "text": "hey <@UBOT|ocw> hi"}, "UBOT").mentions_me
+    assert not slack_event_to_event({**base, "text": "<@UOTHER> hi"}, "UBOT").mentions_me
     # No bot id known (misconfigured) → never flags.
     assert not slack_event_to_event({**base, "text": "<@UBOT> hi"}, None).mentions_me
 
@@ -164,9 +156,7 @@ def test_distinct_thread_spawns_distinct_session(tmp_path, monkeypatch):
 
     asyncio.run(mgr._dispatch_inbound(_mention_event()))
     asyncio.run(
-        mgr._dispatch_inbound(
-            _mention_event("<@UBOT> other thing", ts="1700000099.000900")
-        )
+        mgr._dispatch_inbound(_mention_event("<@UBOT> other thing", ts="1700000099.000900"))
     )
 
     sids = {t.session_id for t in mgr.mention_sessions.all()}
@@ -254,9 +244,7 @@ def test_untagged_channel_traffic_stays_judgement_only(tmp_path, monkeypatch):
 
 def test_set_origin_round_trips_and_survives_saves(tmp_path):
     store = ConversationStore(tmp_path)
-    rec = SessionRecord(
-        session_id="s1", workspace=str(tmp_path), model="m", mode="interactive"
-    )
+    rec = SessionRecord(session_id="s1", workspace=str(tmp_path), model="m", mode="interactive")
     store.save(rec)
     assert store.set_origin("s1", "slack", "#general · T1")
     loaded = store.load("s1")

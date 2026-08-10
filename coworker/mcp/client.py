@@ -64,9 +64,7 @@ class MCPManager:
     async def tools(self, server: MCPServerDef) -> list[Any]:
         return (await self.ensure(server)).tools
 
-    async def call(
-        self, name: str, tool: str, arguments: Optional[dict[str, Any]]
-    ) -> Any:
+    async def call(self, name: str, tool: str, arguments: Optional[dict[str, Any]]) -> Any:
         conn = self._conns.get(name)
         if conn is None:
             raise RuntimeError(f"MCP server not connected: {name}")
@@ -92,9 +90,7 @@ class MCPManager:
             async with AsyncExitStack() as stack:
                 if server.transport == "http":
                     if not server.url:
-                        raise ValueError(
-                            f"MCP server '{server.name}' is http but has no url"
-                        )
+                        raise ValueError(f"MCP server '{server.name}' is http but has no url")
                     auth = None
                     if server.auth == "oauth":
                         from ..secrets import SecretStore
@@ -109,15 +105,11 @@ class MCPManager:
                             interactive=interactive,
                         )
                     read, write, *_ = await stack.enter_async_context(
-                        streamablehttp_client(
-                            server.url, headers=server.headers or None, auth=auth
-                        )
+                        streamablehttp_client(server.url, headers=server.headers or None, auth=auth)
                     )
                 else:
                     if not server.command:
-                        raise ValueError(
-                            f"MCP server '{server.name}' is stdio but has no command"
-                        )
+                        raise ValueError(f"MCP server '{server.name}' is stdio but has no command")
                     params = StdioServerParameters(
                         command=server.command,
                         args=server.args,

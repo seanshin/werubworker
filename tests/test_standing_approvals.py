@@ -108,19 +108,11 @@ def test_grant_entries_validation():
 
 
 def test_standing_rule_candidate():
-    assert (
-        standing_rule_candidate("send_message", {"target": "slack:C1"}, _Meta())
-        == "slack:C1"
-    )
+    assert standing_rule_candidate("send_message", {"target": "slack:C1"}, _Meta()) == "slack:C1"
     # exec risk is never eligible, even with a hand-crafted arg
     assert standing_rule_candidate("run_shell", {"command": "ls"}, _Meta()) is None
     # no declared target argument → not eligible
-    assert (
-        standing_rule_candidate(
-            "github_create_issue", {"repo": "x"}, _Meta("connector")
-        )
-        is None
-    )
+    assert standing_rule_candidate("github_create_issue", {"repo": "x"}, _Meta("connector")) is None
     # eligible tool, but the call names no target
     assert standing_rule_candidate("send_message", {"text": "hi"}, _Meta()) is None
     # local writes are covered by path scoping, not standing rules
@@ -128,9 +120,7 @@ def test_standing_rule_candidate():
 
 
 def test_engine_matches_target(tmp_path):
-    e = PermissionEngine(
-        workspace_root=tmp_path, task_rules={"send_message": {"slack:T1/C1"}}
-    )
+    e = PermissionEngine(workspace_root=tmp_path, task_rules={"send_message": {"slack:T1/C1"}})
     d = e.evaluate("send_message", {"target": "slack:T1/C1", "text": "hi"}, _Meta())
     assert d.allowed and d.rule == "send_message → slack:T1/C1"
     miss = e.evaluate("send_message", {"target": "slack:T1/C2", "text": "hi"}, _Meta())
@@ -140,12 +130,8 @@ def test_engine_matches_target(tmp_path):
 def test_task_rules_cover_connector_tools(tmp_path):
     # The session allowlist deliberately excludes connector tools; a task rule's exact
     # target binding is what makes lifting that exclusion safe (§25 gap 4).
-    e = PermissionEngine(
-        workspace_root=tmp_path, task_rules={"discord_send_message": {"C9"}}
-    )
-    e.allow_tool_for_session(
-        "discord_send_message"
-    )  # session allow alone must NOT unlock it
+    e = PermissionEngine(workspace_root=tmp_path, task_rules={"discord_send_message": {"C9"}})
+    e.allow_tool_for_session("discord_send_message")  # session allow alone must NOT unlock it
     meta = _Meta(category="connector")
     assert not e.evaluate(
         "discord_send_message", {"channel_id": "C8", "content": "x"}, meta
@@ -190,10 +176,7 @@ def test_create_tool_stores_write_grants(tmp_path):
     assert saved.always_allowed_tools == ["send_message slack:T1/C1"]
     # The agent-facing update tool has no permissions field — rules are human-minted only.
     update = next(t for t in tools if t.__name__ == "update_scheduled_task")
-    assert (
-        "permissions"
-        not in update.__coworker_schema__["function"]["parameters"]["properties"]
-    )
+    assert "permissions" not in update.__coworker_schema__["function"]["parameters"]["properties"]
 
 
 # -- store: run-session → owning task --------------------------------------------
@@ -251,17 +234,10 @@ async def test_scheduled_approver_parks_and_mints(tmp_path, monkeypatch):
     outcome, _ = await asyncio.gather(approver(request), click_allow_every_time())
     assert outcome is ApprovalOutcome.ONCE
     # The rule persisted to the task record…
-    assert (
-        "send_message slack:T1/C1"
-        in manager.task_store.get(task.id).always_allowed_tools
-    )
+    assert "send_message slack:T1/C1" in manager.task_store.get(task.id).always_allowed_tools
     # …and a rebuilt run engine auto-allows exactly that call, nothing else.
-    engine = manager._build_task_engine(
-        manager.task_store.get(task.id), session_id=run.session_id
-    )
-    hit = engine.permissions.evaluate(
-        "send_message", {"target": "slack:T1/C1"}, _Meta()
-    )
+    engine = manager._build_task_engine(manager.task_store.get(task.id), session_id=run.session_id)
+    hit = engine.permissions.evaluate("send_message", {"target": "slack:T1/C1"}, _Meta())
     assert hit.allowed and hit.rule
     assert not engine.permissions.evaluate(
         "send_message", {"target": "slack:T1/C2"}, _Meta()
@@ -316,24 +292,14 @@ def test_mint_task_rule_validates(tmp_path, monkeypatch):
     manager.task_store.add_run(run)
 
     # Not an automation run session → no rule, ever.
-    assert not manager.mint_task_rule(
-        "session-1", "send_message", {"target": "slack:C1"}, _Meta()
-    )
+    assert not manager.mint_task_rule("session-1", "send_message", {"target": "slack:C1"}, _Meta())
     # Exec risk → never mintable, even from a run session.
-    assert not manager.mint_task_rule(
-        run.session_id, "run_shell", {"command": "ls"}, _Meta()
-    )
+    assert not manager.mint_task_rule(run.session_id, "run_shell", {"command": "ls"}, _Meta())
     # No declared target argument → not mintable.
-    assert not manager.mint_task_rule(
-        run.session_id, "github_create_issue", {"repo": "x"}, _Meta()
-    )
+    assert not manager.mint_task_rule(run.session_id, "github_create_issue", {"repo": "x"}, _Meta())
     # Eligible call mints exactly one rule.
-    assert manager.mint_task_rule(
-        run.session_id, "send_message", {"target": "slack:C1"}, _Meta()
-    )
-    assert manager.task_store.get(task.id).always_allowed_tools == [
-        "send_message slack:C1"
-    ]
+    assert manager.mint_task_rule(run.session_id, "send_message", {"target": "slack:C1"}, _Meta())
+    assert manager.task_store.get(task.id).always_allowed_tools == ["send_message slack:C1"]
 
 
 def test_get_engine_seeds_run_session_rules(tmp_path, monkeypatch):
@@ -384,9 +350,7 @@ def test_create_automation_grants_and_revoke(tmp_path, monkeypatch):
             "target": "slack:T1/C1",
         }
     ]
-    out = manager.update_automation(
-        res["task"]["id"], {"revoke": "send_message slack:T1/C1"}
-    )
+    out = manager.update_automation(res["task"]["id"], {"revoke": "send_message slack:T1/C1"})
     assert out["ok"] and out["task"]["always_allowed"] == []
     assert manager.task_store.get(res["task"]["id"]).always_allowed_tools == []
 
@@ -400,9 +364,7 @@ async def test_blocked_run_does_not_stall_other_tasks(tmp_path):
     quick = _task(title="quick")
     for t in (blocked, quick):
         store.save(t)
-        store._conn.execute(
-            "UPDATE scheduled_tasks SET next_run=1.0 WHERE id=?", (t.id,)
-        )
+        store._conn.execute("UPDATE scheduled_tasks SET next_run=1.0 WHERE id=?", (t.id,))
     store._conn.commit()
 
     gate = asyncio.Event()
@@ -428,6 +390,7 @@ async def test_blocked_run_does_not_stall_other_tasks(tmp_path):
 
 
 def test_engine_events_carry_standing_context(tmp_path):
+    from coworker.engine import TurnEngine
     from coworker.events import EventType
     from coworker.providers import (
         AssistantTurn,
@@ -435,7 +398,6 @@ def test_engine_events_carry_standing_context(tmp_path):
         ProviderClient,
         ToolCall,
     )
-    from coworker.engine import TurnEngine
     from coworker.tools import ToolRegistry
 
     def send_message(target: str, text: str):

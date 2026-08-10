@@ -107,8 +107,7 @@ def test_args_preview():
     from coworker.inbox import args_preview
 
     assert (
-        args_preview({"path": "g.txt", "content": "buy milk"})
-        == "path: g.txt · content: buy milk"
+        args_preview({"path": "g.txt", "content": "buy milk"}) == "path: g.txt · content: buy milk"
     )
     assert args_preview(None) == "" and args_preview({}) == ""
     assert "\n" not in args_preview({"x": "a\nb\nc"})  # newlines collapsed

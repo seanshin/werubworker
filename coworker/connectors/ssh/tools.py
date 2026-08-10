@@ -12,14 +12,12 @@ from ...secrets import SecretStore
 from .accounts import get_server, list_servers
 from .client import SSHClient
 
-
 # ---------------------------------------------------------------------------
 # Tool-schema helpers (mirrors connectors/tools/_helpers.py)
 # ---------------------------------------------------------------------------
 
-def _meta(
-    name: str, *, approval: bool = False, capabilities: list[str] | None = None
-):
+
+def _meta(name: str, *, approval: bool = False, capabilities: list[str] | None = None):
     return ai.ToolMetadata(
         name=name,
         category="connector",
@@ -82,6 +80,7 @@ def _resolve(secrets: SecretStore, server_id: str) -> tuple:
 # ---------------------------------------------------------------------------
 # Tool factory
 # ---------------------------------------------------------------------------
+
 
 def ssh_tools(secrets: SecretStore) -> list[Callable[..., Any]]:
     """Build the SSH tool functions, closing over *secrets*."""

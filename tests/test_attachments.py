@@ -28,17 +28,11 @@ def _solid_png(r: int, g: int, b: int, size: int = 32) -> bytes:
 
     def chunk(typ: bytes, data: bytes) -> bytes:
         c = typ + data
-        return (
-            struct.pack(">I", len(data))
-            + c
-            + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
-        )
+        return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
 
     return (
         b"\x89PNG\r\n\x1a\n"
-        + chunk(
-            b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
-        )  # 8-bit RGB
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))  # 8-bit RGB
         + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
         + chunk(b"IEND", b"")
     )
@@ -96,8 +90,8 @@ def test_content_to_text_flattens_parts():
 
 # -- (2) the assumption: image reaches the provider unmodified ------------------
 async def test_image_reaches_provider_unmodified():
-    from coworker.agents.chat import chat_agent
     from coworker.agent import build_engine
+    from coworker.agents.chat import chat_agent
     from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient
 
     class Spy(ProviderClient):
@@ -114,9 +108,7 @@ async def test_image_reaches_provider_unmodified():
     spy = Spy()
     engine = build_engine(agent=chat_agent(), model="gpt-4o", provider=spy)
     url = _data_url(220, 30, 30)
-    content = build_user_content(
-        "describe the image", [{"kind": "image", "data_url": url}]
-    )
+    content = build_user_content("describe the image", [{"kind": "image", "data_url": url}])
 
     async for _ in engine.run(content):
         pass
@@ -173,9 +165,7 @@ def test_live_vision_model_reads_image():
         "What is the single dominant color of this image? Reply with one word.",
         [{"kind": "image", "data_url": _data_url(220, 30, 30)}],
     )
-    turn = provider.complete(
-        model="gpt-4o", messages=[{"role": "user", "content": content}]
-    )
+    turn = provider.complete(model="gpt-4o", messages=[{"role": "user", "content": content}])
     assert "red" in (turn.text or "").lower(), f"model said: {turn.text!r}"
 
 

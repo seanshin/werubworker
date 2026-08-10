@@ -122,9 +122,7 @@ class ConversationStore:
         path = self._file(sid)
         if not path.exists():
             return 0
-        return sum(
-            1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
-        )
+        return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
     def _append(self, sid: str, messages: list[dict]) -> None:
         with open(self._file(sid), "a", encoding="utf-8") as f:
@@ -240,14 +238,10 @@ class ConversationStore:
             agent=row["agent"] or "code",
             message_count=len(messages),
             updated_at=row["updated_at"],
-            extra_roots=_load_roots(
-                row["extra_roots"] if "extra_roots" in row.keys() else None
-            ),
+            extra_roots=_load_roots(row["extra_roots"] if "extra_roots" in row.keys() else None),
             grants=_load_grants(row["grants"] if "grants" in row.keys() else None),
             # Auto-compaction state (OPE-27) — same defensive parse as grants.
-            compaction=_load_grants(
-                row["compaction"] if "compaction" in row.keys() else None
-            ),
+            compaction=_load_grants(row["compaction"] if "compaction" in row.keys() else None),
             pinned=bool(row["pinned"]),
             archived=bool(row["archived"]),
             origin=row["origin"],
@@ -338,9 +332,7 @@ class ConversationStore:
 
     def delete(self, session_id: str) -> bool:
         with self._lock:
-            cur = self._conn.execute(
-                "DELETE FROM sessions WHERE session_id = ?", (session_id,)
-            )
+            cur = self._conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
             self._conn.commit()
         path = self._file(session_id)
         if path.exists():

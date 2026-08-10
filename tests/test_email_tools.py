@@ -121,9 +121,7 @@ def _multipart_message() -> EmailMessage:
     msg["Message-ID"] = "<orig-123@example.com>"
     msg.set_content("Plain body here.")
     msg.add_alternative("<p>HTML body</p>", subtype="html")
-    msg.add_attachment(
-        b"%PDF-fake", maintype="application", subtype="pdf", filename="report.pdf"
-    )
+    msg.add_attachment(b"%PDF-fake", maintype="application", subtype="pdf", filename="report.pdf")
     return msg
 
 
@@ -258,9 +256,7 @@ def test_download_attachment_saves_into_scratch_only(tmp_path):
     no_roots = _tools(secrets, imap=imap)
     assert (
         "no writable"
-        in no_roots["email_download_attachment"](uid="7", filename="report.pdf")[
-            "error"
-        ]
+        in no_roots["email_download_attachment"](uid="7", filename="report.pdf")["error"]
     )
 
     imap2 = FakeIMAP({"7": _multipart_message()})
@@ -292,9 +288,7 @@ def test_send_reply_threads_and_reuses_subject(tmp_path):
     imap = FakeIMAP({"7": _multipart_message()})
     smtp = FakeSMTP()
     tools = _tools(_connected_secrets(tmp_path), imap=imap, smtp=smtp)
-    result = tools["email_send"](
-        to="ana@example.com", subject="", body="re!", reply_to_uid="7"
-    )
+    result = tools["email_send"](to="ana@example.com", subject="", body="re!", reply_to_uid="7")
     assert result["ok"] and result["subject"] == "Re: Quarterly report"
     sent = smtp.sent[0]
     assert sent["In-Reply-To"] == "<orig-123@example.com>"
@@ -314,9 +308,7 @@ def test_send_attachment_must_live_inside_roots(tmp_path):
         smtp=smtp,
         roots=[RootDir(path=scratch, writable=True)],
     )
-    denied = tools["email_send"](
-        to="a@b.c", subject="s", body="b", attachments=[str(outside)]
-    )
+    denied = tools["email_send"](to="a@b.c", subject="s", body="b", attachments=[str(outside)])
     assert "outside the session" in denied["error"] and not smtp.sent
 
     ok = tools["email_send"](
@@ -329,10 +321,7 @@ def test_send_attachment_must_live_inside_roots(tmp_path):
 # -- metadata / wiring ----------------------------------------------------------------
 def test_approval_gating(tmp_path):
     tools = _tools(_connected_secrets(tmp_path))
-    gated = {
-        name: fn.__aisuite_tool_metadata__.requires_approval
-        for name, fn in tools.items()
-    }
+    gated = {name: fn.__aisuite_tool_metadata__.requires_approval for name, fn in tools.items()}
     assert gated == {
         "email_list_folders": False,
         "email_search": False,

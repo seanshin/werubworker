@@ -10,12 +10,12 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from coworker.connectors.descriptors import list_descriptors
 from coworker.connectors.setup import (
     connector_list,
     disconnect_connector,
     update_connector_tools,
 )
-from coworker.connectors.descriptors import list_descriptors
 from coworker.connectors.tool_defs import mcp_pinned_tools, mcp_tool_defs, tool_dicts
 from coworker.mcp.config import put_global_server, read_global
 from coworker.secrets import SecretStore
@@ -139,9 +139,7 @@ def test_prepare_mcp_tools_never_starts_an_oauth_flow(tmp_path, monkeypatch):
     assert seen["name"] == "granola"
 
 
-def test_connected_follows_tokens_and_disconnect_forgets_everything(
-    tmp_path, monkeypatch
-):
+def test_connected_follows_tokens_and_disconnect_forgets_everything(tmp_path, monkeypatch):
     _state(tmp_path, monkeypatch)
     secrets = SecretStore()
     secrets.put("monday:default", {"mode": "mcp", "enabled": True})
@@ -174,9 +172,7 @@ def test_connector_backed_servers_hidden_from_mcp_tab(tmp_path, monkeypatch):
 
 
 def _fake_tool(name):
-    return SimpleNamespace(
-        name=name, description=f"vendor {name}", inputSchema={"type": "object"}
-    )
+    return SimpleNamespace(name=name, description=f"vendor {name}", inputSchema={"type": "object"})
 
 
 def test_prepare_mcp_tools_gates_by_session_pin_and_toggles(tmp_path, monkeypatch):
@@ -210,9 +206,7 @@ def test_prepare_mcp_tools_gates_by_session_pin_and_toggles(tmp_path, monkeypatc
         return SimpleNamespace(tools=[t for t in tools if t.name in allow])
 
     monkeypatch.setattr(manager.mcp, "ensure", fake_ensure)
-    monkeypatch.setattr(
-        manager, "effective_connectors", lambda sid, agent=None: {"monday"}
-    )
+    monkeypatch.setattr(manager, "effective_connectors", lambda sid, agent=None: {"monday"})
 
     tools = asyncio.run(manager.prepare_mcp_tools("s1"))
     # Pin is authoritative (no manage_agent), the toggled-off search is gone.
@@ -247,9 +241,7 @@ def test_stale_token_reauth_never_opens_a_browser_mid_turn(tmp_path, monkeypatch
     manager.secrets.put("mcp-oauth:granola", {"tokens": {"access_token": "stale"}})
 
     async def refuses(server):
-        raise ExceptionGroup(
-            "transport", [mcp_oauth.InteractiveAuthRequired("sign-in required")]
-        )
+        raise ExceptionGroup("transport", [mcp_oauth.InteractiveAuthRequired("sign-in required")])
 
     monkeypatch.setattr(manager.mcp, "ensure", refuses)
     assert asyncio.run(manager.prepare_mcp_tools("s1")) == []

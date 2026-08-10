@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 pytestmark = pytest.mark.skip(reason="Cloud managed OAuth removed")
 
 """Slack connection health (M3.6 Step 2) — three honest layers: the
@@ -52,9 +54,7 @@ async def _noop_stop():
 
 def _gateway_with(adapter) -> SimpleNamespace:
     # `stop` because app shutdown tears the gateway down.
-    return SimpleNamespace(
-        _adapters={"slack": adapter} if adapter else {}, stop=_noop_stop
-    )
+    return SimpleNamespace(_adapters={"slack": adapter} if adapter else {}, stop=_noop_stop)
 
 
 # --- endpoint aggregation ----------------------------------------------------
@@ -62,9 +62,7 @@ def _gateway_with(adapter) -> SimpleNamespace:
 
 def test_status_live_relay_with_teams(client):
     client.manager.secrets.put("slack:default", {"mode": "relay", "enabled": True})
-    client.manager.secrets.put(
-        "cloud:auth", {"access_token": "jwt", "account": "rohit@x.com"}
-    )
+    client.manager.secrets.put("cloud:auth", {"access_token": "jwt", "account": "rohit@x.com"})
     client.manager.gateway = _gateway_with(
         _StubAdapter("live", {"T1": {"token_ok": True}, "T2": {"token_ok": False}})
     )
@@ -177,9 +175,7 @@ async def test_adapter_connect_failure_records_last_error():
 async def test_send_error_marks_token_dead_and_recovers(monkeypatch):
     from coworker.connectors import relay_client
 
-    results = iter(
-        [SendResult(False, error="invalid_auth"), SendResult(True, message_id="ts")]
-    )
+    results = iter([SendResult(False, error="invalid_auth"), SendResult(True, message_id="ts")])
     monkeypatch.setattr(relay_client, "_send_slack", lambda *a, **k: next(results))
     adapter = _adapter()
 

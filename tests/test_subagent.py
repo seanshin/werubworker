@@ -63,9 +63,7 @@ def test_explore_returns_final_report(tmp_path):
         ]
     )
     reg = ToolRegistry()
-    reg.register_all(
-        explorer_tools(workspace=tmp_path, provider=provider, model="gpt-5.5")
-    )
+    reg.register_all(explorer_tools(workspace=tmp_path, provider=provider, model="gpt-5.5"))
     spec = reg.get("explore")
     assert spec.metadata.risk_level == "low"  # parallel-safe in the parent engine
 
@@ -82,9 +80,7 @@ def test_explore_child_cannot_write(tmp_path):
         ]
     )
     reg = ToolRegistry()
-    reg.register_all(
-        explorer_tools(workspace=tmp_path, provider=provider, model="gpt-5.5")
-    )
+    reg.register_all(explorer_tools(workspace=tmp_path, provider=provider, model="gpt-5.5"))
     result = reg.execute("explore", {"task": "look around"})
     assert not (tmp_path / "evil.py").exists()
     assert "report" in result
@@ -98,14 +94,10 @@ def test_explore_flags_partial_report_on_iteration_rail(tmp_path):
 
     reg = ToolRegistry()
     reg.register_all(
-        explorer_tools(
-            workspace=tmp_path, provider=LoopingProvider([]), model="gpt-5.5"
-        )
+        explorer_tools(workspace=tmp_path, provider=LoopingProvider([]), model="gpt-5.5")
     )
     result = reg.execute("explore", {"task": "endless"})
-    assert "max_iterations" in result.get(
-        "error", ""
-    ) or "max_iterations" in result.get("note", "")
+    assert "max_iterations" in result.get("error", "") or "max_iterations" in result.get("note", "")
 
 
 def test_code_engine_registers_explore_chat_does_not(tmp_path):

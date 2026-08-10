@@ -5,14 +5,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from coworker.secrets import SecretStore
 from coworker.tools.ci_cd import (
-    ci_cd_tools,
     _ci_status,
     _ci_trigger,
-    _parse_owner_repo,
     _get_token,
+    _parse_owner_repo,
+    ci_cd_tools,
 )
-from coworker.secrets import SecretStore
 
 
 def test_ci_cd_tools_factory():
@@ -80,5 +80,7 @@ def test_ci_trigger_requires_approval():
 
 def test_deploy_rollback_requires_approval():
     tools = ci_cd_tools()
-    rollback = next(t for t in tools if t.__coworker_schema__["function"]["name"] == "deploy_rollback")
+    rollback = next(
+        t for t in tools if t.__coworker_schema__["function"]["name"] == "deploy_rollback"
+    )
     assert rollback.__aisuite_tool_metadata__.requires_approval is True

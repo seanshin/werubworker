@@ -41,12 +41,12 @@ _IS_WINDOWS = sys.platform == "win32"
 
 # Patterns that match commands too dangerous to execute under any circumstance.
 BLOCKED_PATTERNS = [
-    re.compile(r"rm\s+-rf\s+/[^/]"),       # rm -rf / (root delete)
-    re.compile(r"mkfs\."),                   # filesystem format
-    re.compile(r"dd\s+.*of=/dev/"),          # disk overwrite
+    re.compile(r"rm\s+-rf\s+/[^/]"),  # rm -rf / (root delete)
+    re.compile(r"mkfs\."),  # filesystem format
+    re.compile(r"dd\s+.*of=/dev/"),  # disk overwrite
     re.compile(r":()\s*\{\s*:\|:&\s*\};:"),  # fork bomb
-    re.compile(r">\s*/dev/sd"),              # direct disk write
-    re.compile(r"chmod\s+-R\s+777\s+/"),     # chmod 777 root
+    re.compile(r">\s*/dev/sd"),  # direct disk write
+    re.compile(r"chmod\s+-R\s+777\s+/"),  # chmod 777 root
 ]
 
 
@@ -56,6 +56,7 @@ def _is_blocked(command: str) -> str | None:
         if pat.search(command):
             return pat.pattern
     return None
+
 
 # Foreground timeout bounds: long enough for installs/builds/test runs by default, capped so
 # a model-requested timeout can't wedge the turn for more than ten minutes.
@@ -100,9 +101,7 @@ class _BackgroundTask:
         self.command = command
         if _IS_WINDOWS:
             argv = ["powershell.exe", "-NoProfile", "-Command", command]
-            spawn_kwargs: dict[str, Any] = {
-                "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP
-            }
+            spawn_kwargs: dict[str, Any] = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
         else:
             argv = ["/bin/bash", "-c", command]
             spawn_kwargs = {"start_new_session": True}
@@ -200,9 +199,7 @@ class LocalExecutor(Executor):
             ]
             # New process group so a timeout can deliver Ctrl-Break to the child (and only
             # the child), without signaling our own process.
-            spawn_kwargs: dict[str, Any] = {
-                "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP
-            }
+            spawn_kwargs: dict[str, Any] = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
         else:
             argv = [self._shell_path]
             spawn_kwargs = {"start_new_session": True}
@@ -241,9 +238,7 @@ class LocalExecutor(Executor):
             # the session self-heals rather than wedging every future command.
             self._spawn()
         if self._proc.stdin is None:
-            return self._result(
-                command, None, "", timed_out=False, error="shell not running"
-            )
+            return self._result(command, None, "", timed_out=False, error="shell not running")
 
         timeout = timeout or self.default_timeout
         self._abort.clear()
@@ -434,9 +429,7 @@ class LocalExecutor(Executor):
         except (ProcessLookupError, OSError):
             pass
 
-    def _result(
-        self, command, exit_code, output, *, timed_out, truncated=False, error=None
-    ):
+    def _result(self, command, exit_code, output, *, timed_out, truncated=False, error=None):
         result = {
             "command": command,
             "cwd": self.cwd,

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from coworker.agents.base import Agent, AgentContext
 from coworker.agents.dev import (
-    dev_agent,
-    dev_tool_factory,
     DEV_CAPABILITIES,
     DEV_INSTRUCTIONS,
+    dev_agent,
+    dev_tool_factory,
 )
-from coworker.agents.base import Agent, AgentContext
 
 
 def test_dev_agent_definition():

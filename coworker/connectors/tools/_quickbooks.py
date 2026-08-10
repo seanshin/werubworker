@@ -10,9 +10,7 @@ from . import _helpers
 from ._helpers import _attach, _bearer_headers, _clamp, _profile, _qbo_base, _schema
 
 
-def register(
-    secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None
-) -> None:
+def register(secrets: SecretStore, tools: list[Callable[..., Any]], *, roots=None) -> None:
     def quickbooks_query(query: str, max_results: int = 10) -> dict[str, Any]:
         profile, err = _profile(secrets, "quickbooks", "access_token", "realm_id")
         if err:
@@ -50,9 +48,7 @@ def register(
             "GET",
             f"{_qbo_base(profile)}/query",
             headers=_bearer_headers(profile["access_token"]),
-            params={
-                "query": f"SELECT * FROM Customer MAXRESULTS {_clamp(max_results)}"
-            },
+            params={"query": f"SELECT * FROM Customer MAXRESULTS {_clamp(max_results)}"},
         )
 
     quickbooks_list_customers.__name__ = "quickbooks_list_customers"

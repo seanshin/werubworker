@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import aisuite as ai
+
 from coworker.engine import TurnEngine
 from coworker.events import EventType
 from coworker.permissions import Mode, PermissionEngine
@@ -125,8 +126,7 @@ def test_plan_rejection_keeps_plan_mode_and_returns_feedback(tmp_path):
     finished = next(e for e in events if e.type == EventType.TOOL_FINISHED)
     assert finished.data["status"] == "denied"
     assert any(
-        m.get("role") == "tool" and "fix y.py instead" in m["content"]
-        for m in engine.messages
+        m.get("role") == "tool" and "fix y.py instead" in m["content"] for m in engine.messages
     )
 
 
@@ -139,8 +139,7 @@ def test_propose_plan_without_approver_noops(tmp_path):
     assert EventType.PLAN_PROPOSED not in [e.type for e in events]
     assert permissions.mode is Mode.PLAN
     assert any(
-        m.get("role") == "tool" and "isn't available" in m["content"]
-        for m in engine.messages
+        m.get("role") == "tool" and "isn't available" in m["content"] for m in engine.messages
     )
 
 
@@ -159,9 +158,7 @@ def test_build_engine_plan_mode_wiring(tmp_path):
     from coworker.agent import build_engine
     from coworker.agents import code_agent
 
-    engine = build_engine(
-        agent=code_agent(), workspace=tmp_path, provider=_Stub(), mode=Mode.PLAN
-    )
+    engine = build_engine(agent=code_agent(), workspace=tmp_path, provider=_Stub(), mode=Mode.PLAN)
     try:
         assert "propose_plan" in engine.registry.names()
         # the per-turn reminder is live while planning, gone after the flip
@@ -245,6 +242,5 @@ def test_propose_plan_outside_plan_mode_is_rejected(tmp_path):
     events = _collect(engine, "go")
     assert EventType.PLAN_PROPOSED not in [e.type for e in events]
     assert any(
-        m.get("role") == "tool" and "not in plan mode" in m["content"]
-        for m in engine.messages
+        m.get("role") == "tool" and "not in plan mode" in m["content"] for m in engine.messages
     )

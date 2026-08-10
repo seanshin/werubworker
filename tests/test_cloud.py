@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 pytestmark = pytest.mark.skip(reason="Cloud functionality removed — all endpoints are stubs")
 
 """OpenWorker Cloud integration: sign-in, managed connect callback, refresh.
@@ -13,7 +15,6 @@ manual profiles are never touched by cloud refresh.
 
 import time
 import urllib.parse
-
 
 from coworker import cloud
 from coworker.config import Config
@@ -81,9 +82,9 @@ def test_complete_login_stores_tokens_and_account(secrets, config, monkeypatch):
     # byte-for-byte (RFC 6749 §4.1.3). The 07-09 broker-bounce change updated only the
     # authorize leg and every real sign-in failed at the exchange; this pin would have
     # caught it.
-    authorize_redirect = urllib.parse.parse_qs(
-        urllib.parse.urlsplit(begun["authorize_url"]).query
-    )["redirect_uri"][0]
+    authorize_redirect = urllib.parse.parse_qs(urllib.parse.urlsplit(begun["authorize_url"]).query)[
+        "redirect_uri"
+    ][0]
 
     def fake_post(url, **kwargs):
         assert url == "https://tenant.auth0.test/oauth/token"
@@ -187,9 +188,7 @@ def test_sync_connections_restores_github_installs(secrets, config, monkeypatch)
     assert default["mode"] == "relay" and default["default_install"] == "101"
 
 
-def test_sync_connections_pre_restore_rows_fall_back_to_primary(
-    secrets, config, monkeypatch
-):
+def test_sync_connections_pre_restore_rows_fall_back_to_primary(secrets, config, monkeypatch):
     """Rows written before the broker stored the installations list carry only
     the primary install in tenant_metadata — restore that one."""
     _signed_in(secrets)
@@ -203,9 +202,7 @@ def test_sync_connections_pre_restore_rows_fall_back_to_primary(
     assert secrets.get("github:install:101")["account_login"] == "acme"
 
 
-def test_sync_connections_requires_sign_in_and_survives_errors(
-    secrets, config, monkeypatch
-):
+def test_sync_connections_requires_sign_in_and_survives_errors(secrets, config, monkeypatch):
     assert not cloud.sync_connections(secrets, config)["ok"]  # signed out
     _signed_in(secrets)
     monkeypatch.setattr(cloud.httpx, "get", lambda url, **k: FakeResponse(503, {}))
@@ -229,9 +226,7 @@ def test_every_managed_connector_has_a_provider_mapping():
 
     managed = {d.name for d in DESCRIPTORS if d.managed}
     unmapped = managed - set(cloud.PROVIDER_FOR_CONNECTOR)
-    assert (
-        not unmapped
-    ), f"managed connectors missing an OAuth provider: {sorted(unmapped)}"
+    assert not unmapped, f"managed connectors missing an OAuth provider: {sorted(unmapped)}"
 
 
 def test_begin_managed_connect_requires_sign_in(secrets, config):
@@ -251,9 +246,7 @@ def test_managed_profile_is_field_compatible_with_manual(secrets):
         "scope": "gmail.readonly",
         "account": "a@b.c",
     }
-    result = managed_connect_connector(
-        secrets, "gmail", cloud.managed_profile_from_callback(form)
-    )
+    result = managed_connect_connector(secrets, "gmail", cloud.managed_profile_from_callback(form))
     assert result["ok"] and result["account"] == "a@b.c"
 
     listed = {c["name"]: c for c in connector_list(secrets)}
@@ -293,9 +286,7 @@ def test_managed_connect_redirect_follows_actual_port(secrets, config, monkeypat
 
 
 def test_manual_paste_still_works_and_is_not_managed(secrets):
-    result = connect_connector(
-        secrets, "gmail", {"access_token": "manual-token"}, validate=False
-    )
+    result = connect_connector(secrets, "gmail", {"access_token": "manual-token"}, validate=False)
     assert result["ok"]
     listed = {c["name"]: c for c in connector_list(secrets)}
     assert listed["gmail"]["connected"]

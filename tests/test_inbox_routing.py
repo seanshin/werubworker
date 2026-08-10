@@ -25,9 +25,7 @@ def test_route_precedence(tmp_path):
 
 
 def test_bindings_persist(tmp_path):
-    InboxRouting(tmp_path / "routing.json").set_binding(
-        "ops", channel="telegram", target="123"
-    )
+    InboxRouting(tmp_path / "routing.json").set_binding("ops", channel="telegram", target="123")
     r2 = InboxRouting(tmp_path / "routing.json")
     b = r2.binding_for("ops")
     assert b.channel == "telegram" and b.target == "123"
@@ -54,10 +52,7 @@ def test_in_app_only_binding_delivers_nothing(tmp_path):
     routing = InboxRouting(tmp_path / "routing.json")
     item = store.add_approval("s1", "x", inbox=DEFAULT_INBOX)
     calls = []
-    assert (
-        deliver(item, routing.binding_for(DEFAULT_INBOX), lambda *a: calls.append(a))
-        is False
-    )
+    assert deliver(item, routing.binding_for(DEFAULT_INBOX), lambda *a: calls.append(a)) is False
     assert calls == []
 
 

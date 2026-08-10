@@ -136,9 +136,7 @@ def test_shell_commands_not_auto_allowed_by_default(tmp_path):
     # environment disclosure, reads outside the workspace, and helper execution.
     from coworker.config import DEFAULT_ALLOWED_COMMANDS
 
-    eng = PermissionEngine(
-        workspace_root=tmp_path, allowed_commands=list(DEFAULT_ALLOWED_COMMANDS)
-    )
+    eng = PermissionEngine(workspace_root=tmp_path, allowed_commands=list(DEFAULT_ALLOWED_COMMANDS))
     for cmd in (
         "python3 -c 'import os'",
         "pytest /tmp/attacker_test.py",

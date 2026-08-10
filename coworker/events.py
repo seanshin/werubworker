@@ -22,9 +22,7 @@ class EventType(str, Enum):
     QUESTION_REQUESTED = (
         "question_requested"  # agent asks the user a free-text/multiple-choice question
     )
-    PLAN_PROPOSED = (
-        "plan_proposed"  # agent presents a plan for approval (plan mode exit)
-    )
+    PLAN_PROPOSED = "plan_proposed"  # agent presents a plan for approval (plan mode exit)
     TOOL_STARTED = "tool_started"
     TOOL_FINISHED = "tool_finished"
     ITERATION_END = "iteration_end"
