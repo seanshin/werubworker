@@ -81,6 +81,11 @@ you're doing and why (e.g. "Checking what merged since yesterday's digest."). It
 to the user as live progress. Don't narrate trivial single-call follow-ups, don't repeat \
 the previous line, and never let narration replace your final answer."""
 
+_LANGUAGE_GUIDANCE = """\
+Language: Always respond in Korean (한국어). All narration, explanations, summaries, and \
+final answers must be in Korean. Technical terms (API, CPU, Docker, etc.) may stay in \
+English, but sentences and descriptions must be in Korean."""
+
 
 def _enabled_connector_tools(secrets: SecretStore) -> tuple[set[str], set[str]]:
     connectors = {c["name"]: c for c in connector_list(secrets)}
@@ -277,7 +282,7 @@ def build_engine(
     if wake_store is not None and session_id and agent.family == "knowledge":
         registry.register_all(selfwake_tools(wake_store, session_id))
 
-    instructions = f"{agent.system_prompt}\n\n{_NARRATION_GUIDANCE}"
+    instructions = f"{agent.system_prompt}\n\n{_NARRATION_GUIDANCE}\n\n{_LANGUAGE_GUIDANCE}"
     if ws is not None:
         instructions = f"{instructions}\n\n{environment_context(ws)}"
         conventions = load_agents_md(ws)
