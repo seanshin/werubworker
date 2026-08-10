@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { List } from "react-window";
 import { useTranslation } from "react-i18next";
 import {
   announceCloudChanged,
@@ -26,6 +27,11 @@ import { PersonaGlyph, personaGlyph } from "./personaIcon";
 import { SearchModal } from "./SearchModal";
 import { baseName } from "../paths";
 import { showPersonas } from "../flags";
+
+// Virtual scrolling constants for the flat Recent list.
+const ROW_HEIGHT = 40;         // matches cardRow's py-2 + content height
+const VIRTUAL_THRESHOLD = 20;  // use FixedSizeList only when expanded list exceeds this
+const MAX_LIST_HEIGHT = 480;   // cap the virtual list height (12 visible rows)
 
 // Session surfaces shown as accordions, in display order. The surfaced personas drive this list
 // (so third-party / Ops personas appear); the hardcoded set is the fallback before personas load.
@@ -1175,10 +1181,23 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                 </div>
               ) : (
                 <>
-                  {(recentExpanded
-                    ? recentSessions
-                    : recentSessions.slice(0, RECENT_PEEK)
-                  ).map((s) => cardRow(s))}
+                  {recentExpanded && recentSessions.length > VIRTUAL_THRESHOLD ? (
+                    <List
+                      rowComponent={({ rowIndex, style }: any) => (
+                        <div style={style}>{cardRow(recentSessions[rowIndex])}</div>
+                      )}
+                      rowProps={{}}
+                      rowCount={recentSessions.length}
+                      rowHeight={ROW_HEIGHT}
+                      overscanCount={5}
+                      style={{ height: Math.min(recentSessions.length * ROW_HEIGHT, MAX_LIST_HEIGHT) }}
+                    />
+                  ) : (
+                    (recentExpanded
+                      ? recentSessions
+                      : recentSessions.slice(0, RECENT_PEEK)
+                    ).map((s) => cardRow(s))
+                  )}
                   {recentSessions.length > RECENT_PEEK && (
                     <button
                       className="w-full text-left px-2 py-1.5 text-[12px] text-muted hover:text-ink"
