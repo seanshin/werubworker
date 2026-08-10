@@ -18,7 +18,6 @@ import {
   runAutomation,
   setSessionFlags,
   Session,
-  type MessageSource,
   type Persona,
   type RecentWorkspace,
 } from "./api";
@@ -32,7 +31,7 @@ import type {
 import { isProjectScoped } from "./personaScope";
 import { baseName } from "./paths";
 import { itemsFromMessages } from "./itemsFromMessages";
-import { addTurnUsage, emptyUsage, usageFromMessages } from "./usage";
+import { emptyUsage, usageFromMessages } from "./usage";
 import { streamMode } from "./streamGate";
 import { InboxItemCard } from "./components/InboxItemCard";
 import { isTauri, platformOS, startWindowDrag } from "./tauri";
@@ -68,8 +67,6 @@ import { WorkspaceTrustPrompt } from "./components/WorkspaceTrustPrompt";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import {
   newId,
-  FILE_WRITE_TOOLS,
-  normalizeTodos,
   needsWorkspaceFallback,
   gatesWorkspaceFallback,
   rememberLastSession,
@@ -84,6 +81,7 @@ import { useStreamState } from "./hooks/useStreamState";
 import { useInboxState } from "./hooks/useInboxState";
 import { useVisibleInterval } from "./hooks/useVisibleInterval";
 import { useSessionState } from "./hooks/useSessionState";
+import { dispatchEvent, type EventHandlerCtx } from "./hooks/eventHandlers";
 
 export function App() {
   return (
@@ -123,8 +121,6 @@ function AppInner() {
     navCollapsed, toggleNav, navPeek, setNavPeek,
     railHidden, setRailHidden,
     searchOpen, setSearchOpen,
-    browserRefreshKey, setBrowserRefreshKey,
-    artifactCount, setArtifactCount,
     accessKey, openAccess,
     personaViewId,
     personaViewReturn,
@@ -181,6 +177,10 @@ function AppInner() {
     composerPrefill, setComposerPrefill,
   } = useSessionState();
   const [items, setItems] = useState<Item[]>([]);
+  // Moved out of UIContext — only used in App, avoids triggering UIContext consumers
+  // (Sidebar etc.) on every tool_finished / turn_done refresh.
+  const [browserRefreshKey, setBrowserRefreshKey] = useState(0);
+  const [artifactCount, setArtifactCount] = useState(0);
   const {
     streaming, setStreaming,
     reasoning: reasoningStream, setReasoning: setReasoningStream, reasoningRef,
@@ -407,196 +407,16 @@ function AppInner() {
   useEffect(() => {
     if (booting) return; // wait until boot/resume settles the session before connecting
     if (gatesWorkspace(agent) && !workspace) return; // Code needs a folder (gate handles it)
+    const eventCtx: EventHandlerCtx = {
+      setConnected, setModel, setMode, setWorkspace, setWorkspaceTrustRequest,
+      setRunning, setStreaming, setReasoningStream, setCompacting,
+      setItems, setUsage, setTodo, setBrowserRefreshKey,
+      appendDelta, appendReasoningDelta, flushStream,
+      unattendedRef, reasoningRef, activeRunRef,
+      sessionId, refreshSessions, finalizeAutomationRun, updateLastTool,
+    };
     const handleEvent = (ev: WsEvent) => {
-      const d = ev.data || {};
-      // An interrupted/errored turn never emits assistant_message, so its streamed partial
-      // would otherwise live only in the ephemeral buffer until the next turn_start wipes it
-      // (owner-hit 2026-07-22). Promote it to a durable transcript item — the engine persists
-      // the same text server-side, so the live view and a session reload now agree.
-      const flushPartialStream = () => {
-        const flushed = flushStream();
-        if (flushed) setItems((p) => [...p, flushed]);
-      };
-      // Any engine event after `compacting` means the summarizer finished (compacted /
-      // silent no-op / failure prompt) — the transient must never outlive it.
-      if (ev.type !== "compacting") setCompacting(false);
-      switch (ev.type) {
-        case "ready":
-          setConnected(true);
-          if (d.model) setModel(d.model);
-          if (d.mode) setMode(d.mode);
-          if (d.command_trust?.required) setWorkspaceTrustRequest(d.command_trust);
-          // Cowork: adopt the server-provisioned scratch dir (only when we don't already have one).
-          if (d.workspace) setWorkspace((cur) => cur || d.workspace);
-          break;
-        case "turn_start":
-          setRunning(true);
-          setStreaming("");
-          setReasoningStream("");
-          // Background-delivered turns (channel message, self-wake, durable resume) have no local
-          // send(), so the triggering message isn't in `items` yet — surface it. A connector message
-          // carries a structured `source` (§3.1) → render the rich card; otherwise a plain user item.
-          // Foreground turns already appended it in send(); skip the duplicate.
-          if (d.source?.connector) {
-            const src = d.source as MessageSource;
-            setItems((p) => {
-              const last = p[p.length - 1];
-              return last && last.kind === "connector" && last.source.ts === src.ts && last.source.text === src.text
-                ? p
-                : [...p, { kind: "connector", source: src }];
-            });
-          } else if (typeof d.input === "string" && d.input) {
-            // `display` (force-run) is the user's literal "/name …" line; the framed
-            // `input` is model-facing. Surface/dedupe on what the user actually sees.
-            const shown = (typeof d.display === "string" && d.display) || (d.input as string);
-            setItems((p) => {
-              const last = p[p.length - 1];
-              return last && last.kind === "user" && last.text === shown
-                ? p
-                : [...p, { kind: "user", text: shown, ts: Date.now() / 1000 }];
-            });
-          }
-          break;
-        case "assistant_delta":
-          appendDelta(d.text || "");
-          break;
-        case "reasoning_delta":
-          appendReasoningDelta(d.text || "");
-          break;
-        case "assistant_message": {
-          if (d.usage) setUsage((u) => addTurnUsage(u, d.usage));
-          // The event's reasoning is authoritative (covers background-delivered turns);
-          // the local buffer is the fallback for older servers.
-          const reasoning = d.reasoning || reasoningRef.current;
-          if (d.text || reasoning)
-            setItems((p) => [
-              ...p,
-              {
-                kind: "assistant",
-                text: d.text || "",
-                ts: Date.now() / 1000,
-                ...(reasoning ? { reasoning } : {}),
-              },
-            ]);
-          setStreaming(""); // finalized into items (or empty tool-only turn)
-          setReasoningStream("");
-          break;
-        }
-        case "tool_proposed":
-          if (d.name === "todo_write" && (d.arguments?.todos || d.arguments?.items))
-            setTodo(normalizeTodos(d.arguments.todos ?? d.arguments.items));
-          setItems((p) => [
-            ...p,
-            { kind: "tool", id: newId(), name: d.name, args: d.arguments, status: "…" },
-          ]);
-          break;
-        case "permission_required":
-          // Unattended → the backend parked it in the Inbox; don't also surface a live card.
-          if (unattendedRef.current) break;
-          setItems((p) => [
-            ...p,
-            {
-              kind: "approval",
-              name: d.name,
-              args: d.arguments,
-              reason: d.reason,
-              category: d.category,
-              standingTarget: d.standing_target || undefined,
-            },
-          ]);
-          break;
-        case "directory_requested":
-          if (unattendedRef.current) break;
-          setItems((p) => [
-            ...p,
-            { kind: "dirreq", reason: d.reason || "", path: d.path || "", writable: !!d.writable },
-          ]);
-          break;
-        case "plan_proposed":
-          if (unattendedRef.current) break;
-          setItems((p) => [...p, { kind: "planreq", plan: d.plan || "" }]);
-          break;
-        case "question_requested":
-          // ask_user in an attended session — answered inline (not routed to the Inbox).
-          setItems((p) => [
-            ...p,
-            {
-              kind: "question",
-              question: d.question || "",
-              options: d.options || [],
-              allow_text: d.allow_text !== false,
-              multi: !!d.multi,
-            },
-          ]);
-          break;
-        case "tool_finished":
-          setItems((p) =>
-            updateLastTool(
-              p,
-              d.name,
-              d.status,
-              d.result_preview || d.reason,
-              d.display?.hidden_by_filters,
-              d.standing_rule,
-            ),
-          );
-          // Refresh the right rail when something it shows may have changed: browser state, or a
-          // file write that should appear under Artifacts immediately (not only after the turn).
-          if (String(d.name || "").startsWith("browser_") || FILE_WRITE_TOOLS.has(d.name)) {
-            setBrowserRefreshKey((k) => k + 1);
-          }
-          break;
-        case "turn_end":
-          if (d.status === "max_iterations_exceeded")
-            setItems((p) => [...p, { kind: "notice", tone: "warn", text: "Stopped: max iterations reached." }]);
-          break;
-        case "model_changed":
-          // Mid-session switch (server-applied): update the header fact and drop the
-          // persisted marker into the live transcript (replay renders it from history).
-          if (d.model) setModel(d.model);
-          setItems((p) => [...p, { kind: "notice", tone: "info", text: d.text || "Model switched" }]);
-          break;
-        case "compacting":
-          setCompacting(true);
-          break;
-        case "compacted":
-          // Auto-compaction marker (OPE-27): outbound-only — the transcript stays intact,
-          // this divider just shows where the model's memory was summarized.
-          setItems((p) => [...p, { kind: "notice", tone: "info", text: d.text || "Context compacted" }]);
-          break;
-        case "interrupted":
-          flushPartialStream();
-          setItems((p) => [...p, { kind: "notice", tone: "warn", text: "Interrupted." }]);
-          break;
-        case "error":
-          flushPartialStream();
-          setItems((p) => [
-            ...p,
-            { kind: "notice", tone: "warn", text: "Error: " + (d.error || "unknown"), retriable: true },
-          ]);
-          break;
-        case "input_rejected":
-          setItems((p) => [
-            ...p,
-            { kind: "notice", tone: "warn", text: d.error || "That message was rejected." },
-          ]);
-          break;
-        case "turn_done":
-          setRunning(false);
-          refreshSessions();
-          // Catch-all artifact refresh: files created via shell or on a brand-new session (whose
-          // record only exists after the first save) appear once the turn completes.
-          setBrowserRefreshKey((k) => k + 1);
-          // Finalize a manual run after its first turn completes (mark it ok in history).
-          {
-            const ar = activeRunRef.current;
-            if (ar && ar.sessionId === sessionId) {
-              activeRunRef.current = null;
-              finalizeAutomationRun(ar.taskId, ar.runId).catch(() => {});
-            }
-          }
-          break;
-      }
+      dispatchEvent(ev, eventCtx);
     };
 
     const session = new Session(sessionId, workspace || "", agent, {

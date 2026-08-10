@@ -23,3 +23,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <App />
   </React.StrictMode>,
 );
+
+// Register the service worker for immutable asset caching (vendor chunks, fonts).
+// Tauri desktop shells don't support SW; the browser build benefits from cache-first loads.
+if ("serviceWorker" in navigator && !(globalThis as any).__TAURI__) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}

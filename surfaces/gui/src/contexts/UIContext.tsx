@@ -14,10 +14,6 @@ interface UIContextValue {
   setRailHidden: (v: boolean | ((h: boolean) => boolean)) => void;
   searchOpen: boolean;
   setSearchOpen: (v: boolean) => void;
-  browserRefreshKey: number;
-  setBrowserRefreshKey: (v: number | ((k: number) => number)) => void;
-  artifactCount: number;
-  setArtifactCount: (v: number) => void;
   accessKey: number;
   openAccess: () => void;
   personaViewId: string;
@@ -50,8 +46,6 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [navPeek, setNavPeek] = useState(false);
   const [railHidden, setRailHidden] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [browserRefreshKey, setBrowserRefreshKey] = useState(0);
-  const [artifactCount, setArtifactCount] = useState(0);
   const [accessKey, setAccessKey] = useState(0);
   const [personaViewId, setPersonaViewId] = useState<string>("");
   const [personaViewReturn, setPersonaViewReturn] = useState<"session" | "settings">("session");
@@ -138,10 +132,6 @@ export function UIProvider({ children }: { children: ReactNode }) {
       setRailHidden,
       searchOpen,
       setSearchOpen,
-      browserRefreshKey,
-      setBrowserRefreshKey,
-      artifactCount,
-      setArtifactCount,
       accessKey,
       openAccess,
       personaViewId,
@@ -162,8 +152,6 @@ export function UIProvider({ children }: { children: ReactNode }) {
       navPeek,
       railHidden,
       searchOpen,
-      browserRefreshKey,
-      artifactCount,
       accessKey,
       openAccess,
       personaViewId,

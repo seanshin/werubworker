@@ -50,10 +50,7 @@ def estimate_tokens(messages: list[dict[str, Any]]) -> int:
     never report usage (documented in the metering code)."""
     total = 0
     for msg in messages:
-        try:
-            total += len(json.dumps(msg, default=str))
-        except (TypeError, ValueError):
-            total += len(str(msg))
+        total += len(json.dumps(msg, default=str))
     return total // 4
 
 
