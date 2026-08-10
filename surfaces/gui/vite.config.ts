@@ -35,7 +35,6 @@ export default defineConfig(({ command }) => {
         output: {
           manualChunks: {
             "vendor-react": ["react", "react-dom"],
-            "vendor-pdf": ["pdfjs-dist"],
             "vendor-xlsx": ["xlsx"],
             "vendor-markdown": ["react-markdown", "remark-gfm"],
             "vendor-i18n": ["i18next", "react-i18next"],

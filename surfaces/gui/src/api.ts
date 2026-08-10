@@ -770,6 +770,19 @@ export async function inspectPdf(
   return res.json();
 }
 
+/** Server-side PDF → PNG pages. Replaces the pdfjs-dist client-side renderer. */
+export async function renderPdf(
+  dataUrl: string,
+  maxPages = 20,
+): Promise<{ ok: boolean; pages?: string[]; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/attachments/render-pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data_url: dataUrl, max_pages: maxPages }),
+  });
+  return res.json();
+}
+
 /** Persist whether the composer shows the context-window fill bar. */
 export async function setContextBar(
   shown: boolean,

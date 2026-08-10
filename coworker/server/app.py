@@ -1455,6 +1455,21 @@ def create_app(manager: SessionManager) -> FastAPI:
 
         return inspect(str((body or {}).get("data_url", "")))
 
+    @app.post("/v1/attachments/render-pdf")
+    def attachments_render_pdf(body: dict) -> dict[str, Any]:
+        """Server-side PDF → PNG page images. Replaces the pdfjs-dist client-side
+        renderer, eliminating the 1.3MB worker from the frontend bundle."""
+        from ..pdf_support import rasterize
+
+        data_url = str((body or {}).get("data_url", ""))
+        max_pages = int((body or {}).get("max_pages", 20))
+        if not data_url:
+            return {"ok": False, "error": "missing data_url"}
+        pages = rasterize(data_url, max_pages=max_pages)
+        if pages is None:
+            return {"ok": False, "error": "could not render PDF"}
+        return {"ok": True, "pages": pages}
+
     # -- direct-message routing -------------------------------------------------
     @app.get("/v1/messaging/dm-route")
     def dm_route_get() -> dict[str, Any]:
