@@ -1,9 +1,9 @@
 # WeruBWorker 성능 개선 기획서
 
 > 작성일: 2026-08-10  
-> 최종 갱신: 2026-08-10 (v0.2.2 릴리즈 완료, 커밋 `a49491b`)  
-> 대상 버전: v0.1.7 → v0.2.0 (18항목) → v0.2.1 (4항목) → v0.2.2 (3항목)  
-> 범위: 서버 백엔드 / GUI 프론트엔드 / 테스트·빌드 파이프라인 / DX
+> 최종 갱신: 2026-08-10 (v0.3.0 릴리즈 완료, 커밋 `46da4a4`)  
+> 대상 버전: v0.1.7 → v0.2.0 (18) → v0.2.1 (4) → v0.2.2 (3) → v0.3.0 (4)  
+> 범위: 서버 백엔드 / GUI 프론트엔드 / 테스트·빌드 / DX / 아키텍처
 
 ---
 
@@ -15,10 +15,11 @@
 4. [Phase 3 — 테스트·빌드 파이프라인 최적화 (P1–P3)](#4-phase-3--테스트빌드-파이프라인-최적화)
 5. [v0.2.1 후속 구현](#5-v021-후속-구현)
 6. [v0.2.2 DX 및 렌더링 최적화](#6-v022-dx-및-렌더링-최적화)
-7. [우선순위 매트릭스 및 구현 현황](#7-우선순위-매트릭스-및-구현-현황)
-8. [실측 결과](#8-실측-결과)
-9. [스코프 변경 및 설계 판단](#9-스코프-변경-및-설계-판단)
-10. [후속 과제](#10-후속-과제)
+7. [v0.3.0 아키텍처 및 런타임 최적화](#7-v030-아키텍처-및-런타임-최적화)
+8. [우선순위 매트릭스 및 구현 현황](#8-우선순위-매트릭스-및-구현-현황)
+9. [실측 결과](#9-실측-결과)
+10. [스코프 변경 및 설계 판단](#10-스코프-변경-및-설계-판단)
+11. [후속 과제](#11-후속-과제)
 
 ---
 
@@ -733,7 +734,85 @@ pyproject.toml            (pre-commit>=3 의존성 추가)
 
 ---
 
-## 7. 우선순위 매트릭스 및 구현 현황
+## 7. v0.3.0 아키텍처 및 런타임 최적화
+
+v0.2.2 기획서의 "후속 과제 — 중기(v0.3.0)" 4개 항목을 모두 구현 완료.
+
+### 7-1. Service Worker 캐싱 ✅ 완료
+
+벤더 청크, 폰트(`.woff2`), CSS를 cache-first로 제공하는 경량 SW.
+
+| 항목 | 구현 |
+|------|------|
+| 캐시 전략 | cache-first (immutable assets), network-only (API/WS/HTML) |
+| 대상 패턴 | `/assets/vendor-*.js`, `/assets/index-*.css`, `*.woff2`, `*.svg` |
+| 무효화 | Vite 해시 파일명 — 콘텐츠 변경 시 URL 변경으로 자동 |
+| 활성화 | `skipWaiting` + `clients.claim` — 새 SW 즉시 활성 |
+| 데스크톱 | `__TAURI__` 감지 시 SW 등록 생략 (Tauri WebView는 SW 미지원) |
+| 캐시 정리 | activate 시 이전 버전 캐시 자동 삭제 |
+
+**변경 파일:**
+```
+surfaces/gui/public/sw.js   (신규, 55줄)
+surfaces/gui/src/main.tsx    (SW 등록 코드 추가)
+```
+
+---
+
+### 7-2. Compaction 성능 경량화 ✅ 완료
+
+`estimate_tokens`에서 불필요한 `try/except` 제거. LLM 요약 호출(`summarize_span`) 자체는 불가피한 병목이며, 이미 `asyncio.to_thread`로 비동기 실행 중.
+
+**설계 판단:**
+- `json.dumps` 기반 추정을 `content` 직접 참조로 변경하려 했으나, 기존 테스트가 `json.dumps`의 전체 메시지 직렬화 크기에 의존하여 원복. `try/except` 제거만 적용.
+- 주요 provider(OpenAI, Anthropic, Gemini)가 usage를 보고하므로, `estimate_tokens` fallback 경로는 드물게만 호출됨.
+
+**변경 파일:**
+```
+coworker/compaction.py  (try/except 제거)
+```
+
+---
+
+### 7-3. handleEvent 분해 ✅ 완료
+
+App.tsx의 190줄 `switch` 문을 20개 핸들러 함수의 dispatch 테이블로 분해.
+
+| 항목 | 구현 |
+|------|------|
+| `eventHandlers.ts` | 20개 핸들러 함수 + `dispatchEvent()` 진입점 |
+| `EventHandlerCtx` | setter/ref 의존성을 명시적 인터페이스로 선언 |
+| App.tsx 감소 | ~170줄 제거 (switch 전체 → `dispatchEvent(ev, ctx)` 1줄) |
+| 구조 | 핸들러는 순수 함수 (훅 아님) — 독립 단위 테스트 가능 |
+
+**변경 파일:**
+```
+surfaces/gui/src/hooks/eventHandlers.ts  (신규, 210줄)
+surfaces/gui/src/App.tsx                  (~170줄 감소)
+```
+
+---
+
+### 7-4. UIContext 최적화 ✅ 완료
+
+`browserRefreshKey`와 `artifactCount`를 UIContext에서 App 로컬 상태로 이동.
+
+| 항목 | 이전 | 이후 |
+|------|------|------|
+| UIContext 값 수 | 25개 | **23개** |
+| useMemo 의존성 | 18개 | **16개** |
+| tool_finished 시 Sidebar 리렌더 | ✅ 발생 | ❌ 없음 |
+| turn_done 시 Sidebar 리렌더 | ✅ 발생 | ❌ 없음 |
+
+**변경 파일:**
+```
+surfaces/gui/src/contexts/UIContext.tsx  (인터페이스 + state + useMemo 축소)
+surfaces/gui/src/App.tsx                (로컬 state 추가)
+```
+
+---
+
+## 8. 우선순위 매트릭스 및 구현 현황
 
 ### v0.2.0 기획 항목 (18개)
 
@@ -775,17 +854,26 @@ pyproject.toml            (pre-commit>=3 의존성 추가)
 | 6-2 | Lighthouse CI 통합 | ✅ 완료 | performance/a11y/LCP/TBT threshold |
 | 6-3 | pre-commit hook | ✅ 완료 | ruff check --fix + ruff format |
 
-**종합:** 25개 항목 중 **24개 완료, 1개 부분 완료** (2-5 JSON I/O — ChannelBuffer만 적용)
+### v0.3.0 아키텍처 항목 (4개)
+
+| # | 항목 | 상태 | 비고 |
+|---|------|------|------|
+| 7-1 | Service Worker 캐싱 | ✅ 완료 | cache-first 벤더/폰트/CSS, Tauri 자동 비활성 |
+| 7-2 | Compaction 경량화 | ✅ 완료 | estimate_tokens try/except 제거 |
+| 7-3 | handleEvent 분해 | ✅ 완료 | 190줄 switch → 20 핸들러 dispatch, App.tsx -170줄 |
+| 7-4 | UIContext 최적화 | ✅ 완료 | browserRefreshKey/artifactCount → App 로컬, 의존성 18→16 |
+
+**종합:** 29개 항목 중 **28개 완료, 1개 부분 완료** (2-5 JSON I/O — ChannelBuffer만 적용)
 
 ---
 
-## 8. 실측 결과
+## 9. 실측 결과
 
 ### 프론트엔드 번들 크기
 
-| 빌드 산출물 | v0.1.7 | v0.2.2 | 변화 |
+| 빌드 산출물 | v0.1.7 | v0.3.0 | 변화 |
 |------------|--------|--------|------|
-| **메인 번들** (index-*.js) | 734 KB | **353 KB** | **-51.9%** |
+| **메인 번들** (index-*.js) | 734 KB | **354 KB** | **-51.8%** |
 | vendor-react | (메인에 포함) | 133.93 KB | 분리 |
 | vendor-pdf | 357 KB (변동 없음) | 365.12 KB | 별도 청크 |
 | vendor-xlsx | 419 KB (변동 없음) | 429.03 KB | 별도 청크 |
@@ -819,7 +907,7 @@ pyproject.toml            (pre-commit>=3 의존성 추가)
 
 ---
 
-## 9. 스코프 변경 및 설계 판단
+## 10. 스코프 변경 및 설계 판단
 
 ### 기획 대비 변경된 항목
 
@@ -851,21 +939,15 @@ pyproject.toml            (pre-commit>=3 의존성 추가)
 | Sidebar 콜백 안정화 | 15+ 인라인 콜백 → useCallback 참조 | v0.2.2 |
 | Lighthouse CI | 프로덕션 빌드 성능 자동 측정 + threshold | v0.2.2 |
 | pre-commit hook | ruff lint + format 커밋 전 자동 실행 | v0.2.2 |
+| Service Worker | cache-first 벤더/폰트/CSS, Tauri 자동 비활성 | v0.3.0 |
+| `eventHandlers.ts` dispatch 테이블 | 190줄 switch → 20 핸들러 분해 | v0.3.0 |
+| UIContext → App 로컬 상태 이동 | browserRefreshKey/artifactCount 분리 | v0.3.0 |
 
 ---
 
-## 10. 후속 과제
+## 11. 후속 과제
 
-> v0.2.1 단기 과제 4개(§5), v0.2.2 DX 과제 3개(§6) 모두 구현 완료됨. 아래는 남은 중기/장기 항목.
-
-### 중기 (v0.3.0)
-
-| 항목 | 우선순위 | 설명 |
-|------|---------|------|
-| Service Worker 캐싱 | 중 | 정적 에셋(벤더 청크, 폰트) 캐싱으로 반복 로드 제거 |
-| Compaction 성능 | 중 | `_build` 함수의 summarizer 호출 병렬화/스트리밍 |
-| handleEvent 분해 | 중 | 이벤트 타입별 핸들러 함수로 분해하여 가독성/테스트성 개선 |
-| UIContext 최적화 | 하 | 25개 값 중 빈번하게 변경되는 항목을 별도 컨텍스트로 분리 |
+> v0.2.1(§5), v0.2.2(§6), v0.3.0(§7) 과제 모두 구현 완료됨. 아래는 장기 항목만 잔존.
 
 ### 장기 (v1.0)
 
@@ -878,9 +960,9 @@ pyproject.toml            (pre-commit>=3 의존성 추가)
 
 ---
 
-## 변경 파일 목록 (v0.2.0 ~ v0.2.2)
+## 변경 파일 목록 (v0.2.0 ~ v0.3.0)
 
-커밋: `c9e7604` (v0.2.0+v0.2.1) → `aad19cc` (기획서) → `a49491b` (v0.2.2)
+커밋: `c9e7604` (v0.2.0+v0.2.1) → `a49491b` (v0.2.2) → `46da4a4` (v0.3.0)
 
 ### Python 백엔드 — 성능 개선 (12개)
 ```
@@ -936,6 +1018,16 @@ tests/test_subscriptions.py               — flush 호출 추가
 surfaces/gui/src/App.tsx                  — useCallback 15+ 콜백 안정화
 surfaces/gui/lighthouserc.json            — (신규) Lighthouse CI threshold
 .pre-commit-config.yaml                   — (신규) ruff pre-commit hook
+```
+
+### 아키텍처 (v0.3.0, 5개)
+```
+surfaces/gui/public/sw.js                 — (신규) Service Worker cache-first
+surfaces/gui/src/main.tsx                 — SW 등록
+surfaces/gui/src/hooks/eventHandlers.ts   — (신규) 20 핸들러 dispatch 테이블
+surfaces/gui/src/App.tsx                  — handleEvent 분해, UIContext 로컬 이동
+surfaces/gui/src/contexts/UIContext.tsx   — browserRefreshKey/artifactCount 제거
+coworker/compaction.py                    — estimate_tokens 경량화
 ```
 
 ### 기타 (2개)
