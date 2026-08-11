@@ -1,8 +1,8 @@
 # WeruBWorker 성능 개선 기획서
 
 > 작성일: 2026-08-10  
-> 최종 갱신: 2026-08-10 (Sidebar 가상화 완료, 커밋 `00d045c`)  
-> 대상 버전: v0.1.7 → v0.2.0 (18) → v0.2.1 (4) → v0.2.2 (3) → v0.3.0 (4) → v1.0 (1)  
+> 최종 갱신: 2026-08-11 (v0.3.0 릴리즈 — PDF 경량화 포함, 커밋 `07108d9`)  
+> 대상 버전: v0.1.7 → v0.2.0 (18) → v0.2.1 (4) → v0.2.2 (3) → v0.3.0 (6)  
 > 범위: 서버 백엔드 / GUI 프론트엔드 / 테스트·빌드 / DX / 아키텍처
 
 ---
@@ -826,6 +826,45 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 
 ---
 
+### 7-5. Sidebar react-window 가상화 ✅ 완료
+
+flat layout의 확장된 Recent 세션 목록에 react-window v2 `List` 적용.
+
+| 항목 | 구현 |
+|------|------|
+| 활성 조건 | `recentExpanded && length > 20` (VIRTUAL_THRESHOLD) |
+| 행 높이 | 40px 고정 |
+| 최대 높이 | 480px (12행 가시 + 5 overscan) |
+| 효과 | **100+ 세션 DOM: 100+ → ~17개** |
+
+**변경 파일:**
+```
+surfaces/gui/src/components/Sidebar.tsx
+```
+
+---
+
+### 7-6. PDF 경량화 — pdfjs-dist 제거 ✅ 완료
+
+클라이언트 pdfjs-dist (1,741KB) → 서버 pypdfium2 PNG 렌더링.
+
+| 항목 | 이전 | 이후 |
+|------|------|------|
+| vendor-pdf 청크 | 365 KB | **삭제** |
+| pdf.worker.min | 1,376 KB | **삭제** |
+| PDF 렌더링 | 클라이언트 캔버스 (pdfjs) | 서버 PNG (`/v1/attachments/render-pdf`) |
+| 빌드 산출물 | ~2.9 MB | **~1.1 MB (-62%)** |
+
+**변경 파일:**
+```
+coworker/server/app.py                    — /v1/attachments/render-pdf 엔드포인트
+surfaces/gui/src/api.ts                   — renderPdf() 함수
+surfaces/gui/src/components/RightRail.tsx — PdfViewer: pdfjs → 서버 이미지
+surfaces/gui/vite.config.ts              — vendor-pdf 청크 제거
+```
+
+---
+
 ## 8. 우선순위 매트릭스 및 구현 현황
 
 ### v0.2.0 기획 항목 (18개)
@@ -868,7 +907,7 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 | 6-2 | Lighthouse CI 통합 | ✅ 완료 | performance/a11y/LCP/TBT threshold |
 | 6-3 | pre-commit hook | ✅ 완료 | ruff check --fix + ruff format |
 
-### v0.3.0 아키텍처 항목 (4개)
+### v0.3.0 아키텍처 항목 (6개)
 
 | # | 항목 | 상태 | 비고 |
 |---|------|------|------|
@@ -876,14 +915,10 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 | 7-2 | Compaction 경량화 | ✅ 완료 | estimate_tokens try/except 제거 |
 | 7-3 | handleEvent 분해 | ✅ 완료 | 190줄 switch → 20 핸들러 dispatch, App.tsx -170줄 |
 | 7-4 | UIContext 최적화 | ✅ 완료 | browserRefreshKey/artifactCount → App 로컬, 의존성 18→16 |
+| 7-5 | Sidebar react-window 가상화 | ✅ 완료 | flat Recent 20+세션 → List, DOM 100+→~17 |
+| 7-6 | PDF 경량화 — pdfjs-dist 제거 | ✅ 완료 | 서버 pypdfium2 렌더링, -1,741KB 빌드 산출물 |
 
-### v1.0 장기 항목 (1개 완료)
-
-| # | 항목 | 상태 | 비고 |
-|---|------|------|------|
-| — | Sidebar react-window 가상화 | ✅ 완료 | flat Recent 20+세션 → List 가상화, DOM 100+→~17 |
-
-**종합:** 30개 항목 중 **29개 완료, 1개 부분 완료** (2-5 JSON I/O — ChannelBuffer만 적용)
+**종합:** 31개 항목 중 **30개 완료, 1개 부분 완료** (2-5 JSON I/O — ChannelBuffer만 적용)
 
 ---
 
@@ -893,18 +928,20 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 
 | 빌드 산출물 | v0.1.7 | v0.3.0 | 변화 |
 |------------|--------|--------|------|
-| **메인 번들** (index-*.js) | 734 KB | **362 KB** | **-50.7%** |
+| **메인 번들** (index-*.js) | 734 KB | **361 KB** | **-50.8%** |
 | vendor-react | (메인에 포함) | 133.93 KB | 분리 |
-| vendor-pdf | 357 KB (변동 없음) | 365.12 KB | 별도 청크 |
+| ~~vendor-pdf~~ | 357 KB | **삭제** | **서버 렌더링으로 대체** |
+| ~~pdf.worker.min~~ | 1,376 KB | **삭제** | **서버 렌더링으로 대체** |
 | vendor-xlsx | 419 KB (변동 없음) | 429.03 KB | 별도 청크 |
 | vendor-markdown | (메인에 포함) | 157.70 KB | 분리 |
 | vendor-i18n | (메인에 포함) | 57.68 KB | 분리 |
 | lazy 뷰 청크 (12개 합계) | (메인에 포함) | ~192 KB | 분리 |
 | CSS | 94 KB | 97.14 KB | 미세 증가 (loading 스타일) |
-| 빌드 시간 | — | 2.83초 | — |
+| 빌드 시간 | — | 2.21초 | — |
+| **빌드 산출물 총량** | **~2.9 MB** | **~1.1 MB** | **-62%** |
 
-**초기 로드에 필요한 JS:** 362 KB (메인) + 134 KB (react) = **496 KB**  
-(이전 734 KB 대비 **-32%**, react-window +8KB 포함. vendor-pdf/xlsx는 해당 뷰 진입 시에만 로드)
+**초기 로드에 필요한 JS:** 361 KB (메인) + 134 KB (react) = **495 KB**  
+(이전 734 KB 대비 **-33%**. PDF는 서버 렌더링, xlsx는 해당 뷰 진입 시에만 로드)
 
 ### Python 테스트 성능
 
@@ -962,13 +999,14 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 | Service Worker | cache-first 벤더/폰트/CSS, Tauri 자동 비활성 | v0.3.0 |
 | `eventHandlers.ts` dispatch 테이블 | 190줄 switch → 20 핸들러 분해 | v0.3.0 |
 | UIContext → App 로컬 상태 이동 | browserRefreshKey/artifactCount 분리 | v0.3.0 |
-| Sidebar react-window 가상화 | flat Recent 20+세션 → List, DOM 100+→~17 | v1.0 |
+| Sidebar react-window 가상화 | flat Recent 20+세션 → List, DOM 100+→~17 | v0.3.0 |
+| PDF 서버 렌더링 | pdfjs-dist 제거, `/v1/attachments/render-pdf` 추가, -1,741KB | v0.3.0 |
 
 ---
 
 ## 11. 후속 과제
 
-> v0.2.1(§5), v0.2.2(§6), v0.3.0(§7), react-window 가상화(v1.0) 모두 완료됨. 아래는 남은 장기 항목.
+> v0.2.1(§5), v0.2.2(§6), v0.3.0(§7 — 가상화+PDF 포함) 과제 모두 완료됨. 아래는 남은 장기 항목.
 
 ### 장기 (v1.0+)
 
@@ -976,13 +1014,12 @@ surfaces/gui/src/App.tsx                (로컬 state 추가)
 |------|---------|------|
 | SSR / Streaming SSR | 중 | 초기 렌더링 FCP 개선 (현재 CSR only) |
 | SQLite → PostgreSQL 옵션 | 하 | 멀티 프로세스 배포 시 WAL 모드의 단일 writer 제한 해소 |
-| WebAssembly PDF 렌더링 | 하 | pdfjs worker 1.3MB 제거, WASM 기반 경량 뷰어 |
 
 ---
 
-## 변경 파일 목록 (v0.2.0 ~ v1.0)
+## 변경 파일 목록 (v0.2.0 ~ v0.3.0)
 
-커밋: `c9e7604` (v0.2.0+v0.2.1) → `a49491b` (v0.2.2) → `46da4a4` (v0.3.0) → `00d045c` (가상화)
+커밋: `c9e7604` (v0.2.0+v0.2.1) → `a49491b` (v0.2.2) → `07108d9` (v0.3.0)
 
 ### Python 백엔드 — 성능 개선 (12개)
 ```
@@ -1040,7 +1077,7 @@ surfaces/gui/lighthouserc.json            — (신규) Lighthouse CI threshold
 .pre-commit-config.yaml                   — (신규) ruff pre-commit hook
 ```
 
-### 아키텍처 (v0.3.0 + v1.0, 6개)
+### 아키텍처 + PDF (v0.3.0, 9개)
 ```
 surfaces/gui/public/sw.js                 — (신규) Service Worker cache-first
 surfaces/gui/src/main.tsx                 — SW 등록
@@ -1048,7 +1085,11 @@ surfaces/gui/src/hooks/eventHandlers.ts   — (신규) 20 핸들러 dispatch 테
 surfaces/gui/src/App.tsx                  — handleEvent 분해, UIContext 로컬 이동
 surfaces/gui/src/contexts/UIContext.tsx   — browserRefreshKey/artifactCount 제거
 coworker/compaction.py                    — estimate_tokens 경량화
-surfaces/gui/src/components/Sidebar.tsx   — react-window v2 List 가상화 (v1.0)
+surfaces/gui/src/components/Sidebar.tsx   — react-window v2 List 가상화
+surfaces/gui/src/components/RightRail.tsx — pdfjs-dist → 서버 렌더링 이미지
+coworker/server/app.py                    — /v1/attachments/render-pdf 엔드포인트
+surfaces/gui/src/api.ts                   — renderPdf() 함수 추가
+surfaces/gui/vite.config.ts              — vendor-pdf 청크 제거
 ```
 
 ### 기타 (2개)
