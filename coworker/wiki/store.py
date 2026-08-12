@@ -226,12 +226,16 @@ class WikiStore:
     # ------------------------------------------------------------------
 
     def search_fts(self, query: str, limit: int = 50) -> list[dict]:
-        """Full-text search across name, content, tags, category."""
+        """Full-text search across name, content, tags, category.
+
+        Uses FTS5 first; if no results (e.g. CJK text that unicode61
+        tokenizer cannot segment), falls back to LIKE search.
+        """
         if not query or not query.strip():
             return []
-        # Escape special FTS5 characters
         safe_query = query.replace('"', '""')
         with self._connect() as conn:
+            # Try FTS5 first
             rows = conn.execute(
                 'SELECT p.page_id, p.name, p.category, p.tags, p.updated_at, '
                 'snippet(wiki_fts, 1, "<mark>", "</mark>", "...", 40) as snippet '
@@ -239,6 +243,18 @@ class WikiStore:
                 'WHERE wiki_fts MATCH ? ORDER BY rank LIMIT ?',
                 (f'"{safe_query}"', limit),
             ).fetchall()
+            # Fallback to LIKE for CJK and short queries
+            if not rows:
+                like_pattern = f"%{query.strip()}%"
+                rows = conn.execute(
+                    "SELECT page_id, name, category, tags, updated_at, "
+                    "'' as snippet "
+                    "FROM wiki_pages "
+                    "WHERE deleted_at IS NULL AND "
+                    "(name LIKE ? OR content LIKE ? OR tags LIKE ? OR category LIKE ?) "
+                    "ORDER BY updated_at DESC LIMIT ?",
+                    (like_pattern, like_pattern, like_pattern, like_pattern, limit),
+                ).fetchall()
         results = []
         for r in rows:
             d = dict(r)
