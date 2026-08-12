@@ -307,25 +307,71 @@ def _kill_process(pid: int, signal_name: str = "TERM") -> dict:
 
 
 def _network_stats() -> dict:
-    """Get network interface statistics."""
+    """Get network interface statistics + addresses."""
     try:
         import psutil
 
-        stats = {}
+        interfaces: dict = {}
         counters = psutil.net_io_counters(pernic=True)
+        addrs = psutil.net_if_addrs()
+        if_stats = psutil.net_if_stats()
+
         for iface, c in counters.items():
-            stats[iface] = {
+            # Skip empty/virtual interfaces
+            if c.bytes_sent == 0 and c.bytes_recv == 0:
+                continue
+            info: dict = {
                 "bytes_sent": c.bytes_sent,
                 "bytes_recv": c.bytes_recv,
                 "packets_sent": c.packets_sent,
                 "packets_recv": c.packets_recv,
                 "errin": c.errin,
                 "errout": c.errout,
+                "dropin": c.dropin,
+                "dropout": c.dropout,
             }
-        conns = len(psutil.net_connections())
-        return {"ok": True, "interfaces": stats, "connections": conns}
+            # Add IP addresses
+            iface_addrs = addrs.get(iface, [])
+            ips = []
+            for a in iface_addrs:
+                if a.family.name in ("AF_INET", "AF_INET6"):
+                    ips.append({"family": a.family.name, "address": a.address})
+            info["addresses"] = ips
+            # Add link status
+            st = if_stats.get(iface)
+            if st:
+                info["is_up"] = st.isup
+                info["speed_mbps"] = st.speed
+                info["mtu"] = st.mtu
+            interfaces[iface] = info
+
+        # net_connections requires root on macOS — graceful fallback
+        conns = -1
+        try:
+            conns = len(psutil.net_connections())
+        except (psutil.AccessDenied, PermissionError, OSError):
+            pass
+
+        # Total throughput
+        total = psutil.net_io_counters()
+        return {
+            "ok": True,
+            "interfaces": interfaces,
+            "connections": conns,
+            "total": {
+                "bytes_sent": total.bytes_sent,
+                "bytes_recv": total.bytes_recv,
+                "packets_sent": total.packets_sent,
+                "packets_recv": total.packets_recv,
+            },
+        }
     except ImportError:
-        return {"ok": False, "error": "psutil not available"}
+        # Fallback: netstat
+        try:
+            result = subprocess.run(["netstat", "-i", "-b"], capture_output=True, text=True, timeout=5)
+            return {"ok": True, "raw": result.stdout[:5000], "interfaces": {}, "connections": -1}
+        except Exception:
+            return {"ok": False, "error": "psutil not available"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 

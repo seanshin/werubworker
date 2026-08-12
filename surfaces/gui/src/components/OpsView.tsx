@@ -50,17 +50,26 @@ interface ProcessInfo {
   status?: string;
 }
 
+interface NetworkInterface {
+  bytes_sent: number;
+  bytes_recv: number;
+  packets_sent: number;
+  packets_recv: number;
+  errin: number;
+  errout: number;
+  dropin?: number;
+  dropout?: number;
+  addresses?: { family: string; address: string }[];
+  is_up?: boolean;
+  speed_mbps?: number;
+  mtu?: number;
+}
+
 interface NetworkStats {
   ok: boolean;
-  interfaces?: Record<string, {
-    bytes_sent: number;
-    bytes_recv: number;
-    packets_sent: number;
-    packets_recv: number;
-    errin: number;
-    errout: number;
-  }>;
+  interfaces?: Record<string, NetworkInterface>;
   connections?: number;
+  total?: { bytes_sent: number; bytes_recv: number; packets_sent: number; packets_recv: number };
   error?: string;
 }
 
@@ -963,34 +972,67 @@ export function OpsView() {
                 <p className="text-[13px] text-muted">{networkStats?.error || t("session:ops.noNetworkData")}</p>
               ) : (
                 <>
-                  <div className="text-[12px] text-muted mb-3">
-                    {t("session:ops.activeConnections")}: <span className="text-ink font-medium">{networkStats.connections ?? 0}</span>
+                  {/* Total throughput summary */}
+                  <div className="flex gap-4 mb-4 text-[12.5px]">
+                    {networkStats.total && (
+                      <>
+                        <div className="flex-1 rounded-lg bg-paper border border-line p-3 text-center">
+                          <div className="text-faint mb-1">Total Sent</div>
+                          <div className="text-ink font-semibold text-[14px]">{formatBytes(networkStats.total.bytes_sent)}</div>
+                        </div>
+                        <div className="flex-1 rounded-lg bg-paper border border-line p-3 text-center">
+                          <div className="text-faint mb-1">Total Received</div>
+                          <div className="text-ink font-semibold text-[14px]">{formatBytes(networkStats.total.bytes_recv)}</div>
+                        </div>
+                        <div className="flex-1 rounded-lg bg-paper border border-line p-3 text-center">
+                          <div className="text-faint mb-1">{t("session:ops.activeConnections")}</div>
+                          <div className="text-ink font-semibold text-[14px]">{networkStats.connections === -1 ? "N/A" : networkStats.connections}</div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[12.5px]">
-                      <thead>
-                        <tr className="text-muted text-left border-b border-line">
-                          <th className="pb-2 pr-4">{t("session:ops.networkInterface")}</th>
-                          <th className="pb-2 pr-4">{t("session:ops.bytesSent")}</th>
-                          <th className="pb-2 pr-4">{t("session:ops.bytesRecv")}</th>
-                          <th className="pb-2 pr-4">{t("session:ops.packetsSent")}</th>
-                          <th className="pb-2 pr-4">{t("session:ops.packetsRecv")}</th>
-                          <th className="pb-2 pr-4">{t("session:ops.errors")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(networkStats.interfaces || {}).map(([iface, s]) => (
-                          <tr key={iface} className="border-b border-line/50 text-ink">
-                            <td className="py-1.5 pr-4 font-mono">{iface}</td>
-                            <td className="py-1.5 pr-4">{formatBytes(s.bytes_sent)}</td>
-                            <td className="py-1.5 pr-4">{formatBytes(s.bytes_recv)}</td>
-                            <td className="py-1.5 pr-4">{s.packets_sent.toLocaleString()}</td>
-                            <td className="py-1.5 pr-4">{s.packets_recv.toLocaleString()}</td>
-                            <td className="py-1.5 pr-4">{s.errin + s.errout}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+
+                  {/* Interface cards */}
+                  <div className="space-y-3">
+                    {Object.entries(networkStats.interfaces || {}).map(([iface, s]) => (
+                      <div key={iface} className="rounded-lg bg-paper border border-line p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={"w-2 h-2 rounded-full " + (s.is_up !== false ? "bg-ok" : "bg-faint")} />
+                          <span className="text-[13px] font-semibold text-ink font-mono">{iface}</span>
+                          {s.speed_mbps != null && s.speed_mbps > 0 && (
+                            <span className="text-[11px] text-faint">{s.speed_mbps} Mbps</span>
+                          )}
+                          {s.mtu != null && (
+                            <span className="text-[11px] text-faint">MTU {s.mtu}</span>
+                          )}
+                          {s.addresses?.map((a, i) => (
+                            <span key={i} className="text-[11px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-mono">
+                              {a.address}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-4 gap-3 text-[11.5px]">
+                          <div>
+                            <div className="text-faint">Sent</div>
+                            <div className="text-ink font-medium">{formatBytes(s.bytes_sent)}</div>
+                          </div>
+                          <div>
+                            <div className="text-faint">Received</div>
+                            <div className="text-ink font-medium">{formatBytes(s.bytes_recv)}</div>
+                          </div>
+                          <div>
+                            <div className="text-faint">Packets ↑/↓</div>
+                            <div className="text-ink font-medium">{s.packets_sent.toLocaleString()} / {s.packets_recv.toLocaleString()}</div>
+                          </div>
+                          <div>
+                            <div className="text-faint">Errors / Drops</div>
+                            <div className={"font-medium " + ((s.errin + s.errout + (s.dropin || 0) + (s.dropout || 0)) > 0 ? "text-err" : "text-ink")}>
+                              {s.errin + s.errout} / {(s.dropin || 0) + (s.dropout || 0)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </>
               )}
