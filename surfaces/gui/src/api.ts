@@ -3,16 +3,20 @@ import type { SessionInfo, WsEvent } from "./types";
 declare const __COWORKER_DEV_TOKEN__: string;
 
 // Endpoint resolution order: runtime-injected globals (Tauri sets `window.__COWORKER_HTTP__`
-// for its dynamically-chosen sidecar port) → Vite env → the 127.0.0.1:8765 dev default. This
-// keeps a single codebase: browser `npm run dev` hits 8765; the desktop shell hits its sidecar.
+// for its dynamically-chosen sidecar port) → Vite env → Vite dev proxy (relative path) →
+// the 127.0.0.1:8765 dev default. In Vite dev mode the proxy handles /v1 and /ws routes
+// with dynamic token injection, so we use relative paths (empty base) to survive server
+// restarts that regenerate the sidecar token.
 const httpBase = (): string =>
   (globalThis as any).__COWORKER_HTTP__ ||
   (import.meta as any).env?.VITE_COWORKER_HTTP ||
-  "http://127.0.0.1:8765";
+  ((import.meta as any).env?.DEV ? "" : "http://127.0.0.1:8765");
 const wsBase = (): string =>
   (globalThis as any).__COWORKER_WS__ ||
   (import.meta as any).env?.VITE_COWORKER_WS ||
-  "ws://127.0.0.1:8765";
+  ((import.meta as any).env?.DEV
+    ? `ws://${location.host}`
+    : "ws://127.0.0.1:8765");
 const apiToken = (): string =>
   (globalThis as any).__COWORKER_API_TOKEN__ ||
   (import.meta as any).env?.VITE_COWORKER_API_TOKEN ||
