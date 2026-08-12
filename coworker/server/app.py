@@ -1213,7 +1213,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         """List running processes, optionally filtered by name."""
         from ..tools.server_monitor import _process_list
 
-        return _process_list(filter_name=filter or None)
+        return _process_list(filter=filter or "")
 
     @app.get("/v1/ops/ports")
     def ops_ports(ports: str = "80,443,8080,8765,5432,3306") -> dict[str, Any]:
@@ -2647,6 +2647,30 @@ def create_app(manager: SessionManager) -> FastAPI:
             return {"ok": True, "results": []}
         results = manager.wiki_store.search_fts(q.strip())
         return {"ok": True, "results": results}
+
+    # -- Wiki sub-resources (MUST be before /v1/wiki/{page_id} to avoid route capture) --
+
+    @app.get("/v1/wiki/prompts")
+    def wiki_prompts_list_r() -> dict:
+        pages = manager.wiki_store.list_pages(category="prompt")
+        return {"ok": True, "prompts": pages}
+
+    @app.get("/v1/wiki/benchmarks")
+    def wiki_benchmarks_list_r(page_id: str = "", model_id: str = "") -> dict:
+        results = manager.wiki_store.get_benchmarks(page_id, model_id)
+        return {"ok": True, "benchmarks": results}
+
+    @app.get("/v1/wiki/runbooks")
+    def wiki_runbooks_list_r() -> dict[str, Any]:
+        pages = manager.wiki_store.list_pages(category="runbook")
+        return {"ok": True, "runbooks": pages}
+
+    @app.get("/v1/wiki/templates")
+    def wiki_templates_list_r() -> dict[str, Any]:
+        from ..wiki.store import WIKI_TEMPLATES
+        return {"ok": True, "templates": {k: {"name": v["name"], "content": v["content"]} for k, v in WIKI_TEMPLATES.items()}}
+
+    # -- Wiki page CRUD (catch-all {page_id}) --
 
     @app.get("/v1/wiki/{page_id}")
     def wiki_get(page_id: str) -> dict[str, Any]:
