@@ -562,9 +562,11 @@ export function OpsView() {
     if (activeTab === "health") fetchHealthChecks();
   }, [activeTab, fetchProcesses, fetchPorts, fetchDockerContainers, fetchNetworkStats, fetchHealthChecks]);
 
-  // Fetch metrics history when range changes
+  // Fetch metrics history on range change + periodic refresh (30s)
   useEffect(() => {
     fetchMetricsHistory();
+    const timer = setInterval(fetchMetricsHistory, 30_000);
+    return () => clearInterval(timer);
   }, [fetchMetricsHistory]);
 
   const handleDeleteServer = async (s: SshServer) => {
@@ -811,19 +813,28 @@ export function OpsView() {
                 {metricsHistory.length > 0 ? (
                   <div className="space-y-3">
                     <div>
-                      <div className="text-[11.5px] text-muted mb-1">CPU %</div>
-                      <MiniChart data={metricsHistory.map((m) => m.cpu)} type="line" height={36} width={600} color="var(--accent)" />
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11.5px] text-muted">CPU %</span>
+                        <span className="text-[11px] text-faint">{metricsHistory[metricsHistory.length - 1]?.cpu?.toFixed(1)}%</span>
+                      </div>
+                      <MiniChart data={metricsHistory.map((m) => m.cpu)} type="line" height={40} width={800} color="var(--accent)" />
                     </div>
                     <div>
-                      <div className="text-[11.5px] text-muted mb-1">{t("session:ops.memory")} %</div>
-                      <MiniChart data={metricsHistory.map((m) => m.memory)} type="line" height={36} width={600} color="#e89b3e" />
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11.5px] text-muted">{t("session:ops.memory")} %</span>
+                        <span className="text-[11px] text-faint">{metricsHistory[metricsHistory.length - 1]?.memory?.toFixed(1)}%</span>
+                      </div>
+                      <MiniChart data={metricsHistory.map((m) => m.memory)} type="line" height={40} width={800} color="#e89b3e" />
                     </div>
                     <div>
-                      <div className="text-[11.5px] text-muted mb-1">{t("session:ops.disk")} %</div>
-                      <MiniChart data={metricsHistory.map((m) => m.disk)} type="line" height={36} width={600} color="#8b5cf6" />
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11.5px] text-muted">{t("session:ops.disk")} %</span>
+                        <span className="text-[11px] text-faint">{metricsHistory[metricsHistory.length - 1]?.disk?.toFixed(1)}%</span>
+                      </div>
+                      <MiniChart data={metricsHistory.map((m) => m.disk)} type="line" height={40} width={800} color="#8b5cf6" />
                     </div>
                     <div className="text-[11px] text-faint">
-                      {metricsHistory.length} {t("session:ops.dataPoints")}
+                      {metricsHistory.length} {t("session:ops.dataPoints")} · 30초마다 갱신
                     </div>
                   </div>
                 ) : (
