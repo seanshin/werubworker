@@ -5,68 +5,118 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pytest:
+    if: >-
+      github.event_name == 'pull_request' && (
+        contains(github.event.pull_request.changed_files_url, 'placeholder') ||
+        true
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check for Python changes
+        id: filter
+        run: |
+          CHANGES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only | grep -E '^(coworker/|tests/|pyproject\.toml)' || true)
+          if [ -z "$CHANGES" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; else echo "skip=false" >> "$GITHUB_OUTPUT"; fi
+        env:
+          GH_TOKEN: ${{ github.token }}
       - uses: actions/setup-python@v5
+        if: steps.filter.outputs.skip != 'true'
         with:
           python-version: "3.12"
           cache: pip
       - name: Install
+        if: steps.filter.outputs.skip != 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[messaging,dev,bedrock]"
       - name: Lint
+        if: steps.filter.outputs.skip != 'true'
         run: ruff check coworker/ tests/
       - name: Test
+        if: steps.filter.outputs.skip != 'true'
         run: pytest tests -q -n auto
+      - name: Skip
+        if: steps.filter.outputs.skip == 'true'
+        run: echo "No Python changes — skipping"
 
   gui-unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check for GUI changes
+        id: filter
+        run: |
+          CHANGES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only | grep -E '^surfaces/gui/' || true)
+          if [ -z "$CHANGES" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; else echo "skip=false" >> "$GITHUB_OUTPUT"; fi
+        env:
+          GH_TOKEN: ${{ github.token }}
       - uses: actions/setup-node@v4
+        if: steps.filter.outputs.skip != 'true'
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: surfaces/gui/package-lock.json
       - name: npm ci
+        if: steps.filter.outputs.skip != 'true'
         working-directory: surfaces/gui
         run: npm ci
       - name: Unit tests
+        if: steps.filter.outputs.skip != 'true'
         working-directory: surfaces/gui
         run: npm test
+      - name: Skip
+        if: steps.filter.outputs.skip == 'true'
+        run: echo "No GUI changes — skipping"
 
   gui-e2e:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check for GUI changes
+        id: filter
+        run: |
+          CHANGES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only | grep -E '^surfaces/gui/' || true)
+          if [ -z "$CHANGES" ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; else echo "skip=false" >> "$GITHUB_OUTPUT"; fi
+        env:
+          GH_TOKEN: ${{ github.token }}
       - uses: actions/setup-node@v4
+        if: steps.filter.outputs.skip != 'true'
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: surfaces/gui/package-lock.json
       - name: npm ci
+        if: steps.filter.outputs.skip != 'true'
         working-directory: surfaces/gui
         run: npm ci
       - name: Cache Playwright browsers
+        if: steps.filter.outputs.skip != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('surfaces/gui/package-lock.json') }}
       - name: Install Playwright browsers
+        if: steps.filter.outputs.skip != 'true'
         working-directory: surfaces/gui
         run: npx playwright install --with-deps chromium
       - name: e2e
+        if: steps.filter.outputs.skip != 'true'
         working-directory: surfaces/gui
         run: npm run e2e
+      - name: Skip
+        if: steps.filter.outputs.skip == 'true'
+        run: echo "No GUI changes — skipping"
 
   lighthouse:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
