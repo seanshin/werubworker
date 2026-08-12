@@ -29,10 +29,28 @@ interface AlertInfo {
   threshold: number;
 }
 
+interface DiskPartition {
+  device: string;
+  mountpoint: string;
+  fstype: string;
+  total_gb: number;
+  used_gb: number;
+  free_gb: number;
+  percent: number;
+}
+
 interface ServerStatus {
   cpu_percent?: number;
-  memory?: { percent?: number };
-  disk_root?: { percent?: number };
+  cpu_count?: number;
+  cpu_count_logical?: number;
+  cpu_freq_mhz?: number;
+  cpu_per_core?: number[];
+  cpu_times?: { user: number; system: number; idle: number };
+  load_avg?: { "1m": number; "5m": number; "15m": number };
+  memory?: { percent?: number; total_gb?: number; available_gb?: number; used_gb?: number };
+  swap?: { total_gb?: number; used_gb?: number; percent?: number };
+  disk_root?: { percent?: number; total_gb?: number; used_gb?: number };
+  disk_partitions?: DiskPartition[];
   uptime_seconds?: number;
   docker_containers?: { name: string; status: string; image: string }[];
   alerts?: AlertInfo[];
@@ -48,6 +66,10 @@ interface ProcessInfo {
   cpu_percent?: number;
   memory_percent?: number;
   status?: string;
+  cmdline?: string;
+  create_time?: number;
+  num_threads?: number;
+  username?: string;
 }
 
 interface NetworkInterface {
@@ -307,6 +329,10 @@ export function OpsView() {
   const [processFilter, setProcessFilter] = useState("");
   const [activeTab, setActiveTab] = useState<"status" | "processes" | "ports" | "docker" | "network" | "health">("status");
 
+  // Process sorting
+  const [procSortKey, setProcSortKey] = useState<"cpu_percent" | "memory_percent" | "pid" | "name">("cpu_percent");
+  const [procSortAsc, setProcSortAsc] = useState(false);
+
   // Kill confirmation
   const [killTarget, setKillTarget] = useState<ProcessInfo | null>(null);
   const [killing, setKilling] = useState(false);
@@ -542,6 +568,21 @@ export function OpsView() {
     fetchServers();
   };
 
+  const sortedProcesses = [...processes].sort((a, b) => {
+    const dir = procSortAsc ? 1 : -1;
+    if (procSortKey === "name") {
+      return dir * (a.name || "").localeCompare(b.name || "");
+    }
+    const av = (a as any)[procSortKey] ?? 0;
+    const bv = (b as any)[procSortKey] ?? 0;
+    return dir * (av - bv);
+  });
+
+  const toggleProcSort = (key: typeof procSortKey) => {
+    if (procSortKey === key) setProcSortAsc((v) => !v);
+    else { setProcSortKey(key); setProcSortAsc(false); }
+  };
+
   const cpu = localStatus ? cpuOf(localStatus) : 0;
   const mem = localStatus ? memOf(localStatus) : 0;
   const disk = localStatus ? diskOf(localStatus) : 0;
@@ -631,14 +672,103 @@ export function OpsView() {
                       <div className="flex-1 min-w-0"><ProgressBar label="CPU" value={cpu} /></div>
                       <MiniChart data={cpuHistory} type="line" height={28} width={120} color="var(--accent)" />
                     </div>
+
+                    {/* CPU per-core bars */}
+                    {localStatus.cpu_per_core && localStatus.cpu_per_core.length > 0 && (
+                      <div>
+                        <div className="text-[11.5px] text-muted mb-2">{t("session:ops.cpuPerCore")}</div>
+                        <div className="flex gap-1 items-end" style={{ height: 40 }}>
+                          {localStatus.cpu_per_core.map((v, i) => (
+                            <div
+                              key={i}
+                              className="flex-1 rounded-sm"
+                              style={{
+                                height: `${Math.max(v, 2)}%`,
+                                backgroundColor: v > 80 ? "var(--err)" : v > 50 ? "#e89b3e" : "var(--accent)",
+                                minWidth: 4,
+                                maxWidth: 24,
+                              }}
+                              title={`Core ${i}: ${v.toFixed(1)}%`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CPU frequency + Load average row */}
+                    <div className="flex gap-4 text-[12px]">
+                      {localStatus.cpu_freq_mhz != null && localStatus.cpu_freq_mhz > 0 && (
+                        <div className="text-muted">
+                          {t("session:ops.cpuFreq")}:{" "}
+                          <span className="text-ink font-medium">{localStatus.cpu_freq_mhz} MHz</span>
+                        </div>
+                      )}
+                      {localStatus.load_avg && (
+                        <div className="text-muted">
+                          {t("session:ops.loadAvg")}:{" "}
+                          <span className="text-ink font-medium">
+                            {localStatus.load_avg["1m"]} / {localStatus.load_avg["5m"]} / {localStatus.load_avg["15m"]}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Memory detail */}
                     <div className="flex items-center gap-4">
                       <div className="flex-1 min-w-0"><ProgressBar label={t("session:ops.memory")} value={mem} /></div>
                       <MiniChart data={memHistory} type="line" height={28} width={120} color="var(--accent)" />
                     </div>
+                    {localStatus.memory && localStatus.memory.total_gb != null && (
+                      <div className="flex gap-4 text-[12px] text-muted -mt-2">
+                        <span>{t("session:ops.used")}: <span className="text-ink font-medium">{localStatus.memory.used_gb} GB</span></span>
+                        <span>{t("session:ops.available")}: <span className="text-ink font-medium">{localStatus.memory.available_gb} GB</span></span>
+                        <span>{t("session:ops.total")}: <span className="text-ink font-medium">{localStatus.memory.total_gb} GB</span></span>
+                      </div>
+                    )}
+
+                    {/* Swap */}
+                    {localStatus.swap && localStatus.swap.total_gb != null && localStatus.swap.total_gb > 0 && (
+                      <div>
+                        <ProgressBar label={t("session:ops.swap")} value={localStatus.swap.percent ?? 0} />
+                        <div className="flex gap-4 text-[12px] text-muted mt-1">
+                          <span>{t("session:ops.used")}: <span className="text-ink font-medium">{localStatus.swap.used_gb} GB</span></span>
+                          <span>{t("session:ops.total")}: <span className="text-ink font-medium">{localStatus.swap.total_gb} GB</span></span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Disk root */}
                     <div className="flex items-center gap-4">
                       <div className="flex-1 min-w-0"><ProgressBar label={t("session:ops.disk")} value={disk} /></div>
                       <MiniChart data={diskHistory} type="line" height={28} width={120} color="var(--accent)" />
                     </div>
+
+                    {/* Disk partitions */}
+                    {localStatus.disk_partitions && localStatus.disk_partitions.length > 0 && (
+                      <div>
+                        <div className="text-[11.5px] text-muted mb-2">{t("session:ops.diskPartitions")}</div>
+                        <div className="space-y-2">
+                          {localStatus.disk_partitions.map((dp) => (
+                            <div key={dp.mountpoint} className="rounded-lg bg-paper border border-line p-2.5">
+                              <div className="flex items-center justify-between text-[12px] mb-1">
+                                <span className="font-mono text-ink truncate max-w-[200px]" title={dp.device}>{dp.mountpoint}</span>
+                                <span className="text-muted text-[11px]">{dp.fstype} &mdash; {dp.used_gb}/{dp.total_gb} GB</span>
+                              </div>
+                              <div className="w-full h-2 rounded-full bg-line overflow-hidden">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{
+                                    width: `${dp.percent}%`,
+                                    backgroundColor: dp.percent > 90 ? "var(--err)" : dp.percent > 70 ? "#e89b3e" : "var(--accent)",
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {localStatus.uptime_seconds != null && (
                       <div className="text-[12px] text-muted pt-1">
                         {t("session:ops.uptime")}:{" "}
@@ -807,32 +937,52 @@ export function OpsView() {
                   <table className="w-full text-[12.5px]">
                     <thead>
                       <tr className="text-muted text-left border-b border-line">
-                        <th className="pb-2 pr-4">PID</th>
-                        <th className="pb-2 pr-4">Name</th>
-                        <th className="pb-2 pr-4">CPU%</th>
-                        <th className="pb-2 pr-4">MEM%</th>
+                        <th className="pb-2 pr-4 cursor-pointer select-none" onClick={() => toggleProcSort("pid")}>
+                          PID {procSortKey === "pid" ? (procSortAsc ? "▲" : "▼") : ""}
+                        </th>
+                        <th className="pb-2 pr-4 cursor-pointer select-none" onClick={() => toggleProcSort("name")}>
+                          Name {procSortKey === "name" ? (procSortAsc ? "▲" : "▼") : ""}
+                        </th>
+                        <th className="pb-2 pr-4">{t("session:ops.username")}</th>
+                        <th className="pb-2 pr-4 cursor-pointer select-none" onClick={() => toggleProcSort("cpu_percent")}>
+                          CPU% {procSortKey === "cpu_percent" ? (procSortAsc ? "▲" : "▼") : ""}
+                        </th>
+                        <th className="pb-2 pr-4 cursor-pointer select-none" onClick={() => toggleProcSort("memory_percent")}>
+                          MEM% {procSortKey === "memory_percent" ? (procSortAsc ? "▲" : "▼") : ""}
+                        </th>
+                        <th className="pb-2 pr-4">{t("session:ops.threads")}</th>
                         <th className="pb-2 pr-4">Status</th>
+                        <th className="pb-2 pr-4">{t("session:ops.command")}</th>
                         <th className="pb-2"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {processes.map((p) => (
-                        <tr key={p.pid} className="border-b border-line/50 text-ink">
-                          <td className="py-1.5 pr-4 font-mono">{p.pid}</td>
-                          <td className="py-1.5 pr-4 truncate max-w-[200px]">{p.name}</td>
-                          <td className="py-1.5 pr-4">{p.cpu_percent?.toFixed(1) ?? "-"}</td>
-                          <td className="py-1.5 pr-4">{p.memory_percent?.toFixed(1) ?? "-"}</td>
-                          <td className="py-1.5 pr-4">{p.status ?? "-"}</td>
-                          <td className="py-1.5">
-                            <button
-                              className="text-[11px] px-2 py-0.5 rounded bg-err/10 text-err font-medium"
-                              onClick={() => setKillTarget(p)}
-                            >
-                              {t("session:ops.killProcess")}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {sortedProcesses.map((p) => {
+                        const cpuVal = p.cpu_percent ?? 0;
+                        const cpuColor = cpuVal > 50 ? "text-err font-semibold" : cpuVal > 20 ? "text-[#e89b3e] font-medium" : "";
+                        return (
+                          <tr key={p.pid} className="border-b border-line/50 text-ink">
+                            <td className="py-1.5 pr-4 font-mono">{p.pid}</td>
+                            <td className="py-1.5 pr-4 truncate max-w-[160px]">{p.name}</td>
+                            <td className="py-1.5 pr-4 text-muted truncate max-w-[80px]">{p.username ?? "-"}</td>
+                            <td className={"py-1.5 pr-4 " + cpuColor}>{cpuVal.toFixed(1)}</td>
+                            <td className="py-1.5 pr-4">{p.memory_percent?.toFixed(1) ?? "-"}</td>
+                            <td className="py-1.5 pr-4 text-muted">{p.num_threads ?? "-"}</td>
+                            <td className="py-1.5 pr-4">{p.status ?? "-"}</td>
+                            <td className="py-1.5 pr-4 text-muted truncate max-w-[180px] font-mono text-[11px]" title={p.cmdline || ""}>
+                              {p.cmdline ? p.cmdline.slice(0, 60) : "-"}
+                            </td>
+                            <td className="py-1.5">
+                              <button
+                                className="text-[11px] px-2 py-0.5 rounded bg-err/10 text-err font-medium"
+                                onClick={() => setKillTarget(p)}
+                              >
+                                {t("session:ops.killProcess")}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

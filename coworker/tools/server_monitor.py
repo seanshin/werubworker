@@ -137,24 +137,76 @@ def _server_status() -> dict[str, Any]:
     if _HAS_PSUTIL:
         import psutil as _ps
 
-        info["cpu_percent"] = _ps.cpu_percent(interval=0.5)
-        info["cpu_count"] = _ps.cpu_count()
+        # CPU detail
+        cpu_freq = _ps.cpu_freq()
+        cpu_times = _ps.cpu_times_percent(interval=0.5)
+        per_cpu = _ps.cpu_percent(percpu=True)
+
+        info["cpu_percent"] = _ps.cpu_percent()
+        info["cpu_count"] = _ps.cpu_count(logical=False)
+        info["cpu_count_logical"] = _ps.cpu_count(logical=True)
+        info["cpu_freq_mhz"] = round(cpu_freq.current) if cpu_freq else 0
+        info["cpu_per_core"] = per_cpu
+        info["cpu_times"] = {
+            "user": cpu_times.user,
+            "system": cpu_times.system,
+            "idle": cpu_times.idle,
+        }
+
+        # Load average
+        load_avg = os.getloadavg() if hasattr(os, "getloadavg") else (0, 0, 0)
+        info["load_avg"] = {
+            "1m": round(load_avg[0], 2),
+            "5m": round(load_avg[1], 2),
+            "15m": round(load_avg[2], 2),
+        }
+
+        # Memory detail
         mem = _ps.virtual_memory()
         info["memory"] = {
-            "total_gb": round(mem.total / (1024**3), 2),
-            "used_gb": round(mem.used / (1024**3), 2),
+            "total_gb": round(mem.total / (1024**3), 1),
+            "available_gb": round(mem.available / (1024**3), 1),
+            "used_gb": round(mem.used / (1024**3), 1),
             "percent": mem.percent,
         }
+
+        # Swap
+        swap = _ps.swap_memory()
+        info["swap"] = {
+            "total_gb": round(swap.total / (1024**3), 1),
+            "used_gb": round(swap.used / (1024**3), 1),
+            "percent": swap.percent,
+        }
+
+        # Disk root
         disk = _ps.disk_usage("/")
         info["disk_root"] = {
-            "total_gb": round(disk.total / (1024**3), 2),
-            "used_gb": round(disk.used / (1024**3), 2),
+            "total_gb": round(disk.total / (1024**3), 1),
+            "used_gb": round(disk.used / (1024**3), 1),
             "percent": disk.percent,
         }
-        boot = _ps.boot_time()
-        import datetime as _dt
 
-        info["uptime_seconds"] = int((_dt.datetime.now().timestamp() - boot))
+        # Disk partitions — all mount points
+        disk_partitions: list[dict[str, Any]] = []
+        for part in _ps.disk_partitions():
+            try:
+                usage = _ps.disk_usage(part.mountpoint)
+                disk_partitions.append({
+                    "device": part.device,
+                    "mountpoint": part.mountpoint,
+                    "fstype": part.fstype,
+                    "total_gb": round(usage.total / (1024**3), 1),
+                    "used_gb": round(usage.used / (1024**3), 1),
+                    "free_gb": round(usage.free / (1024**3), 1),
+                    "percent": usage.percent,
+                })
+            except (PermissionError, OSError):
+                continue
+        info["disk_partitions"] = disk_partitions
+
+        # Boot time & uptime
+        boot = _ps.boot_time()
+        info["uptime_seconds"] = int(time.time() - boot)
     else:
         # Fallback: shell commands
         info["uptime"] = _run(["uptime"])
@@ -215,11 +267,18 @@ def _process_list(filter: str = "") -> dict[str, Any]:
         import psutil as _ps
 
         procs = []
-        for p in _ps.process_iter(["pid", "name", "cpu_percent", "memory_percent", "status"]):
+        for p in _ps.process_iter(["pid", "name", "cpu_percent", "memory_percent", "status",
+                                    "cmdline", "create_time", "num_threads", "username"]):
             try:
                 info = p.info
                 if filter and filter.lower() not in (info.get("name") or "").lower():
                     continue
+                # Add cmdline as truncated string
+                cmdline_parts = info.get("cmdline")
+                if cmdline_parts and isinstance(cmdline_parts, list):
+                    info["cmdline"] = " ".join(cmdline_parts)[:100]
+                else:
+                    info["cmdline"] = ""
                 procs.append(info)
             except (_ps.NoSuchProcess, _ps.AccessDenied):
                 continue
@@ -304,6 +363,27 @@ def _kill_process(pid: int, signal_name: str = "TERM") -> dict:
         return {"ok": False, "error": f"Process {pid} not found"}
     except PermissionError:
         return {"ok": False, "error": f"Permission denied for PID {pid}"}
+
+
+def _system_info() -> dict[str, Any]:
+    """Comprehensive system information for the agent."""
+    info: dict[str, Any] = {
+        "os": platform.system(),
+        "os_version": platform.version(),
+        "architecture": platform.machine(),
+        "hostname": platform.node(),
+        "python": platform.python_version(),
+        "cpu_model": platform.processor(),
+    }
+    if _HAS_PSUTIL:
+        import psutil as _ps
+
+        info["cpu_count"] = _ps.cpu_count()
+        info["memory_total_gb"] = round(_ps.virtual_memory().total / (1024**3), 1)
+        info["disk_total_gb"] = round(_ps.disk_usage("/").total / (1024**3), 1)
+        info["boot_time"] = _ps.boot_time()
+        info["uptime_hours"] = round((time.time() - _ps.boot_time()) / 3600, 1)
+    return info
 
 
 def _network_stats() -> dict:
@@ -520,6 +600,18 @@ _DISK_USAGE_SCHEMA = {
     },
 }
 
+_SYSTEM_INFO_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "system_info",
+        "description": (
+            "Comprehensive system information: OS, architecture, CPU model, memory, disk, "
+            "uptime. Read-only, no side effects."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
 _SYSTEM_LOGS_SCHEMA = {
     "type": "function",
     "function": {
@@ -571,6 +663,9 @@ def server_monitor_tools(context: Any = None) -> list:
     def system_logs(service: str = "", lines: int = 50) -> dict:
         return _system_logs(service, lines)
 
+    def system_info() -> dict:
+        return _system_info()
+
     _meta = ai.ToolMetadata(
         category="server_monitor",
         risk_level="low",
@@ -585,6 +680,7 @@ def server_monitor_tools(context: Any = None) -> list:
         (check_ports, _CHECK_PORTS_SCHEMA),
         (process_list, _PROCESS_LIST_SCHEMA),
         (disk_usage, _DISK_USAGE_SCHEMA),
+        (system_info, _SYSTEM_INFO_SCHEMA),
         (system_logs, _SYSTEM_LOGS_SCHEMA),
     ]:
         wrapped = ai.tool(fn, metadata=_meta)

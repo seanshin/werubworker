@@ -316,7 +316,20 @@
     "noHealthChecks": "No health checks configured.",
     "addCheck": "Add Check",
     "checkType": "Type",
-    "checkTarget": "Target"
+    "checkTarget": "Target",
+    "loadAvg": "Load Average",
+    "cpuFreq": "CPU Frequency",
+    "cpuPerCore": "CPU Per Core",
+    "swap": "Swap",
+    "available": "Available",
+    "used": "Used",
+    "total": "Total",
+    "systemInfo": "System Info",
+    "threads": "Threads",
+    "command": "Command",
+    "username": "User",
+    "sortBy": "Sort by",
+    "diskPartitions": "Disk Partitions"
   },
   "dev": {
     "title": "Development Dashboard",

@@ -100,9 +100,9 @@ def test_system_logs_caps_lines():
 
 
 def test_server_monitor_tools_factory():
-    """Factory returns 6 tools with correct schema attributes."""
+    """Factory returns 7 tools with correct schema attributes."""
     tools = server_monitor_tools()
-    assert len(tools) == 6
+    assert len(tools) == 7
     names = {t.__coworker_schema__["function"]["name"] for t in tools}
     assert names == {
         "server_status",
@@ -110,5 +110,6 @@ def test_server_monitor_tools_factory():
         "check_ports",
         "process_list",
         "disk_usage",
+        "system_info",
         "system_logs",
     }

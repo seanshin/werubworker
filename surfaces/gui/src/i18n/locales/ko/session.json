@@ -316,7 +316,20 @@
     "noHealthChecks": "구성된 상태 점검이 없습니다.",
     "addCheck": "점검 추가",
     "checkType": "유형",
-    "checkTarget": "대상"
+    "checkTarget": "대상",
+    "loadAvg": "로드 평균",
+    "cpuFreq": "CPU 주파수",
+    "cpuPerCore": "코어별 CPU",
+    "swap": "스왑",
+    "available": "가용",
+    "used": "사용",
+    "total": "전체",
+    "systemInfo": "시스템 정보",
+    "threads": "스레드",
+    "command": "명령어",
+    "username": "사용자",
+    "sortBy": "정렬",
+    "diskPartitions": "디스크 파티션"
   },
   "dev": {
     "title": "개발 대시보드",
