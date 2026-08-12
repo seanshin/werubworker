@@ -39,10 +39,20 @@ export function WikiPageEditor({ pageId, onSave, onCancel }: Props) {
   const [saving, setSaving] = useState(false);
 
   // All available categories: merge templates + existing DB categories
-  const ALL_CATEGORIES = [
-    "service", "database", "server", "cloud", "model", "prompt",
-    "benchmark", "runbook", "api_doc", "architecture", "general",
-  ];
+  const CATEGORY_META: Record<string, string> = {
+    service: "서비스 문서 — 연결 정보, 크리덴셜",
+    database: "데이터베이스 — host/port/user, 백업",
+    server: "서버 설정 — SSH, OS, 실행 서비스",
+    cloud: "클라우드 — AWS/GCP/CF 계정, 리전",
+    model: "LLM 모델 카드 — 스펙, 가격, 기능",
+    prompt: "프롬프트 템플릿 — 변수, 대상 모델",
+    benchmark: "벤치마크 — 데이터셋, 결과 비교",
+    runbook: "런북 — 장애 대응 절차, 단계",
+    api_doc: "API 문서 — 엔드포인트, 인증, rate limit",
+    architecture: "아키텍처 — 컴포넌트, 데이터 플로우",
+    general: "일반 문서",
+  };
+  const ALL_CATEGORIES = Object.keys(CATEGORY_META);
 
   useEffect(() => {
     getWikiCategories()
@@ -176,10 +186,10 @@ export function WikiPageEditor({ pageId, onSave, onCancel }: Props) {
           value={category}
           onChange={(e) => setCategory(e.target.value)}
         >
-          <option value="">--</option>
+          <option value="">-- 카테고리 선택 --</option>
           {categories.map((cat) => (
             <option key={cat} value={cat}>
-              {cat}
+              {CATEGORY_META[cat] || cat}
             </option>
           ))}
         </select>
