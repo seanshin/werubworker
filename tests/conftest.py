@@ -16,7 +16,6 @@ from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient,
 from coworker.server import SessionManager, create_app
 from coworker.testing.fake_slack import FakeSlack
 
-
 # -- Shared server-test helpers ------------------------------------------------
 
 

@@ -3,6 +3,7 @@
 // e2e harness never sees this — these unit tests are the coverage).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import "../i18n"; // initialise i18next so useTranslation resolves keys to English strings
 import { UpdateBanner } from "./UpdateBanner";
 
 const FIRST_CHECK_MS = 15_000;

@@ -15,7 +15,6 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-
 # Default templates for each category
 WIKI_TEMPLATES: dict[str, dict] = {
     "model": {

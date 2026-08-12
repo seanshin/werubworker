@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import pytest
+from conftest import ScriptedProvider, _client, _drain, _text, _tool
 from fastapi.testclient import TestClient
 
 from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient
 from coworker.server import SessionManager, create_app
 from coworker.sessions import SessionRecord
-from conftest import ScriptedProvider, _client, _drain, _text, _tool
 
 # -- WebSocket ------------------------------------------------------------------
 

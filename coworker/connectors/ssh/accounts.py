@@ -28,7 +28,7 @@ def _validate_key_path(key_path: str) -> str | None:
     home = Path.home().resolve()
     # Must be under home directory
     if not str(resolved).startswith(str(home)):
-        return f"key_path must be under home directory"
+        return "key_path must be under home directory"
     # Must not follow symlinks outside home
     if resolved.is_symlink():
         target = resolved.resolve()

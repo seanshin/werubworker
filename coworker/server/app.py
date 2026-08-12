@@ -1069,7 +1069,7 @@ def create_app(manager: SessionManager) -> FastAPI:
     @app.put("/v1/ssh/servers/{server_id}")
     def ssh_servers_update(server_id: str, body: dict) -> dict[str, Any]:
         """Update an existing SSH server profile."""
-        from ..connectors.ssh import remove_server, add_server
+        from ..connectors.ssh import add_server, remove_server
 
         if not isinstance(body, dict):
             return {"ok": False, "error": "invalid body"}
@@ -1377,8 +1377,8 @@ def create_app(manager: SessionManager) -> FastAPI:
     @app.post("/v1/databases/scan")
     async def databases_scan() -> dict[str, Any]:
         """Scan local and network for running database services."""
-        import socket
         import asyncio
+        import socket
 
         targets = [
             ("127.0.0.1", 5432, "postgresql", "PostgreSQL"),
@@ -1675,8 +1675,8 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     def _get_scm_connector():
         """Get the configured SCM connector (GitHub or Gitea)."""
-        from ..connectors.github import get_github_connector
         from ..connectors.gitea import get_gitea_connector
+        from ..connectors.github import get_github_connector
         # Gitea takes priority if configured (self-hosted)
         gt = get_gitea_connector(manager.secrets)
         if gt is not None:

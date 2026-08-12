@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from conftest import ScriptedProvider, _client, _text, _tool
 from fastapi.testclient import TestClient
 
 from coworker.server import SessionManager, create_app
 from coworker.sessions import SessionRecord
-from conftest import ScriptedProvider, _client, _text, _tool
 
 # -- REST -----------------------------------------------------------------------
 
