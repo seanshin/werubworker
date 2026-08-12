@@ -10,10 +10,13 @@ remote-server monitoring is handled via the shell tool + SSH.
 
 from __future__ import annotations
 
+import os
 import platform
 import socket
 import subprocess
 import sys
+import time
+from pathlib import Path
 from typing import Any, Optional
 
 import aisuite as ai
@@ -46,6 +49,76 @@ def _run(cmd: list[str], timeout: int = 10) -> str:
         return r.stdout.strip()
     except Exception:
         return ""
+
+
+# ---------------------------------------------------------------------------
+# Alert thresholds
+# ---------------------------------------------------------------------------
+
+
+def _check_thresholds(status: dict, thresholds: dict) -> list[dict]:
+    """Check if any metric exceeds configured thresholds. Returns list of alerts."""
+    alerts: list[dict] = []
+    cpu = status.get("cpu_percent", 0)
+    mem = status.get("memory", {}).get("percent", 0) if isinstance(status.get("memory"), dict) else 0
+    disk = status.get("disk_root", {}).get("percent", 0) if isinstance(status.get("disk_root"), dict) else 0
+
+    if cpu > thresholds.get("cpu", 90):
+        alerts.append({"metric": "cpu", "value": cpu, "threshold": thresholds["cpu"]})
+    if mem > thresholds.get("memory", 85):
+        alerts.append({"metric": "memory", "value": mem, "threshold": thresholds["memory"]})
+    if disk > thresholds.get("disk", 90):
+        alerts.append({"metric": "disk", "value": disk, "threshold": thresholds["disk"]})
+    return alerts
+
+
+# ---------------------------------------------------------------------------
+# Metrics history store (SQLite)
+# ---------------------------------------------------------------------------
+
+
+class MetricsStore:
+    def __init__(self, data_dir: Path):
+        self._db = data_dir / "metrics.db"
+        self._init_db()
+
+    def _init_db(self) -> None:
+        import sqlite3
+
+        with sqlite3.connect(str(self._db)) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL NOT NULL,
+                    server_id TEXT NOT NULL DEFAULT 'local',
+                    cpu REAL, memory REAL, disk REAL,
+                    extra TEXT DEFAULT '{}'
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_metrics_ts ON metrics(timestamp)")
+
+    def record(self, server_id: str, cpu: float, mem: float, disk: float) -> None:
+        import sqlite3
+
+        with sqlite3.connect(str(self._db)) as conn:
+            conn.execute(
+                "INSERT INTO metrics (timestamp, server_id, cpu, memory, disk) VALUES (?, ?, ?, ?, ?)",
+                (time.time(), server_id, cpu, mem, disk),
+            )
+            # Prune old entries (keep 7 days)
+            conn.execute("DELETE FROM metrics WHERE timestamp < ?", (time.time() - 7 * 86400,))
+
+    def get_history(self, server_id: str = "local", range_seconds: int = 3600) -> list[dict]:
+        import sqlite3
+
+        since = time.time() - range_seconds
+        with sqlite3.connect(str(self._db)) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT timestamp, cpu, memory, disk FROM metrics WHERE server_id = ? AND timestamp > ? ORDER BY timestamp",
+                (server_id, since),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -216,6 +289,94 @@ def _system_logs(service: str = "", lines: int = 50) -> dict[str, Any]:
         }
     else:
         return {"error": f"system logs not supported on {sys.platform}"}
+
+
+def _kill_process(pid: int, signal_name: str = "TERM") -> dict:
+    """Kill a process by PID. Requires approval."""
+    import signal as sig
+
+    signals = {"TERM": sig.SIGTERM, "KILL": sig.SIGKILL, "HUP": sig.SIGHUP}
+    s = signals.get(signal_name.upper(), sig.SIGTERM)
+    try:
+        os.kill(pid, s)
+        return {"ok": True, "pid": pid, "signal": signal_name}
+    except ProcessLookupError:
+        return {"ok": False, "error": f"Process {pid} not found"}
+    except PermissionError:
+        return {"ok": False, "error": f"Permission denied for PID {pid}"}
+
+
+def _network_stats() -> dict:
+    """Get network interface statistics."""
+    try:
+        import psutil
+
+        stats = {}
+        counters = psutil.net_io_counters(pernic=True)
+        for iface, c in counters.items():
+            stats[iface] = {
+                "bytes_sent": c.bytes_sent,
+                "bytes_recv": c.bytes_recv,
+                "packets_sent": c.packets_sent,
+                "packets_recv": c.packets_recv,
+                "errin": c.errin,
+                "errout": c.errout,
+            }
+        conns = len(psutil.net_connections())
+        return {"ok": True, "interfaces": stats, "connections": conns}
+    except ImportError:
+        return {"ok": False, "error": "psutil not available"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Health check schedule (S12)
+# ---------------------------------------------------------------------------
+
+
+class HealthChecker:
+    """Periodic health checks with configurable interval."""
+
+    def __init__(self, check_interval: int = 300):
+        self.interval = check_interval
+        self.enabled = False
+        self.checks: list[dict] = []  # {type, target, last_status, last_check}
+
+    def add_check(self, check_type: str, target: str) -> None:
+        # Update if same type+target exists, otherwise append.
+        for c in self.checks:
+            if c["type"] == check_type and c["target"] == target:
+                return
+        self.checks.append(
+            {"type": check_type, "target": target, "last_status": "unknown", "last_check": 0}
+        )
+
+    async def run_checks(self) -> list[dict]:
+        results = []
+        for check in self.checks:
+            if check["type"] == "port":
+                r = _check_ports(host="localhost", ports=check["target"])
+                port_results = r.get("results", r.get("ports", []))
+                status = (
+                    "ok"
+                    if all(p.get("status") == "open" for p in port_results)
+                    else "fail"
+                )
+            elif check["type"] == "http":
+                import urllib.request
+
+                try:
+                    urllib.request.urlopen(check["target"], timeout=5)
+                    status = "ok"
+                except Exception:
+                    status = "fail"
+            else:
+                status = "unknown"
+            check["last_status"] = status
+            check["last_check"] = time.time()
+            results.append({**check})
+        return results
 
 
 # ---------------------------------------------------------------------------

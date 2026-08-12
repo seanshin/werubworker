@@ -61,12 +61,39 @@ def _is_readonly(query: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _expand_env(value: str) -> str:
+    """Replace $VAR or ${VAR} with environment variable values."""
+    if not isinstance(value, str) or "$" not in value:
+        return value
+    return re.sub(r'\$\{?(\w+)\}?', lambda m: os.environ.get(m.group(1), m.group(0)), value)
+
+
 def _resolve_config(context: Any, database: str) -> Optional[dict[str, Any]]:
-    """Look up ``database:<name>`` in the SecretStore attached to *context*."""
+    """Look up ``database:<name>`` in the SecretStore attached to *context*.
+
+    If a vault is available on *context*, retrieve the password from vault
+    (key ``database:<name>:password``) and inject it into the returned config.
+    Environment variable references ($VAR or ${VAR}) in host, user, password,
+    and path fields are expanded.
+    """
     secrets = getattr(context, "secrets", None) if context is not None else None
     if secrets is None:
         return None
-    return secrets.get(_PREFIX + database)
+    cfg = secrets.get(_PREFIX + database)
+    if cfg is None:
+        return None
+    # Try to retrieve password from vault
+    vault = getattr(context, "vault", None)
+    if vault is not None:
+        try:
+            cfg["password"] = vault.retrieve(f"database:{database}:password")
+        except (KeyError, RuntimeError):
+            pass  # Not in vault or vault locked — use profile value
+    # Expand environment variable references in connection fields
+    for field in ("host", "user", "password", "path"):
+        if field in cfg:
+            cfg[field] = _expand_env(cfg[field])
+    return cfg
 
 
 def _list_databases(context: Any) -> list[dict[str, Any]]:
@@ -128,7 +155,15 @@ def _add_database(
         profile["name"] = db_name.strip()
         profile["user"] = user.strip()
         if password:
-            profile["password"] = password
+            # Store password in vault when available; fall back to secrets profile
+            vault = getattr(context, "vault", None)
+            if vault is not None:
+                try:
+                    vault.store(f"database:{name}:password", password)
+                except Exception:
+                    profile["password"] = password
+            else:
+                profile["password"] = password
     secrets.put(key, profile)
     return {"ok": True, "name": name}
 
@@ -288,25 +323,38 @@ def _sqlite_query(cfg: dict, query: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def _execute_query(cfg: dict, query: str) -> dict[str, Any]:
-    """Execute *query* against the database described by *cfg*."""
+def _execute_query(
+    cfg: dict, query: str, *, offset: int = 0, limit: int = 100
+) -> dict[str, Any]:
+    """Execute *query* against the database described by *cfg*.
+
+    *offset* and *limit* apply to Python-driver result sets (rows are fetched up
+    to ``min(limit, 1000)`` after skipping *offset*).  CLI fallbacks ignore them.
+    """
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
+    fetch_count = offset + limit  # fetch enough to slice
+
     db_type = cfg.get("type", "").lower()
     try:
         if db_type == "postgresql":
             if _HAS_PSYCOPG2:
                 rows = _pg_python(cfg, query)
-                return {"ok": True, "rows": rows, "driver": "psycopg2"}
+                sliced = rows[offset : offset + limit]
+                return {"ok": True, "rows": sliced, "total_fetched": len(rows), "driver": "psycopg2"}
             out = _pg_cli(cfg, query)
             return {"ok": True, "output": out, "driver": "psql"}
         elif db_type == "mysql":
             if _HAS_PYMYSQL:
                 rows = _mysql_python(cfg, query)
-                return {"ok": True, "rows": rows, "driver": "pymysql"}
+                sliced = rows[offset : offset + limit]
+                return {"ok": True, "rows": sliced, "total_fetched": len(rows), "driver": "pymysql"}
             out = _mysql_cli(cfg, query)
             return {"ok": True, "output": out, "driver": "mysql"}
         elif db_type == "sqlite":
             rows = _sqlite_query(cfg, query)
-            return {"ok": True, "rows": rows, "driver": "sqlite3"}
+            sliced = rows[offset : offset + limit]
+            return {"ok": True, "rows": sliced, "total_fetched": len(rows), "driver": "sqlite3"}
         else:
             return {"ok": False, "error": f"unsupported database type: {db_type}"}
     except Exception as e:
@@ -400,7 +448,7 @@ def _get_tables(cfg: dict) -> dict[str, Any]:
             for row in rows:
                 tname = row.get("name", "")
                 # Validate table name to prevent SQL injection
-                if not tname or not all(c.isalnum() or c in "_-." for c in tname):
+                if not tname or not all(c.isalnum() or c == "_" for c in tname):
                     continue
                 count_result = _execute_query(cfg, f'SELECT count(*) AS row_count FROM "{tname}";')
                 count = _extract_scalar(count_result) if count_result.get("ok") else "?"
@@ -408,6 +456,164 @@ def _get_tables(cfg: dict) -> dict[str, Any]:
             return {"ok": True, "rows": table_info, "driver": "sqlite3"}
         else:
             return {"ok": False, "error": f"unsupported type: {db_type}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+_SAFE_TABLE_RE = re.compile(r"^[a-zA-Z0-9_]+$")
+
+
+def _validate_table_name(table: str) -> str | None:
+    """Return an error string if *table* contains unsafe characters, else None."""
+    if not table or not _SAFE_TABLE_RE.match(table):
+        return f"invalid table name: {table!r}"
+    return None
+
+
+def _get_columns(cfg: dict, table: str) -> dict:
+    """Get column details for a table."""
+    err = _validate_table_name(table)
+    if err:
+        return {"ok": False, "error": err}
+    db_type = cfg.get("type", "").lower()
+    try:
+        if db_type == "postgresql":
+            q = (f"SELECT column_name, data_type, is_nullable, column_default "
+                 f"FROM information_schema.columns "
+                 f"WHERE table_name = '{table}' ORDER BY ordinal_position;")
+            return _execute_query(cfg, q)
+        elif db_type == "mysql":
+            return _execute_query(cfg, f"DESCRIBE `{table}`;")
+        elif db_type == "sqlite":
+            return _execute_query(cfg, f'PRAGMA table_info("{table}");')
+        return {"ok": False, "error": f"unsupported type: {db_type}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _get_indexes(cfg: dict, table: str) -> dict:
+    """Get indexes for a table."""
+    err = _validate_table_name(table)
+    if err:
+        return {"ok": False, "error": err}
+    db_type = cfg.get("type", "").lower()
+    try:
+        if db_type == "postgresql":
+            q = (f"SELECT indexname, indexdef FROM pg_indexes "
+                 f"WHERE tablename = '{table}';")
+            return _execute_query(cfg, q)
+        elif db_type == "mysql":
+            return _execute_query(cfg, f"SHOW INDEX FROM `{table}`;")
+        elif db_type == "sqlite":
+            return _execute_query(cfg, f'PRAGMA index_list("{table}");')
+        return {"ok": False, "error": f"unsupported type: {db_type}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _get_foreign_keys(cfg: dict, table: str) -> dict:
+    """Get foreign key relationships."""
+    err = _validate_table_name(table)
+    if err:
+        return {"ok": False, "error": err}
+    db_type = cfg.get("type", "").lower()
+    try:
+        if db_type == "postgresql":
+            q = (f"SELECT tc.constraint_name, kcu.column_name, "
+                 f"ccu.table_name AS foreign_table, ccu.column_name AS foreign_column "
+                 f"FROM information_schema.table_constraints tc "
+                 f"JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name "
+                 f"JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name "
+                 f"WHERE tc.table_name = '{table}' AND tc.constraint_type = 'FOREIGN KEY';")
+            return _execute_query(cfg, q)
+        elif db_type == "sqlite":
+            return _execute_query(cfg, f'PRAGMA foreign_key_list("{table}");')
+        return {"ok": True, "rows": []}  # MySQL: complex query, skip for now
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _generate_erd_mermaid(cfg: dict) -> dict:
+    """Generate Mermaid ER diagram from database schema."""
+    tables_result = _get_tables(cfg)
+    if not tables_result.get("ok"):
+        return tables_result
+
+    lines = ["erDiagram"]
+    table_names = [r.get("table_name", r.get("name", "")) for r in tables_result.get("rows", [])]
+
+    for table in table_names:
+        if not table or not all(c.isalnum() or c == "_" for c in table):
+            continue
+        cols_result = _get_columns(cfg, table)
+        if cols_result.get("ok"):
+            lines.append(f"    {table} {{")
+            for col in cols_result.get("rows", [])[:20]:  # Limit columns
+                col_name = col.get("column_name", col.get("name", col.get("Field", "")))
+                col_type = col.get("data_type", col.get("type", col.get("Type", "text")))
+                if col_name:
+                    safe_type = col_type.split("(")[0].replace(" ", "_") if col_type else "text"
+                    lines.append(f"        {safe_type} {col_name}")
+            lines.append("    }")
+
+        # Foreign keys
+        fk_result = _get_foreign_keys(cfg, table)
+        if fk_result.get("ok"):
+            for fk in fk_result.get("rows", []):
+                ref_table = fk.get("foreign_table", fk.get("table", ""))
+                if ref_table and ref_table in table_names:
+                    lines.append(f"    {table} }}o--|| {ref_table} : references")
+
+    return {"ok": True, "mermaid": "\n".join(lines)}
+
+
+def _get_db_status(cfg: dict) -> dict[str, Any]:
+    """Return status info: version, connection info (no password), size, table count."""
+    db_type = cfg.get("type", "").lower()
+    try:
+        base = _get_status(cfg)
+        # Add table count
+        tables_result = _get_tables(cfg)
+        table_count = len(tables_result.get("rows", [])) if tables_result.get("ok") else 0
+        base["table_count"] = table_count
+        # Add sanitised connection info (no password)
+        base["host"] = cfg.get("host", "")
+        base["port"] = cfg.get("port", "")
+        base["database"] = cfg.get("name", cfg.get("path", ""))
+        base["user"] = cfg.get("user", "")
+        return base
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _list_migrations(cfg: dict) -> dict[str, Any]:
+    """List migration history (framework-dependent)."""
+    db_type = cfg.get("type", "").lower()
+    try:
+        if db_type == "postgresql":
+            for table in ["schema_migrations", "alembic_version", "django_migrations", "_prisma_migrations"]:
+                result = _execute_query(cfg, f"SELECT * FROM {table} ORDER BY 1 DESC LIMIT 50;")
+                if result.get("ok") and result.get("rows"):
+                    return {"ok": True, "table": table, "rows": result["rows"], "driver": result.get("driver")}
+            return {"ok": True, "rows": [], "message": "No migration table found"}
+        elif db_type == "mysql":
+            for table in ["schema_migrations", "alembic_version", "django_migrations"]:
+                result = _execute_query(cfg, f"SELECT * FROM {table} ORDER BY 1 DESC LIMIT 50;")
+                if result.get("ok") and result.get("rows"):
+                    return {"ok": True, "table": table, "rows": result["rows"]}
+            return {"ok": True, "rows": [], "message": "No migration table found"}
+        elif db_type == "sqlite":
+            result = _execute_query(
+                cfg,
+                "SELECT name FROM sqlite_master WHERE type='table' AND "
+                "(name LIKE '%migration%' OR name LIKE '%alembic%');",
+            )
+            if result.get("ok") and result.get("rows"):
+                table = result["rows"][0].get("name", "")
+                if table:
+                    return _execute_query(cfg, f'SELECT * FROM "{table}" ORDER BY 1 DESC LIMIT 50;')
+            return {"ok": True, "rows": [], "message": "No migration table found"}
+        return {"ok": False, "error": f"unsupported: {db_type}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 

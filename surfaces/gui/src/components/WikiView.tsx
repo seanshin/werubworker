@@ -1,12 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getWikiPages, getWikiCategories, getWikiAlerts } from "../api";
+import { getWikiPages, getWikiCategories, getWikiAlerts, searchWiki } from "../api";
 import { PanelHead } from "./IntegrationsView";
 import { WikiPageView } from "./WikiPageView";
 import { WikiPageEditor } from "./WikiPageEditor";
 import { Icon } from "./Icon";
 
 const CARD = "rounded-xl2 border border-line bg-panel";
+
+// LLM wiki extended categories → available IconName values
+import type { IconName } from "./Icon";
+const CATEGORY_ICONS: Record<string, IconName> = {
+  service: "wrench",
+  database: "table",
+  server: "wrench",
+  cloud: "plug",
+  general: "book",
+  model: "sparkle",
+  prompt: "pencil",
+  benchmark: "diamond",
+  runbook: "file",
+  api_doc: "code",
+  architecture: "folder",
+};
 
 interface WikiPage {
   id: string;
@@ -15,6 +31,7 @@ interface WikiPage {
   tags: string[];
   updated_at?: string;
   linked_service?: string;
+  snippet?: string;
 }
 
 interface WikiAlert {
@@ -37,29 +54,58 @@ export function WikiView() {
   const [loading, setLoading] = useState(true);
 
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [activePageId, setActivePageId] = useState<string | null>(null);
 
+  // Debounce search query (300ms)
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
+
+  const isSearchMode = debouncedQuery.trim().length > 0;
+
   const fetchData = useCallback(() => {
     setLoading(true);
-    Promise.all([
-      getWikiPages(query || undefined, selectedCategory || undefined).catch(
-        () => [],
-      ),
-      getWikiCategories().catch(() => []),
-      getWikiAlerts().catch(() => []),
-    ])
-      .then(([p, c, a]) => {
-        setPages(Array.isArray(p) ? p : (p as any)?.pages || []);
-        setCategories(
-          Array.isArray(c) ? c : (c as any)?.categories || [],
-        );
-        setAlerts(Array.isArray(a) ? a : (a as any)?.alerts || []);
-      })
-      .finally(() => setLoading(false));
-  }, [query, selectedCategory]);
+    if (isSearchMode) {
+      // FTS search mode — skip category filter and alerts
+      searchWiki(debouncedQuery.trim())
+        .catch(() => [])
+        .then((results) => {
+          const mapped = (results as any[]).map((r) => ({
+            id: r.page_id ?? r.id,
+            name: r.name,
+            category: r.category,
+            tags: r.tags ?? [],
+            updated_at: r.updated_at,
+            snippet: r.snippet,
+          }));
+          setPages(mapped);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      Promise.all([
+        getWikiPages(undefined, selectedCategory || undefined).catch(
+          () => [],
+        ),
+        getWikiCategories().catch(() => []),
+        getWikiAlerts().catch(() => []),
+      ])
+        .then(([p, c, a]) => {
+          setPages(Array.isArray(p) ? p : (p as any)?.pages || []);
+          setCategories(
+            Array.isArray(c) ? c : (c as any)?.categories || [],
+          );
+          setAlerts(Array.isArray(a) ? a : (a as any)?.alerts || []);
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [debouncedQuery, selectedCategory, isSearchMode]);
 
   useEffect(() => {
     fetchData();
@@ -232,10 +278,12 @@ export function WikiView() {
           </div>
         )}
 
-        {/* Recently modified list */}
+        {/* Page list */}
         <div>
           <h3 className="text-[13px] font-semibold mb-2">
-            {t("session:wiki.recentlyModified")}
+            {isSearchMode
+              ? t("session:wiki.searchResults")
+              : t("session:wiki.recentlyModified")}
           </h3>
           {loading ? (
             <div className="text-[12.5px] text-muted py-4 text-center">
@@ -243,7 +291,9 @@ export function WikiView() {
             </div>
           ) : pages.length === 0 ? (
             <div className={CARD + " p-6 text-center text-[13px] text-muted"}>
-              {t("session:wiki.noPages")}
+              {isSearchMode
+                ? t("session:wiki.noSearchResults", { query: debouncedQuery })
+                : t("session:wiki.noPages")}
             </div>
           ) : (
             <div className="space-y-1">
@@ -256,26 +306,33 @@ export function WikiView() {
                   }
                   onClick={() => openPage(page.id)}
                 >
-                  <Icon name="book" size={16} className="text-muted shrink-0" />
+                  <Icon name={CATEGORY_ICONS[page.category] ?? "book"} size={16} className="text-muted shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-medium text-ink truncate">
                       {page.name}
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {page.category && (
-                        <span className="text-[11px] text-accent">
-                          {page.category}
-                        </span>
-                      )}
-                      {page.tags?.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-[11px] text-faint"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                    {isSearchMode && page.snippet ? (
+                      <div
+                        className="text-[12px] text-muted mt-0.5 line-clamp-2 [&_mark]:bg-yellow-200/60 [&_mark]:text-ink [&_mark]:rounded-sm"
+                        dangerouslySetInnerHTML={{ __html: page.snippet }}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {page.category && (
+                          <span className="text-[11px] text-accent">
+                            {page.category}
+                          </span>
+                        )}
+                        {page.tags?.slice(0, 3).map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-[11px] text-faint"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {page.updated_at && (
                     <span className="text-[11px] text-faint tabular-nums shrink-0">

@@ -7,6 +7,7 @@ Supports both local and remote (via SSH) Docker operations. Read-only tools
 
 from __future__ import annotations
 
+import json as _json
 import subprocess
 from typing import Any
 
@@ -123,6 +124,69 @@ def _docker_images(server: str = "local") -> dict[str, Any]:
         "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}",
     ]
     return _run_cmd(cmd, server=server)
+
+
+# ---------------------------------------------------------------------------
+# REST API helpers (CLI-based, no SDK dependency)
+# ---------------------------------------------------------------------------
+
+
+def _docker_available() -> bool:
+    """Check if docker CLI is available."""
+    try:
+        subprocess.run(["docker", "info"], capture_output=True, timeout=5)
+        return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _list_containers(all: bool = False) -> dict[str, Any]:
+    """List containers in JSON format for the REST API."""
+    cmd = ["docker", "ps", "--format", "json"]
+    if all:
+        cmd.insert(2, "-a")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        containers: list[dict] = []
+        for line in result.stdout.strip().split("\n"):
+            if line:
+                try:
+                    containers.append(_json.loads(line))
+                except _json.JSONDecodeError:
+                    pass
+        return {"ok": True, "containers": containers}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _container_action(container_id: str, action: str) -> dict[str, Any]:
+    """Perform start/stop/restart on a container."""
+    if action not in ("start", "stop", "restart"):
+        return {"ok": False, "error": f"Invalid action: {action}"}
+    try:
+        result = subprocess.run(
+            ["docker", action, container_id],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return {"ok": result.returncode == 0, "output": result.stdout + result.stderr}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _container_logs(container_id: str, tail: int = 100) -> dict[str, Any]:
+    """Get container logs for the REST API."""
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "--tail", str(min(tail, 500)), container_id],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return {"ok": True, "logs": result.stdout[-10000:]}  # Cap at 10k chars
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 # ---------------------------------------------------------------------------

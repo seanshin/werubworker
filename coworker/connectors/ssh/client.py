@@ -7,6 +7,7 @@ negotiation, known_hosts, and all auth methods out of the box.
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
@@ -56,6 +57,24 @@ class SSHClient:
         """Quick connectivity check (runs ``echo ok``)."""
         return self.execute("echo ok", timeout=10)
 
+    def get_fingerprint(self) -> dict:
+        """Get SSH host key fingerprint."""
+        try:
+            result = subprocess.run(
+                ["ssh-keyscan", "-p", str(self.server.port), "-t", "ed25519,rsa", self.server.host],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # Hash the key
+                hash_result = subprocess.run(
+                    ["ssh-keygen", "-lf", "-"],
+                    input=result.stdout, capture_output=True, text=True, timeout=5,
+                )
+                return {"ok": True, "fingerprint": hash_result.stdout.strip(), "raw": result.stdout.strip()[:500]}
+            return {"ok": False, "error": "Could not retrieve host key"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def _build_ssh_command(self, command: str, *, sudo: bool = False) -> list[str]:
         args = [
             "ssh",
@@ -71,7 +90,12 @@ class SSHClient:
         args.extend(["-p", str(self.server.port)])
         args.append(f"{self.server.username}@{self.server.host}")
         if sudo:
-            args.append(f"sudo {command}")
+            # Sanitize: reject shell metacharacters that could chain commands
+            _dangerous = set(";|&`$(){}!")
+            if any(c in _dangerous for c in command):
+                args.append("echo 'ERROR: shell metacharacters not allowed in sudo commands'")
+            else:
+                args.append(f"sudo {command}")
         else:
             args.append(command)
         return args

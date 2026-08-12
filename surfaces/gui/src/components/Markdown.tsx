@@ -55,6 +55,20 @@ export function Markdown({ text }: { text: string }) {
               </a>
             );
           },
+          code: ({ className, children, ...props }: any) => {
+            if (className === "language-mermaid") {
+              return (
+                <pre className="mermaid-block bg-paper border border-line rounded-lg p-4 text-[12px] overflow-x-auto">
+                  <code className="language-mermaid">{children}</code>
+                </pre>
+              );
+            }
+            return (
+              <code className={className} {...props}>
+                {children}
+              </code>
+            );
+          },
         }}
       >
         {text}

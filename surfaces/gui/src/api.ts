@@ -2033,6 +2033,12 @@ export interface WikiPage {
   updated_at?: string;
 }
 
+export async function searchWiki(query: string): Promise<any[]> {
+    const r = await fetch(`${httpBase()}/v1/wiki/search?q=${encodeURIComponent(query)}`);
+    const d = await r.json();
+    return d.results || [];
+}
+
 export async function getWikiPages(query?: string, category?: string): Promise<WikiPage[]> {
   const q = new URLSearchParams();
   if (query) q.set("q", query);

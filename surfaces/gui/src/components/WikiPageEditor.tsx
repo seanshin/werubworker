@@ -47,6 +47,21 @@ export function WikiPageEditor({ pageId, onSave, onCancel }: Props) {
       .catch(() => {});
   }, []);
 
+  // Auto-fill from template when creating a new page and category changes
+  useEffect(() => {
+    if (pageId || !category) return;
+    fetch(`/v1/wiki/templates/${encodeURIComponent(category)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.ok && d.template) {
+          if (!content) setContent(d.template.content || "");
+        }
+      })
+      .catch(() => {});
+    // Only run when category changes on a new page
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, pageId]);
+
   useEffect(() => {
     if (!pageId) return;
     getWikiPage(pageId)

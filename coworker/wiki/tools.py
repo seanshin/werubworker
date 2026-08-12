@@ -192,6 +192,32 @@ def wiki_tools(context: Any = None) -> list:
     )
     tools.append(wiki_check_alerts)
 
+    # -- wiki_resolve_service -----------------------------------------------
+    secrets = getattr(context, "secrets", None)
+
+    def wiki_resolve_service(service_ref: str) -> dict:
+        """Resolve a service reference to its configuration and wiki documentation."""
+        from ..registry import ServiceRegistry
+        reg = ServiceRegistry(wiki_store, secrets, vault)
+        return reg.resolve(service_ref)
+
+    _attach(
+        wiki_resolve_service,
+        _schema(
+            "wiki_resolve_service",
+            "Resolve a service reference (e.g. 'database:production', 'ssh:server:web-01') "
+            "to its configuration and related wiki documentation.",
+            {
+                "service_ref": {
+                    "type": "string",
+                    "description": "Service reference string (e.g. 'database:production', 'ssh:server:web-01', 'cloud:aws')",
+                },
+            },
+            ["service_ref"],
+        ),
+    )
+    tools.append(wiki_resolve_service)
+
     def wiki_analyze(page_id: str = "", content: str = "") -> dict:
         """Analyze a wiki page or free-form text to extract service credentials.
         Provide either page_id (to analyze existing page) or content (to analyze new text).
@@ -224,5 +250,122 @@ def wiki_tools(context: Any = None) -> list:
         ),
     )
     tools.append(wiki_analyze)
+
+    # -- wiki_optimize_prompt (Step 33: A6) --------------------------------
+    def wiki_optimize_prompt(page_id: str) -> dict:
+        """Analyze prompt run history and suggest improvements."""
+        page = wiki_store.get_page(page_id)
+        if not page:
+            return {"ok": False, "error": "page not found"}
+        runs = wiki_store.get_prompt_runs(page_id, limit=50)
+        if not runs:
+            return {"ok": False, "error": "no run history to analyze"}
+        total = len(runs)
+        successes = sum(1 for r in runs if r.get("success"))
+        avg_latency = sum(r.get("latency_ms", 0) for r in runs) / total if total else 0
+        avg_tokens = (
+            sum(r.get("input_tokens", 0) + r.get("output_tokens", 0) for r in runs) / total
+            if total
+            else 0
+        )
+        return {
+            "ok": True,
+            "page_id": page_id,
+            "analysis": {
+                "total_runs": total,
+                "success_rate": round(successes / total * 100, 1) if total else 0,
+                "avg_latency_ms": round(avg_latency),
+                "avg_total_tokens": round(avg_tokens),
+                "content": page.get("content", "")[:2000],
+            },
+            "suggestion": "Review the prompt content above and suggest improvements based on the run statistics.",
+        }
+
+    _attach(
+        wiki_optimize_prompt,
+        _schema(
+            "wiki_optimize_prompt",
+            "Analyze prompt run history and suggest improvements based on success rate, latency, and token usage.",
+            {
+                "page_id": {"type": "string", "description": "Wiki page ID of the prompt to optimize"},
+            },
+            ["page_id"],
+        ),
+        caps=["wiki", "prompt_library"],
+    )
+    tools.append(wiki_optimize_prompt)
+
+    # -- wiki_get_model_comparison (Step 34: A7) ---------------------------
+    def wiki_get_model_comparison(model_ids: str) -> dict:
+        """Compare model cards by their page IDs (comma-separated)."""
+        ids = [m.strip() for m in model_ids.split(",") if m.strip()]
+        models = []
+        for mid in ids[:4]:  # Max 4 models
+            page = wiki_store.get_page(mid)
+            if page:
+                models.append({
+                    "page_id": mid,
+                    "name": page.get("name", ""),
+                    "structured_data": page.get("structured_data", {}),
+                })
+        return {"ok": True, "models": models, "count": len(models)}
+
+    _attach(
+        wiki_get_model_comparison,
+        _schema(
+            "wiki_get_model_comparison",
+            "Compare model cards by their page IDs (comma-separated). Returns structured data for up to 4 models.",
+            {
+                "model_ids": {
+                    "type": "string",
+                    "description": "Comma-separated page IDs of model cards to compare",
+                },
+            },
+            ["model_ids"],
+        ),
+        caps=["wiki", "model_registry"],
+    )
+    tools.append(wiki_get_model_comparison)
+
+    # -- wiki_test_prompt_with_model (Step 34: A7) -------------------------
+    def wiki_test_prompt_with_model(page_id: str, model_id: str, variables: str = "{}") -> dict:
+        """Test a prompt template with specific model and variables."""
+        import json as _json
+        import uuid as _uuid
+
+        page = wiki_store.get_page(page_id)
+        if not page:
+            return {"ok": False, "error": "prompt page not found"}
+        try:
+            vars_dict = _json.loads(variables)
+        except Exception:
+            vars_dict = {}
+        run_id = str(_uuid.uuid4())[:8]
+        wiki_store.record_prompt_run(
+            page_id=page_id, run_id=run_id, model_id=model_id,
+            input_tokens=0, output_tokens=0, latency_ms=0,
+            success=True, variables=vars_dict, output_preview="(agent test)",
+            prompt_version=page.get("version", 1),
+        )
+        return {"ok": True, "run_id": run_id, "content": page.get("content", "")[:2000]}
+
+    _attach(
+        wiki_test_prompt_with_model,
+        _schema(
+            "wiki_test_prompt_with_model",
+            "Test a prompt template with a specific model and variables. Records a run entry.",
+            {
+                "page_id": {"type": "string", "description": "Wiki page ID of the prompt template"},
+                "model_id": {"type": "string", "description": "Model ID to test with"},
+                "variables": {
+                    "type": "string",
+                    "description": "JSON string of variable key-value pairs (default '{}')",
+                },
+            },
+            ["page_id", "model_id"],
+        ),
+        caps=["wiki", "prompt_library"],
+    )
+    tools.append(wiki_test_prompt_with_model)
 
     return tools

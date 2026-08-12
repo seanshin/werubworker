@@ -174,7 +174,19 @@ def create_app(manager: SessionManager) -> FastAPI:
             import traceback
 
             traceback.print_exc()
+
+        # Background task: auto-lock vault after 30 min idle (SEC-12)
+        async def _vault_idle_checker() -> None:
+            while True:
+                await asyncio.sleep(60)  # check every minute
+                try:
+                    manager.vault.check_idle()
+                except Exception:
+                    pass
+
+        vault_task = asyncio.create_task(_vault_idle_checker())
         yield
+        vault_task.cancel()
         await manager.aclose()  # stop gateway + close MCP connections on shutdown
 
     app = FastAPI(title="coworker", version="0.0.0", lifespan=lifespan)
@@ -1027,21 +1039,76 @@ def create_app(manager: SessionManager) -> FastAPI:
 
         if not isinstance(body, dict):
             return {"ok": False, "error": "invalid body"}
+        # SEC-13: Validate input fields
+        server_id = str(body.get("server_id", "")).strip()
+        host = str(body.get("host", "")).strip()
+        if not server_id:
+            return {"ok": False, "error": "server_id is required"}
+        if not host:
+            return {"ok": False, "error": "host is required"}
+        if " " in host or "\t" in host or len(host) > 253:
+            return {"ok": False, "error": "invalid host format"}
+        try:
+            port = int(body.get("port", 22))
+        except (ValueError, TypeError):
+            return {"ok": False, "error": "port must be a number"}
+        if not (1 <= port <= 65535):
+            return {"ok": False, "error": "port must be between 1 and 65535"}
         return add_server(
             manager.secrets,
-            server_id=str(body.get("server_id", "")).strip(),
-            host=str(body.get("host", "")).strip(),
-            port=int(body.get("port", 22)),
+            server_id=server_id,
+            host=host,
+            port=port,
             username=str(body.get("username", "deploy")).strip(),
             key_path=str(body.get("key_path", "")).strip(),
             label=str(body.get("label", "")).strip(),
             tags=body.get("tags") if isinstance(body.get("tags"), list) else [],
+            vault=manager.vault,
+        )
+
+    @app.put("/v1/ssh/servers/{server_id}")
+    def ssh_servers_update(server_id: str, body: dict) -> dict[str, Any]:
+        """Update an existing SSH server profile."""
+        from ..connectors.ssh import remove_server, add_server
+
+        if not isinstance(body, dict):
+            return {"ok": False, "error": "invalid body"}
+        # SEC-13: Validate input fields
+        host = str(body.get("host", "")).strip()
+        if not host:
+            return {"ok": False, "error": "host is required"}
+        if " " in host or "\t" in host or len(host) > 253:
+            return {"ok": False, "error": "invalid host format"}
+        try:
+            port = int(body.get("port", 22))
+        except (ValueError, TypeError):
+            return {"ok": False, "error": "port must be a number"}
+        if not (1 <= port <= 65535):
+            return {"ok": False, "error": "port must be between 1 and 65535"}
+        # Remove then re-add with new values
+        rm = remove_server(manager.secrets, server_id)
+        if not rm.get("ok"):
+            return rm
+        return add_server(
+            manager.secrets,
+            server_id=server_id,
+            host=host,
+            port=port,
+            username=str(body.get("username", "deploy")).strip(),
+            key_path=str(body.get("key_path", "")).strip(),
+            label=str(body.get("label", "")).strip(),
+            tags=body.get("tags") if isinstance(body.get("tags"), list) else [],
+            vault=manager.vault,
         )
 
     @app.delete("/v1/ssh/servers/{server_id}")
     def ssh_servers_remove(server_id: str) -> dict[str, Any]:
         from ..connectors.ssh import remove_server
+        from ..security.rate_limiter import get_limiter
 
+        limiter = get_limiter("destructive", 10, 60)
+        if not limiter.check():
+            return JSONResponse({"ok": False, "error": "Rate limit exceeded"}, status_code=429)
         return remove_server(manager.secrets, server_id)
 
     @app.post("/v1/ssh/servers/{server_id}/test")
@@ -1049,20 +1116,206 @@ def create_app(manager: SessionManager) -> FastAPI:
         from ..connectors.ssh import get_server
         from ..connectors.ssh.client import SSHClient
 
-        server = get_server(manager.secrets, server_id)
+        server = get_server(manager.secrets, server_id, vault=manager.vault)
         if server is None:
             return {"ok": False, "error": f"server '{server_id}' not found"}
         result = await asyncio.to_thread(lambda: SSHClient(server).test_connection())
         return result
 
+    @app.get("/v1/ssh/servers/{server_id}/fingerprint")
+    async def ssh_server_fingerprint(server_id: str) -> dict[str, Any]:
+        from ..connectors.ssh import get_server
+        from ..connectors.ssh.client import SSHClient
+
+        server = get_server(manager.secrets, server_id, vault=manager.vault)
+        if server is None:
+            return {"ok": False, "error": f"server '{server_id}' not found"}
+        result = await asyncio.to_thread(lambda: SSHClient(server).get_fingerprint())
+        return result
+
+    @app.post("/v1/vault/change-master")
+    def vault_change_master(body: dict) -> dict[str, Any]:
+        if not isinstance(body, dict):
+            return {"ok": False, "error": "invalid body"}
+        old_password = str(body.get("old_password", ""))
+        new_password = str(body.get("new_password", ""))
+        if not old_password or not new_password:
+            return {"ok": False, "error": "old_password and new_password are required"}
+        return manager.vault.change_master(old_password, new_password)
+
     # -- Ops dashboard status ---------------------------------------------------
 
-    @app.get("/v1/ops/local-status")
-    def ops_local_status() -> dict[str, Any]:
-        """Quick local server status for the OpsView dashboard."""
-        from ..tools.server_monitor import _server_status
+    # Alert thresholds (module-level mutable config)
+    _alert_thresholds: dict[str, float] = {"cpu": 90, "memory": 85, "disk": 90}
 
-        return _server_status()
+    # Metrics store for history (Step 7)
+    from ..tools.server_monitor import MetricsStore as _MetricsStore
+
+    _metrics_store = _MetricsStore(manager._data_base)
+
+    @app.get("/v1/ops/alerts/config")
+    def ops_alerts_config_get() -> dict[str, Any]:
+        """Return current alert threshold config."""
+        return {"ok": True, "thresholds": dict(_alert_thresholds)}
+
+    @app.post("/v1/ops/alerts/config")
+    def ops_alerts_config_set(body: dict) -> dict[str, Any]:
+        """Update alert thresholds."""
+        for key in ("cpu", "memory", "disk"):
+            if key in body:
+                try:
+                    _alert_thresholds[key] = float(body[key])
+                except (TypeError, ValueError):
+                    pass
+        return {"ok": True, "thresholds": dict(_alert_thresholds)}
+
+    @app.get("/v1/ops/local-status")
+    async def ops_local_status() -> dict[str, Any]:
+        """Quick local server status for the OpsView dashboard.
+        Also checks thresholds and broadcasts alerts, and records metrics."""
+        from ..tools.server_monitor import _check_thresholds, _server_status
+
+        status = _server_status()
+
+        # Record metrics to history store
+        cpu = status.get("cpu_percent", 0)
+        mem = status.get("memory", {}).get("percent", 0) if isinstance(status.get("memory"), dict) else 0
+        disk = status.get("disk_root", {}).get("percent", 0) if isinstance(status.get("disk_root"), dict) else 0
+        try:
+            _metrics_store.record("local", cpu, mem, disk)
+        except Exception:
+            pass  # never fail the status endpoint for metrics
+
+        # Check thresholds and broadcast alerts
+        alerts = _check_thresholds(status, _alert_thresholds)
+        if alerts:
+            try:
+                await manager.broadcast_event({
+                    "type": "server_alert",
+                    "alerts": alerts,
+                })
+            except Exception:
+                pass
+            status["alerts"] = alerts
+
+        return status
+
+    @app.get("/v1/ops/metrics")
+    def ops_metrics(range: str = "1h") -> dict[str, Any]:
+        """Return metrics history. range: 1h/6h/24h/7d."""
+        range_map = {"1h": 3600, "6h": 6 * 3600, "24h": 24 * 3600, "7d": 7 * 86400}
+        seconds = range_map.get(range, 3600)
+        history = _metrics_store.get_history("local", seconds)
+        return {"ok": True, "metrics": history, "range": range, "range_seconds": seconds}
+
+    @app.get("/v1/ops/processes")
+    def ops_processes(filter: str = "") -> dict[str, Any]:
+        """List running processes, optionally filtered by name."""
+        from ..tools.server_monitor import _process_list
+
+        return _process_list(filter_name=filter or None)
+
+    @app.get("/v1/ops/ports")
+    def ops_ports(ports: str = "80,443,8080,8765,5432,3306") -> dict[str, Any]:
+        """Check if common ports are open on localhost."""
+        from ..tools.server_monitor import _check_ports
+
+        return _check_ports(host="localhost", ports=ports)
+
+    @app.get("/v1/ops/services")
+    def ops_service_status(service: str = "") -> dict[str, Any]:
+        """Check system service status (systemctl/launchctl)."""
+        from ..tools.server_monitor import _service_status
+
+        if not service.strip():
+            return {"ok": False, "error": "service name required"}
+        return _service_status(service=service.strip())
+
+    # -- Process kill + network stats (S10, S11) --------------------------------
+
+    @app.post("/v1/ops/processes/{pid}/kill")
+    def ops_kill_process(pid: int, body: dict) -> dict[str, Any]:
+        """Kill a process by PID. Rate-limited."""
+        from ..security.rate_limiter import get_limiter
+        from ..tools.server_monitor import _kill_process
+
+        limiter = get_limiter("kill_process", 5, 60)
+        if not limiter.check():
+            return JSONResponse({"ok": False, "error": "Rate limit exceeded"}, status_code=429)
+        signal_name = str((body or {}).get("signal", "TERM")).strip()
+        return _kill_process(pid, signal_name)
+
+    @app.get("/v1/ops/network")
+    def ops_network() -> dict[str, Any]:
+        """Get network interface statistics."""
+        from ..tools.server_monitor import _network_stats
+
+        return _network_stats()
+
+    # -- Audit log dashboard (SEC-19) -------------------------------------------
+
+    @app.get("/v1/audit/log")
+    def ops_audit_log(days: int = 7) -> dict[str, Any]:
+        """Read recent vault audit log entries."""
+        from ..wiki.vault import read_audit_entries
+
+        days = max(1, min(days, 90))
+        entries = read_audit_entries(days=days)
+        return {"ok": True, "entries": entries, "days": days}
+
+    # -- Health check schedule (S12) --------------------------------------------
+
+    from ..tools.server_monitor import HealthChecker as _HealthChecker
+
+    _health_checker = _HealthChecker()
+
+    @app.get("/v1/ops/healthcheck")
+    def ops_healthcheck_list() -> dict[str, Any]:
+        """List configured health checks + last status."""
+        return {"ok": True, "checks": list(_health_checker.checks), "enabled": _health_checker.enabled}
+
+    @app.post("/v1/ops/healthcheck")
+    def ops_healthcheck_add(body: dict) -> dict[str, Any]:
+        """Add or update a health check config."""
+        body = body or {}
+        check_type = str(body.get("type", "")).strip()
+        target = str(body.get("target", "")).strip()
+        if not check_type or not target:
+            return {"ok": False, "error": "type and target required"}
+        interval = int(body.get("interval", 300))
+        _health_checker.interval = interval
+        _health_checker.add_check(check_type, target)
+        _health_checker.enabled = True
+        return {"ok": True, "checks": list(_health_checker.checks)}
+
+    @app.post("/v1/ops/healthcheck/run")
+    async def ops_healthcheck_run() -> dict[str, Any]:
+        """Run all configured health checks now."""
+        results = await _health_checker.run_checks()
+        return {"ok": True, "results": results}
+
+    # -- Docker REST endpoints --------------------------------------------------
+
+    @app.get("/v1/docker/containers")
+    def docker_containers_list(all: bool = False) -> dict[str, Any]:
+        """List Docker containers (JSON format)."""
+        from ..tools.docker_mgmt import _list_containers
+
+        return _list_containers(all=all)
+
+    @app.post("/v1/docker/containers/{container_id}/{action}")
+    def docker_container_action(container_id: str, action: str) -> dict[str, Any]:
+        """Start/stop/restart a Docker container."""
+        from ..tools.docker_mgmt import _container_action
+
+        return _container_action(container_id, action)
+
+    @app.get("/v1/docker/containers/{container_id}/logs")
+    def docker_container_logs(container_id: str, tail: int = 100) -> dict[str, Any]:
+        """Get Docker container logs."""
+        from ..tools.docker_mgmt import _container_logs
+
+        return _container_logs(container_id, tail=tail)
 
     # -- Database config management ---------------------------------------------
 
@@ -1078,12 +1331,28 @@ def create_app(manager: SessionManager) -> FastAPI:
 
         if not isinstance(body, dict):
             return {"ok": False, "error": "invalid body"}
+        # SEC-13: Validate input fields
+        name = str(body.get("name", "")).strip()
+        db_type = str(body.get("type", "")).strip()
+        if not name:
+            return {"ok": False, "error": "name is required"}
+        if not db_type:
+            return {"ok": False, "error": "type is required"}
+        host = str(body.get("host", "")).strip()
+        if host and (" " in host or "\t" in host or len(host) > 253):
+            return {"ok": False, "error": "invalid host format"}
+        try:
+            port = int(body.get("port", 0))
+        except (ValueError, TypeError):
+            return {"ok": False, "error": "port must be a number"}
+        if port and not (1 <= port <= 65535):
+            return {"ok": False, "error": "port must be between 1 and 65535"}
         return _add_database(
             manager,
-            name=str(body.get("name", "")).strip(),
-            db_type=str(body.get("type", "")).strip(),
-            host=str(body.get("host", "")).strip(),
-            port=int(body.get("port", 0)),
+            name=name,
+            db_type=db_type,
+            host=host,
+            port=port,
             db_name=str(body.get("database", "")).strip(),
             user=str(body.get("user", "")).strip(),
             password=str(body.get("password", "")).strip(),
@@ -1092,9 +1361,345 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.delete("/v1/databases/{name}")
     def databases_remove(name: str) -> dict[str, Any]:
+        from ..security.rate_limiter import get_limiter
         from ..tools.db_mgmt import _remove_database
 
+        limiter = get_limiter("destructive", 10, 60)
+        if not limiter.check():
+            return JSONResponse({"ok": False, "error": "Rate limit exceeded"}, status_code=429)
         return _remove_database(manager, name)
+
+    @app.post("/v1/databases/{name}/query")
+    def databases_query(name: str, body: dict) -> dict:
+        from ..security.rate_limiter import get_limiter
+        from ..tools.db_mgmt import _execute_query, _resolve_config
+
+        limiter = get_limiter("query", 30, 60)
+        if not limiter.check():
+            return JSONResponse({"ok": False, "error": "Rate limit exceeded"}, status_code=429)
+        cfg = _resolve_config(manager, name)
+        if not cfg:
+            return {"ok": False, "error": f"database '{name}' not found"}
+        query = str(body.get("query", "")).strip()
+        if not query:
+            return {"ok": False, "error": "query is required"}
+        offset = int(body.get("offset", 0))
+        limit = int(body.get("limit", 100))
+        return _execute_query(cfg, query, offset=offset, limit=limit)
+
+    @app.get("/v1/databases/{name}/tables")
+    def databases_tables(name: str) -> dict:
+        from ..tools.db_mgmt import _get_tables, _resolve_config
+
+        cfg = _resolve_config(manager, name)
+        if not cfg:
+            return {"ok": False, "error": f"database '{name}' not found"}
+        return _get_tables(cfg)
+
+    @app.get("/v1/databases/{name}/tables/{table}/columns")
+    def databases_table_columns(name: str, table: str) -> dict:
+        from ..tools.db_mgmt import _get_columns, _resolve_config, _validate_table_name
+
+        cfg = _resolve_config(manager, name)
+        if not cfg:
+            return {"ok": False, "error": f"database '{name}' not found"}
+        err = _validate_table_name(table)
+        if err:
+            return {"ok": False, "error": err}
+        return _get_columns(cfg, table)
+
+    @app.get("/v1/databases/{name}/tables/{table}/indexes")
+    def databases_table_indexes(name: str, table: str) -> dict:
+        from ..tools.db_mgmt import _get_indexes, _resolve_config, _validate_table_name
+
+        cfg = _resolve_config(manager, name)
+        if not cfg:
+            return {"ok": False, "error": f"database '{name}' not found"}
+        err = _validate_table_name(table)
+        if err:
+            return {"ok": False, "error": err}
+        return _get_indexes(cfg, table)
+
+    @app.get("/v1/databases/{name}/tables/{table}/fkeys")
+    def databases_table_fkeys(name: str, table: str) -> dict:
+        from ..tools.db_mgmt import _get_foreign_keys, _resolve_config, _validate_table_name
+
+        cfg = _resolve_config(manager, name)
+        if not cfg:
+            return {"ok": False, "error": f"database '{name}' not found"}
+        err = _validate_table_name(table)
+        if err:
+            return {"ok": False, "error": err}
+        return _get_foreign_keys(cfg, table)
+
+    @app.get("/v1/databases/{name}/migrations")
+    def databases_migrations(name: str) -> dict:
+        from ..tools.db_mgmt import _list_migrations, _resolve_config
+
+        cfg = _resolve_config(manager, name)
+        if not cfg:
+            return {"ok": False, "error": f"database '{name}' not found"}
+        return _list_migrations(cfg)
+
+    @app.get("/v1/databases/{name}/status")
+    def databases_status(name: str) -> dict:
+        from ..tools.db_mgmt import _get_db_status, _resolve_config
+
+        cfg = _resolve_config(manager, name)
+        if not cfg:
+            return {"ok": False, "error": f"database '{name}' not found"}
+        return _get_db_status(cfg)
+
+    @app.get("/v1/databases/{name}/erd")
+    def databases_erd(name: str) -> dict:
+        from ..tools.db_mgmt import _generate_erd_mermaid, _resolve_config
+
+        cfg = _resolve_config(manager, name)
+        if not cfg:
+            return {"ok": False, "error": f"database '{name}' not found"}
+        return _generate_erd_mermaid(cfg)
+
+    # -- Config export/import ---------------------------------------------------
+
+    @app.post("/v1/config/export")
+    def config_export(body: dict) -> dict:
+        """Export all configuration (optionally excluding credentials)."""
+        include_creds = bool((body or {}).get("include_credentials", False))
+        config: dict[str, Any] = {"ssh_servers": [], "databases": [], "cloud_providers": []}
+        # SSH
+        from ..connectors.ssh import list_servers
+        config["ssh_servers"] = list_servers(manager.secrets)
+        # Databases
+        from ..tools.db_mgmt import _list_databases
+        config["databases"] = _list_databases(manager)
+        # Cloud
+        from ..connectors.cloud import list_providers
+        config["cloud_providers"] = list_providers(manager.secrets)
+        if not include_creds:
+            for db in config["databases"]:
+                db.pop("password", None)
+        return {"ok": True, "config": config}
+
+    @app.post("/v1/config/import")
+    def config_import(body: dict) -> dict:
+        """Import configuration from exported JSON."""
+        config = (body or {}).get("config", {})
+        imported: dict[str, int] = {"ssh": 0, "databases": 0, "cloud": 0}
+        # SSH
+        from ..connectors.ssh import add_server
+        for s in config.get("ssh_servers", []):
+            r = add_server(
+                manager.secrets,
+                server_id=s.get("server_id", ""),
+                host=s.get("host", ""),
+                port=s.get("port", 22),
+                username=s.get("username", "deploy"),
+            )
+            if r.get("ok"):
+                imported["ssh"] += 1
+        # Databases
+        from ..tools.db_mgmt import _add_database
+        for d in config.get("databases", []):
+            r = _add_database(
+                manager,
+                name=d.get("name", ""),
+                db_type=d.get("type", ""),
+                host=d.get("host", ""),
+                port=d.get("port", 0),
+                db_name=d.get("database", ""),
+                user=d.get("user", ""),
+                password=d.get("password", ""),
+            )
+            if r.get("ok"):
+                imported["databases"] += 1
+        return {"ok": True, "imported": imported}
+
+    # -- Cloud provider management ----------------------------------------------
+
+    @app.get("/v1/cloud/providers")
+    def cloud_providers_list() -> dict[str, Any]:
+        from ..connectors.cloud import list_providers
+
+        return {"ok": True, "providers": list_providers(manager.secrets)}
+
+    @app.post("/v1/cloud/providers")
+    def cloud_providers_add(body: dict) -> dict[str, Any]:
+        from ..connectors.cloud import add_provider
+
+        if not isinstance(body, dict):
+            return {"ok": False, "error": "invalid body"}
+        return add_provider(
+            manager.secrets,
+            name=str(body.get("name", "")).strip(),
+            provider=str(body.get("provider", "")).strip(),
+            api_key=str(body.get("api_key", "")).strip(),
+            api_secret=str(body.get("api_secret", "")).strip(),
+            region=str(body.get("region", "")).strip(),
+        )
+
+    @app.delete("/v1/cloud/providers/{name}")
+    def cloud_providers_remove(name: str) -> dict[str, Any]:
+        from ..connectors.cloud import remove_provider
+
+        return remove_provider(manager.secrets, name)
+
+    @app.post("/v1/cloud/providers/{name}/test")
+    async def cloud_providers_test(name: str) -> dict[str, Any]:
+        from ..connectors.cloud import test_provider
+
+        return await test_provider(manager.secrets, name)
+
+    # -- Dev dashboard (GitHub integration) ------------------------------------
+
+    @app.get("/v1/dev/config")
+    def dev_config() -> dict[str, Any]:
+        """Check if GitHub is configured."""
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": True, "configured": False}
+        return {"ok": True, "configured": True, "owner": gh.owner, "repo": gh.repo}
+
+    @app.post("/v1/dev/config")
+    def dev_config_save(body: dict) -> dict[str, Any]:
+        """Save GitHub PAT and repo config."""
+        from ..connectors.github import save_github_config
+        return save_github_config(
+            manager.secrets,
+            token=str(body.get("token", "")).strip(),
+            owner=str(body.get("owner", "")).strip(),
+            repo=str(body.get("repo", "")).strip(),
+        )
+
+    @app.get("/v1/dev/repo")
+    async def dev_repo() -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.get_repo()
+
+    @app.get("/v1/dev/pulls")
+    async def dev_pulls(state: str = "open") -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.list_pulls(state=state)
+
+    @app.get("/v1/dev/actions/runs")
+    async def dev_actions_runs() -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.list_runs()
+
+    @app.get("/v1/dev/issues")
+    async def dev_issues(state: str = "open") -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.list_issues(state=state)
+
+    @app.get("/v1/dev/pulls/{number}")
+    async def dev_pull_detail(number: int) -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.get_pull(number)
+
+    @app.get("/v1/dev/actions/runs/{run_id}/jobs")
+    async def dev_run_jobs(run_id: int) -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.get_run_logs(run_id)
+
+    @app.post("/v1/dev/issues")
+    async def dev_create_issue(body: dict) -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        labels_raw = body.get("labels")
+        labels = [l.strip() for l in labels_raw if l.strip()] if isinstance(labels_raw, list) else None
+        return await gh.create_issue(
+            title=str(body.get("title", "")).strip(),
+            body=str(body.get("body", "")).strip(),
+            labels=labels,
+        )
+
+    @app.get("/v1/dev/reviews")
+    async def dev_reviews() -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.list_review_requests()
+
+    @app.get("/v1/dev/releases")
+    async def dev_releases() -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.list_releases()
+
+    @app.post("/v1/dev/releases")
+    async def dev_create_release(body: dict) -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.create_release(
+            tag=str(body.get("tag", "")).strip(),
+            name=str(body.get("name", "")).strip(),
+            body=str(body.get("body", "")).strip(),
+            draft=bool(body.get("draft", False)),
+        )
+
+    @app.get("/v1/dev/commits")
+    async def dev_commits(sha: str = "") -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        return await gh.list_commits(sha=sha)
+
+    @app.post("/v1/dev/pulls/{number}/merge")
+    async def dev_merge_pull(number: int, body: dict) -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        method = str(body.get("method", "squash")).strip()
+        if method not in ("squash", "merge", "rebase"):
+            return {"ok": False, "error": "Invalid merge method"}
+        return await gh.merge_pull(number, method=method)
+
+    @app.post("/v1/dev/pulls/{number}/review")
+    async def dev_pr_review(number: int) -> dict[str, Any]:
+        from ..connectors.github import get_github_connector
+        gh = get_github_connector(manager.secrets)
+        if gh is None:
+            return {"ok": False, "error": "GitHub not configured"}
+        pr = await gh.get_pull(number)
+        if not pr.get("ok"):
+            return pr
+        return {"ok": True, "pr": pr, "review_prompt": f"Review PR #{number}: {pr.get('title', '')}\n+{pr.get('additions', 0)} -{pr.get('deletions', 0)} in {pr.get('changed_files', 0)} files"}
+
+    @app.post("/v1/dev/webhook")
+    async def dev_webhook(request: Request) -> dict[str, Any]:
+        """Receive GitHub webhook events."""
+        body = await request.json()
+        event_type = request.headers.get("X-GitHub-Event", "")
+        if event_type in ("pull_request", "issues", "push", "workflow_run"):
+            await manager.broadcast_event({"type": "github_event", "event": event_type, "action": body.get("action", "")})
+        return {"ok": True, "event": event_type}
 
     # -- OpenWorker Cloud: sign-in + managed one-click connect ---------------
     # All optional: the app is fully functional signed out (manual token paste
@@ -2036,6 +2641,13 @@ def create_app(manager: SessionManager) -> FastAPI:
     def wiki_ack_alert(alert_id: int) -> dict[str, Any]:
         return manager.wiki_store.ack_alert(alert_id)
 
+    @app.get("/v1/wiki/search")
+    def wiki_search_fts(q: str = "") -> dict[str, Any]:
+        if not q.strip():
+            return {"ok": True, "results": []}
+        results = manager.wiki_store.search_fts(q.strip())
+        return {"ok": True, "results": results}
+
     @app.get("/v1/wiki/{page_id}")
     def wiki_get(page_id: str) -> dict[str, Any]:
         page = manager.wiki_store.get_page(page_id)
@@ -2083,6 +2695,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             linked_service=linked_service,
             tags=body.get("tags"),
             updated_by=str(body.get("updated_by", "api")),
+            structured_data=body.get("structured_data"),
         )
         # Store values in vault + sync to secrets.json
         _wiki_store_credentials(page_id, credentials, linked_service)
@@ -2135,7 +2748,16 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.delete("/v1/wiki/{page_id}")
     def wiki_delete(page_id: str) -> dict[str, Any]:
+        from ..security.rate_limiter import get_limiter
+
+        limiter = get_limiter("destructive", 10, 60)
+        if not limiter.check():
+            return JSONResponse({"ok": False, "error": "Rate limit exceeded"}, status_code=429)
         return manager.wiki_store.delete_page(page_id)
+
+    @app.post("/v1/wiki/{page_id}/restore")
+    def wiki_restore(page_id: str) -> dict[str, Any]:
+        return manager.wiki_store.restore_page(page_id)
 
     @app.get("/v1/wiki/{page_id}/history")
     def wiki_history(page_id: str) -> dict[str, Any]:
@@ -2143,6 +2765,11 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.post("/v1/wiki/{page_id}/credentials/{key}/reveal")
     def wiki_reveal_credential(page_id: str, key: str) -> dict[str, Any]:
+        from ..security.rate_limiter import get_limiter
+
+        limiter = get_limiter("reveal", 10, 60)
+        if not limiter.check():
+            return JSONResponse({"ok": False, "error": "Rate limit exceeded"}, status_code=429)
         vault_key = f"{page_id}:{key}"
         try:
             value = manager.vault.retrieve(vault_key)
@@ -2173,6 +2800,248 @@ def create_app(manager: SessionManager) -> FastAPI:
         if page is None:
             return JSONResponse({"error": "page not found"}, status_code=404)
         return analyze_document(page.get("content", ""), page.get("name", ""))
+
+    @app.get("/v1/wiki/prompts")
+    def wiki_prompts_list() -> dict:
+        pages = manager.wiki_store.list_pages(category="prompt")
+        return {"ok": True, "prompts": pages}
+
+    @app.get("/v1/wiki/prompts/{page_id}/runs")
+    def wiki_prompt_runs(page_id: str) -> dict:
+        runs = manager.wiki_store.get_prompt_runs(page_id)
+        return {"ok": True, "runs": runs}
+
+    @app.post("/v1/wiki/prompts/{page_id}/test")
+    async def wiki_prompt_test(page_id: str, body: dict) -> dict:
+        """Test a prompt with given variables. Returns mock result for now."""
+        import uuid as _uuid
+
+        page = manager.wiki_store.get_page(page_id)
+        if not page:
+            return {"ok": False, "error": "page not found"}
+        variables = body.get("variables", {})
+        model_id = body.get("model_id", "unknown")
+        # Record the test run
+        run_id = str(_uuid.uuid4())[:8]
+        manager.wiki_store.record_prompt_run(
+            page_id=page_id, run_id=run_id, model_id=model_id,
+            input_tokens=0, output_tokens=0, latency_ms=0,
+            success=True, variables=variables, output_preview="(test recorded)",
+            prompt_version=page.get("version", 1)
+        )
+        return {"ok": True, "run_id": run_id, "message": "Test run recorded"}
+
+    @app.get("/v1/wiki/benchmarks")
+    def wiki_benchmarks_list(page_id: str = "", model_id: str = "") -> dict:
+        results = manager.wiki_store.get_benchmarks(page_id, model_id)
+        return {"ok": True, "benchmarks": results}
+
+    @app.post("/v1/wiki/benchmarks")
+    def wiki_benchmarks_add(body: dict) -> dict:
+        import uuid as _uuid
+
+        return manager.wiki_store.record_benchmark(
+            benchmark_id=body.get("benchmark_id", str(_uuid.uuid4())[:8]),
+            page_id=str(body.get("page_id", "")),
+            model_id=str(body.get("model_id", "")),
+            metric_name=str(body.get("metric_name", "")),
+            metric_value=float(body.get("metric_value", 0)),
+            run_date=str(body.get("run_date", "")),
+        )
+
+    @app.post("/v1/wiki/models/calc-cost")
+    def wiki_calc_cost(body: dict) -> dict:
+        """Calculate monthly cost based on model card data."""
+        input_price = float(body.get("input_price_per_1m", 0))
+        output_price = float(body.get("output_price_per_1m", 0))
+        daily_requests = int(body.get("daily_requests", 100))
+        avg_input_tokens = int(body.get("avg_input_tokens", 1000))
+        avg_output_tokens = int(body.get("avg_output_tokens", 500))
+
+        monthly_input = daily_requests * 30 * avg_input_tokens
+        monthly_output = daily_requests * 30 * avg_output_tokens
+        cost = (monthly_input / 1_000_000 * input_price) + (monthly_output / 1_000_000 * output_price)
+
+        return {"ok": True, "monthly_cost": round(cost, 2),
+                "monthly_input_tokens": monthly_input, "monthly_output_tokens": monthly_output}
+
+    # -- Runbook execution -------------------------------------------------
+
+    @app.get("/v1/wiki/runbooks")
+    def wiki_runbooks_list() -> dict[str, Any]:
+        pages = manager.wiki_store.list_pages(category="runbook")
+        return {"ok": True, "runbooks": pages}
+
+    @app.get("/v1/wiki/runbooks/{page_id}/executions")
+    def wiki_runbook_executions(page_id: str) -> dict[str, Any]:
+        execs = manager.wiki_store.get_runbook_executions(page_id)
+        return {"ok": True, "executions": execs}
+
+    @app.post("/v1/wiki/runbooks/{page_id}/execute")
+    def wiki_runbook_execute(page_id: str) -> dict[str, Any]:
+        import uuid
+        page = manager.wiki_store.get_page(page_id)
+        if not page:
+            return {"ok": False, "error": "runbook not found"}
+        # Parse steps from structured_data
+        sd = page.get("structured_data", {})
+        steps = sd.get("steps", []) if isinstance(sd, dict) else []
+        exec_id = str(uuid.uuid4())[:8]
+        manager.wiki_store.record_runbook_execution(
+            execution_id=exec_id,
+            page_id=page_id,
+            steps_total=len(steps),
+            executed_by="api",
+        )
+        return {"ok": True, "execution_id": exec_id, "steps_total": len(steps)}
+
+    # -- Wiki export/import ------------------------------------------------
+
+    @app.post("/v1/wiki/export")
+    def wiki_export() -> dict[str, Any]:
+        pages = manager.wiki_store.export_all()
+        return {"ok": True, "pages": pages}
+
+    @app.post("/v1/wiki/import")
+    def wiki_import(body: dict) -> dict[str, Any]:
+        pages = (body or {}).get("pages", [])
+        if not isinstance(pages, list):
+            return {"ok": False, "error": "pages must be a list"}
+        return manager.wiki_store.import_pages(pages)
+
+    # -- Vault rotation + audit --------------------------------------------
+
+    @app.post("/v1/vault/rotate/{key}")
+    def vault_rotate(key: str, body: dict) -> dict[str, Any]:
+        new_value = body.get("new_value", "")
+        if not new_value:
+            return JSONResponse({"ok": False, "error": "new_value is required"}, status_code=400)
+        return manager.vault.rotate(key, new_value)
+
+    @app.get("/v1/vault/audit")
+    def vault_audit(days: int = 7) -> dict[str, Any]:
+        from datetime import datetime, timedelta, timezone
+
+        path = Path.home() / ".config" / "werubworker" / "audit.log"
+        if not path.is_file():
+            return {"ok": True, "entries": []}
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        entries: list[dict[str, str]] = []
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                parts = line.split("  ", 2)
+                if len(parts) < 3:
+                    continue
+                ts_str, action, key_name = parts
+                try:
+                    ts = datetime.fromisoformat(ts_str)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if ts < cutoff:
+                        continue
+                except (ValueError, TypeError):
+                    continue
+                entries.append({"timestamp": ts_str, "action": action, "key": key_name})
+        except OSError:
+            pass
+        return {"ok": True, "entries": entries}
+
+    @app.get("/v1/vault/expiring")
+    def vault_expiring(days: int = 30) -> dict[str, Any]:
+        return {"ok": True, "expiring": manager.vault.check_expiring(days)}
+
+    # -- Wiki template system ------------------------------------------------
+
+    @app.get("/v1/wiki/templates")
+    def wiki_templates() -> dict[str, Any]:
+        from ..wiki.store import WIKI_TEMPLATES
+
+        return {"ok": True, "templates": WIKI_TEMPLATES}
+
+    @app.get("/v1/wiki/templates/{category}")
+    def wiki_template_by_category(category: str) -> dict[str, Any]:
+        from ..wiki.store import WIKI_TEMPLATES
+
+        tmpl = WIKI_TEMPLATES.get(category)
+        if not tmpl:
+            return JSONResponse(
+                {"ok": False, "error": f"no template for '{category}'"}, status_code=404
+            )
+        return {"ok": True, "template": tmpl}
+
+    # -- Prompt A/B test -----------------------------------------------------
+
+    @app.post("/v1/wiki/prompts/{page_id}/ab-test")
+    def wiki_prompt_ab_test(page_id: str, body: dict) -> dict:
+        """Compare two prompt versions side by side."""
+        page = manager.wiki_store.get_page(page_id)
+        if not page:
+            return {"ok": False, "error": "page not found"}
+        history = manager.wiki_store.get_history(page_id)
+        version_a = int(body.get("version_a", page.get("version", 1)))
+        version_b = int(body.get("version_b", max(1, page.get("version", 1) - 1)))
+        # Get content for both versions
+        content_a = page.get("content", "")
+        content_b = content_a
+        for h in history:
+            if h.get("version") == version_b:
+                content_b = h.get("content", "")
+                break
+        # If version_a is not current, look it up too
+        if version_a != page.get("version", 1):
+            for h in history:
+                if h.get("version") == version_a:
+                    content_a = h.get("content", "")
+                    break
+        return {
+            "ok": True,
+            "version_a": {"version": version_a, "content": content_a},
+            "version_b": {"version": version_b, "content": content_b},
+        }
+
+    # -- Wiki AI Summary -----------------------------------------------------
+
+    @app.post("/v1/wiki/{page_id}/summarize")
+    def wiki_summarize(page_id: str) -> dict:
+        page = manager.wiki_store.get_page(page_id)
+        if not page:
+            return {"ok": False, "error": "not found"}
+        content = page.get("content", "")
+        # Simple extractive summary: first paragraph + all headings
+        lines = content.split("\n")
+        headings = [line for line in lines if line.startswith("#")]
+        first_para = ""
+        for line in lines:
+            if line.strip() and not line.startswith("#"):
+                first_para = line.strip()
+                break
+        summary = "\n".join(headings[:10])
+        if first_para:
+            summary = first_para + "\n\n" + summary
+        return {"ok": True, "summary": summary[:500]}
+
+    # -- Service Registry --------------------------------------------------
+
+    @app.get("/v1/services")
+    def services_list() -> dict:
+        from ..registry import ServiceRegistry
+        reg = ServiceRegistry(manager.wiki_store, manager.secrets, getattr(manager, 'vault', None))
+        return {"ok": True, "services": reg.list_services()}
+
+    @app.get("/v1/services/{service_ref:path}")
+    def services_resolve(service_ref: str) -> dict:
+        from ..registry import ServiceRegistry
+        reg = ServiceRegistry(manager.wiki_store, manager.secrets, getattr(manager, 'vault', None))
+        return {"ok": True, **reg.resolve(service_ref)}
+
+    # -- Security filter test ----------------------------------------------
+
+    @app.post("/v1/security/filter-test")
+    def security_filter_test(body: dict) -> dict:
+        from ..security.response_filter import filter_credentials
+        text = str(body.get("text", ""))
+        filtered = filter_credentials(text)
+        return {"ok": True, "original_length": len(text), "filtered": filtered}
 
     return app
 
