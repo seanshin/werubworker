@@ -12,19 +12,30 @@ const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join("
 
 describe("stream gate (§33 refinement #3 — one rule for all streamed text)", () => {
   it("turn-start under the threshold is HELD (spinner, nothing rendered)", () => {
-    expect(streamMode("Checking what merged since yesterday.", USER, true)).toBe("hold");
+    expect(streamMode("Checking", USER, true)).toBe("hold");
     expect(streamMode(words(STREAM_PROMOTE_WORDS - 1), USER, true)).toBe("hold");
   });
 
   it("mid-turn under the threshold is QUIET — it belongs to the live turn group", () => {
-    // The owner's exact repro: ~25 words of mid-turn narration must never float.
+    // Short mid-turn narration stays quiet (under 8 words).
+    expect(
+      streamMode(
+        "checking the pages…",
+        AFTER_TOOL,
+        true,
+      ),
+    ).toBe("quiet");
+  });
+
+  it("longer mid-turn text promotes to answer — no longer hidden", () => {
+    // 25 words of mid-turn text now shows as answer (above 8-word threshold).
     expect(
       streamMode(
         "The quote endpoint rate-limited, so I'm checking whether the historical pages expose older pages for January closes.",
         AFTER_TOOL,
         true,
       ),
-    ).toBe("quiet");
+    ).toBe("answer");
   });
 
   it("crossing the threshold promotes to the ANSWER bubble — start and mid-turn alike", () => {

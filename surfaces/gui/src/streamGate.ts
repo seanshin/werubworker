@@ -16,8 +16,11 @@
 
 import type { Item } from "./types";
 
-// Owner call: 40 words (~1-2s of stream) — "people can wait 1-2 seconds longer".
-export const STREAM_PROMOTE_WORDS = 40;
+// Lowered from 40 to 8 words (~0.3-0.5s) — faster perceived response.
+// Original rationale was "people can wait 1-2s" but users reported the
+// "waiting for agent..." spinner felt unresponsive. 8 words is enough to
+// distinguish narration from an answer while showing content quickly.
+export const STREAM_PROMOTE_WORDS = 8;
 
 export type StreamMode = "none" | "hold" | "quiet" | "answer";
 
