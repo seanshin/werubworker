@@ -1564,85 +1564,103 @@ def create_app(manager: SessionManager) -> FastAPI:
 
         return await test_provider(manager.secrets, name)
 
-    # -- Dev dashboard (GitHub integration) ------------------------------------
+    # -- Dev dashboard (GitHub + Gitea/Forgejo) --------------------------------
+
+    def _get_scm_connector():
+        """Get the configured SCM connector (GitHub or Gitea)."""
+        from ..connectors.github import get_github_connector
+        from ..connectors.gitea import get_gitea_connector
+        # Gitea takes priority if configured (self-hosted)
+        gt = get_gitea_connector(manager.secrets)
+        if gt is not None:
+            return gt, "gitea"
+        gh = get_github_connector(manager.secrets)
+        if gh is not None:
+            return gh, "github"
+        return None, None
 
     @app.get("/v1/dev/config")
     def dev_config() -> dict[str, Any]:
-        """Check if GitHub is configured."""
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
+        """Check if SCM (GitHub/Gitea) is configured."""
+        conn, provider = _get_scm_connector()
+        if conn is None:
             return {"ok": True, "configured": False}
-        return {"ok": True, "configured": True, "owner": gh.owner, "repo": gh.repo}
+        return {"ok": True, "configured": True, "provider": provider,
+                "owner": conn.owner, "repo": conn.repo,
+                "base_url": getattr(conn, "base_url", "")}
 
     @app.post("/v1/dev/config")
     def dev_config_save(body: dict) -> dict[str, Any]:
-        """Save GitHub PAT and repo config."""
-        from ..connectors.github import save_github_config
-        return save_github_config(
-            manager.secrets,
-            token=str(body.get("token", "")).strip(),
-            owner=str(body.get("owner", "")).strip(),
-            repo=str(body.get("repo", "")).strip(),
-        )
+        """Save SCM config. Set provider=gitea for Gitea/Forgejo instances."""
+        provider = str(body.get("provider", "github")).strip().lower()
+        if provider == "gitea":
+            from ..connectors.gitea import save_gitea_config
+            return save_gitea_config(
+                manager.secrets,
+                base_url=str(body.get("base_url", "")).strip(),
+                token=str(body.get("token", "")).strip(),
+                owner=str(body.get("owner", "")).strip(),
+                repo=str(body.get("repo", "")).strip(),
+            )
+        else:
+            from ..connectors.github import save_github_config
+            return save_github_config(
+                manager.secrets,
+                token=str(body.get("token", "")).strip(),
+                owner=str(body.get("owner", "")).strip(),
+                repo=str(body.get("repo", "")).strip(),
+            )
 
     @app.get("/v1/dev/repo")
     async def dev_repo() -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.get_repo()
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.get_repo()
 
     @app.get("/v1/dev/pulls")
     async def dev_pulls(state: str = "open") -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.list_pulls(state=state)
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.list_pulls(state=state)
 
     @app.get("/v1/dev/actions/runs")
     async def dev_actions_runs() -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.list_runs()
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.list_runs()
 
     @app.get("/v1/dev/issues")
     async def dev_issues(state: str = "open") -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.list_issues(state=state)
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.list_issues(state=state)
 
     @app.get("/v1/dev/pulls/{number}")
     async def dev_pull_detail(number: int) -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.get_pull(number)
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.get_pull(number)
 
     @app.get("/v1/dev/actions/runs/{run_id}/jobs")
     async def dev_run_jobs(run_id: int) -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.get_run_logs(run_id)
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.get_run_logs(run_id)
 
     @app.post("/v1/dev/issues")
     async def dev_create_issue(body: dict) -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
         labels_raw = body.get("labels")
         labels = [l.strip() for l in labels_raw if l.strip()] if isinstance(labels_raw, list) else None
-        return await gh.create_issue(
+        return await conn.create_issue(
             title=str(body.get("title", "")).strip(),
             body=str(body.get("body", "")).strip(),
             labels=labels,
@@ -1650,27 +1668,24 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.get("/v1/dev/reviews")
     async def dev_reviews() -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.list_review_requests()
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.list_review_requests()
 
     @app.get("/v1/dev/releases")
     async def dev_releases() -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.list_releases()
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.list_releases()
 
     @app.post("/v1/dev/releases")
     async def dev_create_release(body: dict) -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.create_release(
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.create_release(
             tag=str(body.get("tag", "")).strip(),
             name=str(body.get("name", "")).strip(),
             body=str(body.get("body", "")).strip(),
@@ -1679,30 +1694,27 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.get("/v1/dev/commits")
     async def dev_commits(sha: str = "") -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        return await gh.list_commits(sha=sha)
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        return await conn.list_commits(sha=sha)
 
     @app.post("/v1/dev/pulls/{number}/merge")
     async def dev_merge_pull(number: int, body: dict) -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
         method = str(body.get("method", "squash")).strip()
         if method not in ("squash", "merge", "rebase"):
             return {"ok": False, "error": "Invalid merge method"}
-        return await gh.merge_pull(number, method=method)
+        return await conn.merge_pull(number, method=method)
 
     @app.post("/v1/dev/pulls/{number}/review")
     async def dev_pr_review(number: int) -> dict[str, Any]:
-        from ..connectors.github import get_github_connector
-        gh = get_github_connector(manager.secrets)
-        if gh is None:
-            return {"ok": False, "error": "GitHub not configured"}
-        pr = await gh.get_pull(number)
+        conn, _ = _get_scm_connector()
+        if conn is None:
+            return {"ok": False, "error": "SCM not configured"}
+        pr = await conn.get_pull(number)
         if not pr.get("ok"):
             return pr
         return {"ok": True, "pr": pr, "review_prompt": f"Review PR #{number}: {pr.get('title', '')}\n+{pr.get('additions', 0)} -{pr.get('deletions', 0)} in {pr.get('changed_files', 0)} files"}

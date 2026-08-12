@@ -93,6 +93,8 @@ interface Commit {
 // GitHub Setup Modal
 // ---------------------------------------------------------------------------
 function SetupModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [provider, setProvider] = useState<"github" | "gitea">("github");
+  const [baseUrl, setBaseUrl] = useState("https://itms.weve.io.kr");
   const [token, setToken] = useState("");
   const [owner, setOwner] = useState("");
   const [repo, setRepo] = useState("");
@@ -102,12 +104,15 @@ function SetupModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const handleSave = async () => {
     if (!token.trim()) { setError("Token is required"); return; }
     if (!owner.trim() || !repo.trim()) { setError("Owner and repo are required"); return; }
+    if (provider === "gitea" && !baseUrl.trim()) { setError("Server URL is required"); return; }
     setSaving(true);
     try {
+      const body: Record<string, string> = { provider, token, owner, repo };
+      if (provider === "gitea") body.base_url = baseUrl;
       const r = await fetch("/v1/dev/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, owner, repo }),
+        body: JSON.stringify(body),
       });
       const d = await r.json();
       if (d.ok) { onSaved(); onClose(); }
@@ -118,13 +123,40 @@ function SetupModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="bg-panel rounded-xl2 border border-line p-6 w-[420px]" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-[15px] font-semibold text-ink mb-4">GitHub Configuration</h3>
+      <div className="bg-panel rounded-xl2 border border-line p-6 w-[460px]" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-[15px] font-semibold text-ink mb-4">SCM Configuration</h3>
         <div className="space-y-3">
+          {/* Provider selector */}
           <div>
-            <label className="block text-[12px] text-muted mb-1">Personal Access Token</label>
+            <label className="block text-[12px] text-muted mb-1">Provider</label>
+            <div className="flex gap-2">
+              {(["github", "gitea"] as const).map((p) => (
+                <button
+                  key={p}
+                  className={"flex-1 text-[13px] px-3 py-2 rounded-lg border font-medium " +
+                    (provider === p ? "border-accent bg-accent/10 text-accent" : "border-line text-muted hover:text-ink")}
+                  onClick={() => setProvider(p)}
+                >
+                  {p === "github" ? "GitHub" : "Gitea / Forgejo"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Gitea server URL */}
+          {provider === "gitea" && (
+            <div>
+              <label className="block text-[12px] text-muted mb-1">Server URL</label>
+              <input className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
+                value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://itms.weve.io.kr" />
+            </div>
+          )}
+          <div>
+            <label className="block text-[12px] text-muted mb-1">
+              {provider === "github" ? "Personal Access Token" : "Access Token"}
+            </label>
             <input type="password" className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
-              value={token} onChange={(e) => setToken(e.target.value)} placeholder="ghp_..." />
+              value={token} onChange={(e) => setToken(e.target.value)}
+              placeholder={provider === "github" ? "ghp_..." : "your-gitea-token"} />
           </div>
           <div className="flex gap-3">
             <div className="flex-1">
