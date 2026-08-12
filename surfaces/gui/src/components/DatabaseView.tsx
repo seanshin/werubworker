@@ -55,11 +55,252 @@ interface DbStatus {
   user?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Scan result type
+// ---------------------------------------------------------------------------
+interface ScanResult {
+  host: string;
+  port: number;
+  type: string;
+  label: string;
+  path?: string;
+  status: string;
+}
+
+// ---------------------------------------------------------------------------
+// Add Database Modal
+// ---------------------------------------------------------------------------
+function AddDbModal({
+  onClose,
+  onSaved,
+  prefill,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+  prefill?: ScanResult | null;
+}) {
+  const { t } = useTranslation(["session", "common"]);
+  const [dbType, setDbType] = useState(prefill?.type || "postgresql");
+  const [name, setName] = useState(prefill?.label?.replace(/[^a-zA-Z0-9_-]/g, "_") || "");
+  const [host, setHost] = useState(prefill?.host || "127.0.0.1");
+  const [port, setPort] = useState(prefill?.port || (dbType === "postgresql" ? 5432 : 3306));
+  const [database, setDatabase] = useState("");
+  const [user, setUser] = useState("");
+  const [password, setPassword] = useState("");
+  const [path, setPath] = useState(prefill?.path || "");
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; version?: string; latency_ms?: number; error?: string } | null>(null);
+  const [error, setError] = useState("");
+
+  const isSqlite = dbType === "sqlite";
+
+  // Update port when type changes
+  const handleTypeChange = (t: string) => {
+    setDbType(t);
+    if (t === "postgresql") setPort(5432);
+    else if (t === "mysql") setPort(3306);
+    else if (t === "sqlite") { setPort(0); setHost(""); }
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await fetch("/v1/databases/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: dbType, host, port, database, user, password, path }),
+      });
+      const d = await r.json();
+      setTestResult(d);
+    } catch { setTestResult({ ok: false, error: "Network error" }); }
+    setTesting(false);
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) { setError("Name is required"); return; }
+    if (!isSqlite && !host.trim()) { setError("Host is required"); return; }
+    if (isSqlite && !path.trim()) { setError("File path is required"); return; }
+    setSaving(true);
+    setError("");
+    try {
+      const r = await fetch("/v1/databases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, type: dbType, host, port, database, user, password, path }),
+      });
+      const d = await r.json();
+      if (d.ok) { onSaved(); onClose(); }
+      else setError(d.error || "Save failed");
+    } catch { setError("Network error"); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-panel rounded-xl2 border border-line p-6 w-[480px] max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-[15px] font-semibold text-ink mb-4">{t("session:database.addDatabase")}</h3>
+        <div className="space-y-3">
+          {/* Type selector */}
+          <div>
+            <label className="block text-[12px] text-muted mb-1">Type</label>
+            <div className="flex gap-1">
+              {["postgresql", "mysql", "sqlite"].map((t) => (
+                <button key={t} className={"flex-1 text-[12.5px] px-2 py-1.5 rounded-lg border font-medium " +
+                  (dbType === t ? "border-accent bg-accent/10 text-accent" : "border-line text-muted")}
+                  onClick={() => handleTypeChange(t)}>
+                  {t === "postgresql" ? "PostgreSQL" : t === "mysql" ? "MySQL" : "SQLite"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Name */}
+          <div>
+            <label className="block text-[12px] text-muted mb-1">Name</label>
+            <input className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
+              value={name} onChange={(e) => setName(e.target.value)} placeholder="production-db" />
+          </div>
+          {isSqlite ? (
+            <div>
+              <label className="block text-[12px] text-muted mb-1">File Path</label>
+              <input className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
+                value={path} onChange={(e) => setPath(e.target.value)} placeholder="/path/to/database.db" />
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-3">
+                <div className="flex-[3]">
+                  <label className="block text-[12px] text-muted mb-1">Host</label>
+                  <input className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
+                    value={host} onChange={(e) => setHost(e.target.value)} placeholder="127.0.0.1" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[12px] text-muted mb-1">Port</label>
+                  <input type="number" className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
+                    value={port} onChange={(e) => setPort(Number(e.target.value))} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[12px] text-muted mb-1">Database</label>
+                <input className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
+                  value={database} onChange={(e) => setDatabase(e.target.value)} placeholder="mydb" />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-[12px] text-muted mb-1">User</label>
+                  <input className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
+                    value={user} onChange={(e) => setUser(e.target.value)} placeholder="postgres" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[12px] text-muted mb-1">Password</label>
+                  <input type="password" className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
+                    value={password} onChange={(e) => setPassword(e.target.value)} />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        {/* Test result */}
+        {testResult && (
+          <div className={"mt-3 px-3 py-2 rounded-lg text-[12.5px] " +
+            (testResult.ok ? "bg-ok/10 text-ok" : "bg-err/10 text-err")}>
+            {testResult.ok
+              ? `✅ Connected (${testResult.latency_ms}ms) — ${testResult.version}`
+              : `❌ ${testResult.error}`}
+          </div>
+        )}
+        {error && <p className="text-[12px] text-err mt-2">{error}</p>}
+        <div className="flex justify-between mt-5">
+          <button className="text-[13px] text-muted hover:text-ink" onClick={handleTest} disabled={testing}>
+            {testing ? "Testing..." : "Test Connection"}
+          </button>
+          <div className="flex gap-2">
+            <button className="text-[13px] px-3 py-1.5 rounded-lg border border-line text-muted" onClick={onClose}>Cancel</button>
+            <button className={BTN_ACCENT} onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scan Modal
+// ---------------------------------------------------------------------------
+function ScanModal({
+  onClose,
+  onSelect,
+}: {
+  onClose: () => void;
+  onSelect: (result: ScanResult) => void;
+}) {
+  const [scanning, setScanning] = useState(true);
+  const [results, setResults] = useState<ScanResult[]>([]);
+  const [scanned, setScanned] = useState(0);
+
+  useEffect(() => {
+    fetch("/v1/databases/scan", { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        setResults(d.found || []);
+        setScanned(d.scanned || 0);
+      })
+      .catch(() => {})
+      .finally(() => setScanning(false));
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-panel rounded-xl2 border border-line p-6 w-[500px] max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-[15px] font-semibold text-ink mb-4">Database Scan</h3>
+        {scanning ? (
+          <div className="text-[13px] text-muted py-8 text-center">Scanning local and network ports...</div>
+        ) : results.length === 0 ? (
+          <div className="text-[13px] text-muted py-8 text-center">
+            No database services found ({scanned} ports scanned)
+          </div>
+        ) : (
+          <div className="space-y-2 mb-4">
+            <p className="text-[12px] text-faint">{results.length} found / {scanned} scanned</p>
+            {results.map((r, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-paper border border-line cursor-pointer hover:border-accent"
+                onClick={() => { onSelect(r); onClose(); }}>
+                <span className={"w-2.5 h-2.5 rounded-full " + (r.status === "open" ? "bg-ok" : "bg-accent")} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium text-ink">{r.label}</div>
+                  <div className="text-[11.5px] text-faint font-mono">
+                    {r.type}{r.host ? ` — ${r.host}:${r.port}` : ""}{r.path ? ` — ${r.path}` : ""}
+                  </div>
+                </div>
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">
+                  Register →
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex justify-end">
+          <button className="text-[13px] px-3 py-1.5 rounded-lg border border-line text-muted" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Component
+// ---------------------------------------------------------------------------
 export function DatabaseView() {
   const { t } = useTranslation(["session", "common"]);
   const [databases, setDatabases] = useState<DatabaseConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDb, setSelectedDb] = useState<string>("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scanPrefill, setScanPrefill] = useState<ScanResult | null>(null);
   const [query, setQuery] = useState("");
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const [executing, setExecuting] = useState(false);
@@ -281,13 +522,17 @@ export function DatabaseView() {
               <h3 className="text-[14px] font-semibold text-ink">
                 {t("session:database.configured")}
               </h3>
-              <button
-                className="text-[12.5px] text-accent font-medium"
-                onClick={fetchDatabases}
-              >
-                <Icon name="refresh" size={13} className="inline mr-1" />
-                {t("common:button.refresh")}
-              </button>
+              <div className="flex gap-2">
+                <button className="text-[12.5px] text-accent font-medium" onClick={() => setShowScanModal(true)}>
+                  <Icon name="search" size={13} className="inline mr-1" />Scan
+                </button>
+                <button className="text-[12.5px] text-accent font-medium" onClick={() => { setScanPrefill(null); setShowAddModal(true); }}>
+                  <Icon name="plus" size={13} className="inline mr-1" />{t("session:database.addDatabase")}
+                </button>
+                <button className="text-[12.5px] text-accent font-medium" onClick={fetchDatabases}>
+                  <Icon name="refresh" size={13} className="inline mr-1" />{t("common:button.refresh")}
+                </button>
+              </div>
             </div>
             {loading ? (
               <p className="text-[13px] text-muted">{t("common:status.loading")}</p>
@@ -672,6 +917,20 @@ export function DatabaseView() {
           )}
         </div>
       </div>
+      {/* Modals */}
+      {showAddModal && (
+        <AddDbModal
+          prefill={scanPrefill}
+          onClose={() => { setShowAddModal(false); setScanPrefill(null); }}
+          onSaved={fetchDatabases}
+        />
+      )}
+      {showScanModal && (
+        <ScanModal
+          onClose={() => setShowScanModal(false)}
+          onSelect={(r) => { setScanPrefill(r); setShowAddModal(true); }}
+        />
+      )}
     </main>
   );
 }

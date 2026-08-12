@@ -1374,6 +1374,113 @@ def create_app(manager: SessionManager) -> FastAPI:
             path=str(body.get("path", "")).strip(),
         )
 
+    @app.post("/v1/databases/scan")
+    async def databases_scan() -> dict[str, Any]:
+        """Scan local and network for running database services."""
+        import socket
+        import asyncio
+
+        targets = [
+            ("127.0.0.1", 5432, "postgresql", "PostgreSQL"),
+            ("127.0.0.1", 3306, "mysql", "MySQL"),
+            ("127.0.0.1", 27017, "mongodb", "MongoDB"),
+            ("127.0.0.1", 6379, "redis", "Redis"),
+            ("127.0.0.1", 1433, "mssql", "SQL Server"),
+            ("127.0.0.1", 9200, "elasticsearch", "Elasticsearch"),
+            ("127.0.0.1", 5433, "postgresql", "PostgreSQL (alt)"),
+            ("127.0.0.1", 3307, "mysql", "MySQL (alt)"),
+        ]
+        # Also scan local network gateway
+        try:
+            import psutil
+            for iface, addrs in psutil.net_if_addrs().items():
+                for a in addrs:
+                    if a.family.name == "AF_INET" and not a.address.startswith("127."):
+                        # Scan same subnet .1 and .100
+                        base = ".".join(a.address.split(".")[:3])
+                        for host_suffix in ["1", "100", "200"]:
+                            ip = f"{base}.{host_suffix}"
+                            targets.append((ip, 5432, "postgresql", f"PostgreSQL ({ip})"))
+                            targets.append((ip, 3306, "mysql", f"MySQL ({ip})"))
+        except ImportError:
+            pass
+
+        # Also scan for SQLite files in common locations
+        import glob
+        sqlite_files = []
+        for pattern in [
+            str(Path.home() / "*.db"),
+            str(Path.home() / "*.sqlite"),
+            str(Path.home() / "*.sqlite3"),
+            "/tmp/*.db",
+            str(Path.home() / "**/*.db"),
+        ]:
+            sqlite_files.extend(glob.glob(pattern, recursive=False)[:5])
+
+        async def check_port(host, port, db_type, label):
+            try:
+                loop = asyncio.get_event_loop()
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                result = await loop.run_in_executor(None, lambda: sock.connect_ex((host, port)))
+                sock.close()
+                if result == 0:
+                    return {"host": host, "port": port, "type": db_type, "label": label, "status": "open"}
+            except Exception:
+                pass
+            return None
+
+        tasks = [check_port(h, p, t, l) for h, p, t, l in targets]
+        results = await asyncio.gather(*tasks)
+        found = [r for r in results if r is not None]
+
+        # Add SQLite files
+        for f in sqlite_files[:10]:
+            found.append({"host": "", "port": 0, "type": "sqlite", "label": f"SQLite ({Path(f).name})", "path": f, "status": "file"})
+
+        return {"ok": True, "found": found, "scanned": len(targets)}
+
+    @app.post("/v1/databases/test")
+    async def databases_test(body: dict) -> dict[str, Any]:
+        """Test database connection without registering."""
+        from ..tools.db_mgmt import _execute_query
+        db_type = str(body.get("type", "")).strip().lower()
+        if not db_type:
+            return {"ok": False, "error": "type is required"}
+
+        cfg = {
+            "type": db_type,
+            "host": str(body.get("host", "")).strip(),
+            "port": int(body.get("port", 0) or 0),
+            "name": str(body.get("database", "")).strip(),
+            "user": str(body.get("user", "")).strip(),
+            "password": str(body.get("password", "")).strip(),
+            "path": str(body.get("path", "")).strip(),
+        }
+        import time
+        start = time.time()
+        try:
+            if db_type == "sqlite":
+                result = _execute_query(cfg, "SELECT sqlite_version();")
+            elif db_type == "postgresql":
+                result = _execute_query(cfg, "SELECT version();")
+            elif db_type == "mysql":
+                result = _execute_query(cfg, "SELECT version();")
+            else:
+                result = {"ok": False, "error": f"unsupported type: {db_type}"}
+            latency = round((time.time() - start) * 1000)
+            if result.get("ok"):
+                version = ""
+                rows = result.get("rows", [])
+                if rows and isinstance(rows[0], dict):
+                    version = str(list(rows[0].values())[0])
+                elif result.get("output"):
+                    version = result["output"][:100]
+                return {"ok": True, "latency_ms": latency, "version": version}
+            return result
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     @app.delete("/v1/databases/{name}")
     def databases_remove(name: str) -> dict[str, Any]:
         from ..security.rate_limiter import get_limiter

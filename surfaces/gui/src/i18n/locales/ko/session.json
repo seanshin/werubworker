@@ -401,7 +401,9 @@
     "erd": "ERD",
     "erdTitle": "엔터티 관계 다이어그램",
     "erdLoading": "ERD 생성 중...",
-    "erdError": "ERD 생성 실패"
+    "erdError": "ERD 생성 실패",
+    "addDatabase": "데이터베이스 추가",
+    "scanDatabases": "스캔"
   },
   "serviceConfig": {
     "title": "서비스 설정",
