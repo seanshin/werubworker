@@ -111,9 +111,8 @@ export function WikiView() {
         .then(([p, c, a]) => {
           const raw = Array.isArray(p) ? p : (p as any)?.pages || [];
           setPages(raw.map(normalizePage));
-          setCategories(
-            Array.isArray(c) ? c : (c as any)?.categories || [],
-          );
+          const rawCats = Array.isArray(c) ? c : (c as any)?.categories || [];
+          setCategories(rawCats.map((cat: any) => typeof cat === "string" ? cat : cat.category || ""));
           setAlerts(Array.isArray(a) ? a : (a as any)?.alerts || []);
         })
         .finally(() => setLoading(false));
