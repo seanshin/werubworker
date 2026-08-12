@@ -46,6 +46,14 @@ COWORK_TOOLS = {
     "shell_task_output",
     "shell_task_kill",
     "todo_write",
+    # server_monitor tools
+    "server_status",
+    "service_status",
+    "check_ports",
+    "process_list",
+    "disk_usage",
+    "system_logs",
+    "system_info",
 }
 
 
