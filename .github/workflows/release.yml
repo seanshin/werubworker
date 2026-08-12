@@ -29,7 +29,9 @@
 name: Release
 
 on:
-  workflow_dispatch:  # disabled tag-push trigger to avoid GitHub Actions costs
+  push:
+    tags: ["v*", "app-v*"]
+  workflow_dispatch:
 
 defaults:
   run:
