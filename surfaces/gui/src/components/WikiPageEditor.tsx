@@ -38,13 +38,22 @@ export function WikiPageEditor({ pageId, onSave, onCancel }: Props) {
   const [categories, setCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // All available categories: merge templates + existing DB categories
+  const ALL_CATEGORIES = [
+    "service", "database", "server", "cloud", "model", "prompt",
+    "benchmark", "runbook", "api_doc", "architecture", "general",
+  ];
+
   useEffect(() => {
     getWikiCategories()
       .then((cats: any) => {
         const raw = Array.isArray(cats) ? cats : cats?.categories || [];
-        setCategories(raw.map((c: any) => typeof c === "string" ? c : c.category || ""));
+        const dbCats = raw.map((c: any) => typeof c === "string" ? c : c.category || "").filter(Boolean);
+        // Merge: all template categories + any extra from DB
+        const merged = [...new Set([...ALL_CATEGORIES, ...dbCats])];
+        setCategories(merged);
       })
-      .catch(() => {});
+      .catch(() => setCategories(ALL_CATEGORIES));
   }, []);
 
   // Auto-fill from template when creating a new page and category changes

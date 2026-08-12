@@ -42,6 +42,36 @@ WIKI_TEMPLATES: dict[str, dict] = {
         "content": "# {{service_name}}\n\n## Connection Info\n\n## Credentials\n\n## Notes\n",
         "structured_data": {},
     },
+    "database": {
+        "name": "Database Configuration",
+        "content": "# {{db_name}}\n\n## Connection\n- Host: \n- Port: \n- Database: \n- User: \n\n## Backup Schedule\n\n## Notes\n",
+        "structured_data": {"type": "", "host": "", "port": 0, "database": "", "user": "", "backup_schedule": ""},
+    },
+    "server": {
+        "name": "Server Configuration",
+        "content": "# {{server_name}}\n\n## Connection\n- Host: \n- Port: 22\n- User: \n\n## Services Running\n\n## Monitoring\n\n## Notes\n",
+        "structured_data": {"host": "", "port": 22, "user": "", "os": "", "services": []},
+    },
+    "cloud": {
+        "name": "Cloud Provider Configuration",
+        "content": "# {{provider_name}}\n\n## Account\n- Provider: \n- Region: \n- Account ID: \n\n## Services Used\n\n## Billing\n\n## Notes\n",
+        "structured_data": {"provider": "", "region": "", "account_id": "", "services": []},
+    },
+    "api_doc": {
+        "name": "API Documentation",
+        "content": "# {{api_name}}\n\n## Base URL\n\n## Authentication\n\n## Endpoints\n\n### GET /example\n\n```\ncurl -H 'Authorization: Bearer TOKEN' https://api.example.com/v1/resource\n```\n\n## Rate Limits\n\n## Notes\n",
+        "structured_data": {"base_url": "", "auth_type": "", "rate_limit": "", "version": ""},
+    },
+    "benchmark": {
+        "name": "Benchmark Record",
+        "content": "# {{benchmark_name}}\n\n## Dataset\n\n## Models Tested\n\n## Results\n\n| Model | Accuracy | Latency | Cost |\n|-------|----------|---------|------|\n|       |          |         |      |\n\n## Notes\n",
+        "structured_data": {"dataset": "", "models": [], "metrics": {}},
+    },
+    "architecture": {
+        "name": "Architecture Document",
+        "content": "# {{system_name}}\n\n## Overview\n\n## Components\n\n## Data Flow\n\n```mermaid\ngraph LR\n  A[Client] --> B[API]\n  B --> C[Database]\n```\n\n## Dependencies\n\n## Notes\n",
+        "structured_data": {"components": [], "dependencies": []},
+    },
 }
 
 
