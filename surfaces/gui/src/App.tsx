@@ -456,19 +456,11 @@ function AppInner() {
   const autoScrollingRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   const [following, setFollowing] = useState(true);
-  const scrollDebounceRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Debounce: coalesce multiple scroll requests into one per frame.
-    // Prevents competing smooth-scroll animations during rapid streaming.
-    if (scrollDebounceRef.current) return;
-    scrollDebounceRef.current = requestAnimationFrame(() => {
-      scrollDebounceRef.current = null;
-      if (!scrollRef.current) return;
-      autoScrollingRef.current = true;
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-    });
+    autoScrollingRef.current = true;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, []);
   const followLatest = useCallback(() => {
     atBottomRef.current = true;
@@ -498,26 +490,11 @@ function AppInner() {
     atBottomRef.current = true;
     setFollowing(true);
   }, [sessionId]);
-  // Auto-scroll on new items (messages, tool results). Streaming text changes
-  // are NOT a dependency — they fire every rAF frame and would cause competing
-  // scroll animations. Instead, streaming scroll is handled by the streaming
-  // ref length check below.
+  // Auto-scroll when items change (new messages, tool results) OR when streaming
+  // content grows. Uses atBottomRef to respect user scroll-up.
   useEffect(() => {
     if (atBottomRef.current) scrollToBottom();
-  }, [items, scrollToBottom]);
-  // Streaming scroll: check periodically during active streaming via the
-  // existing rAF cycle. The streamingRef update in useStreamState already
-  // triggers re-renders via _setStreaming; we piggyback on those renders.
-  const prevStreamLenRef = useRef(0);
-  useEffect(() => {
-    const len = streaming.length;
-    // Only scroll when streaming grows significantly (every ~200 chars)
-    if (atBottomRef.current && len > 0 && len - prevStreamLenRef.current > 200) {
-      prevStreamLenRef.current = len;
-      scrollToBottom();
-    }
-    if (len === 0) prevStreamLenRef.current = 0;
-  }, [streaming, scrollToBottom]);
+  }, [items, streaming, scrollToBottom]);
 
   // Track produced-file count for the topbar "Artifacts" affordance (works even when the rail is
   // hidden, where the rail itself doesn't fetch). Cowork only; refreshes on file writes/turn end.
