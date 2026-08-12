@@ -26,12 +26,24 @@ const CATEGORY_ICONS: Record<string, IconName> = {
 
 interface WikiPage {
   id: string;
+  page_id?: string;
   name: string;
   category: string;
   tags: string[];
-  updated_at?: string;
+  updated_at?: string | number;
   linked_service?: string;
   snippet?: string;
+}
+
+/** Normalize page data — API returns page_id, UI uses id */
+function normalizePage(p: any): WikiPage {
+  return {
+    ...p,
+    id: p.id || p.page_id || "",
+    updated_at: typeof p.updated_at === "number"
+      ? new Date(p.updated_at * 1000).toISOString()
+      : p.updated_at,
+  };
 }
 
 interface WikiAlert {
@@ -77,7 +89,7 @@ export function WikiView() {
       searchWiki(debouncedQuery.trim())
         .catch(() => [])
         .then((results) => {
-          const mapped = (results as any[]).map((r) => ({
+          const mapped = (results as any[]).map((r) => normalizePage({
             id: r.page_id ?? r.id,
             name: r.name,
             category: r.category,
@@ -97,7 +109,8 @@ export function WikiView() {
         getWikiAlerts().catch(() => []),
       ])
         .then(([p, c, a]) => {
-          setPages(Array.isArray(p) ? p : (p as any)?.pages || []);
+          const raw = Array.isArray(p) ? p : (p as any)?.pages || [];
+          setPages(raw.map(normalizePage));
           setCategories(
             Array.isArray(c) ? c : (c as any)?.categories || [],
           );
