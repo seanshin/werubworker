@@ -41,8 +41,8 @@ export function WikiPageEditor({ pageId, onSave, onCancel }: Props) {
   useEffect(() => {
     getWikiCategories()
       .then((cats: any) => {
-        if (Array.isArray(cats)) setCategories(cats);
-        else if (cats?.categories) setCategories(cats.categories);
+        const raw = Array.isArray(cats) ? cats : cats?.categories || [];
+        setCategories(raw.map((c: any) => typeof c === "string" ? c : c.category || ""));
       })
       .catch(() => {});
   }, []);
