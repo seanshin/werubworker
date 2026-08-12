@@ -56,6 +56,17 @@ export default defineConfig(({ command }) => {
         "/ws": {
           target: "ws://127.0.0.1:8765",
           ws: true,
+          configure: (proxy) => {
+            proxy.on("proxyReqWs", (proxyReq) => {
+              // Inject token into sec-websocket-protocol for WS auth
+              const token = readToken();
+              if (token) {
+                const existing = proxyReq.getHeader("sec-websocket-protocol") as string || "";
+                const protocols = existing ? `${existing}, ${token}` : `werubworker, ${token}`;
+                proxyReq.setHeader("sec-websocket-protocol", protocols);
+              }
+            });
+          },
         },
       },
     },
