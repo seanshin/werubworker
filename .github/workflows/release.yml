@@ -29,9 +29,7 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*", "app-v*"]
-  workflow_dispatch:
+  workflow_dispatch:  # manual only — avoids macOS/Windows runner costs if repo goes private
 
 defaults:
   run:
