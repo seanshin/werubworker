@@ -1276,23 +1276,38 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.post("/v1/ops/healthcheck")
     def ops_healthcheck_add(body: dict) -> dict[str, Any]:
-        """Add or update a health check config."""
+        """Add a health check. Types: port, http, https, tcp, dns, ping, disk, memory."""
         body = body or {}
         check_type = str(body.get("type", "")).strip()
         target = str(body.get("target", "")).strip()
         if not check_type or not target:
             return {"ok": False, "error": "type and target required"}
-        interval = int(body.get("interval", 300))
-        _health_checker.interval = interval
-        _health_checker.add_check(check_type, target)
+        result = _health_checker.add_check(
+            check_type=check_type,
+            target=target,
+            name=str(body.get("name", "")).strip(),
+            expected_status=int(body.get("expected_status", 200)),
+            timeout_sec=int(body.get("timeout_sec", 5)),
+        )
         _health_checker.enabled = True
-        return {"ok": True, "checks": list(_health_checker.checks)}
+        return {**result, "checks": list(_health_checker.checks)}
+
+    @app.delete("/v1/ops/healthcheck/{index}")
+    def ops_healthcheck_remove(index: int) -> dict[str, Any]:
+        """Remove a health check by index."""
+        result = _health_checker.remove_check(index)
+        return {**result, "checks": list(_health_checker.checks)}
 
     @app.post("/v1/ops/healthcheck/run")
     async def ops_healthcheck_run() -> dict[str, Any]:
         """Run all configured health checks now."""
         results = await _health_checker.run_checks()
         return {"ok": True, "results": results}
+
+    @app.get("/v1/ops/healthcheck/history")
+    def ops_healthcheck_history(key: str = "") -> dict[str, Any]:
+        """Get health check history."""
+        return {"ok": True, "history": _health_checker.get_history(key)}
 
     # -- Docker REST endpoints --------------------------------------------------
 

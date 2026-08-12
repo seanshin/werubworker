@@ -462,45 +462,176 @@ def _network_stats() -> dict:
 
 
 class HealthChecker:
-    """Periodic health checks with configurable interval."""
+    """Periodic health checks with configurable interval and history."""
 
     def __init__(self, check_interval: int = 300):
         self.interval = check_interval
         self.enabled = False
-        self.checks: list[dict] = []  # {type, target, last_status, last_check}
+        self.checks: list[dict] = []
+        # History: last 100 results per check
+        self._history: dict[str, list[dict]] = {}
 
-    def add_check(self, check_type: str, target: str) -> None:
-        # Update if same type+target exists, otherwise append.
+    def _check_key(self, check: dict) -> str:
+        return f"{check['type']}:{check['target']}"
+
+    def add_check(self, check_type: str, target: str, name: str = "",
+                  expected_status: int = 200, timeout_sec: int = 5) -> dict:
+        """Add a health check. Types: port, http, https, tcp, dns, ping, disk, memory."""
         for c in self.checks:
             if c["type"] == check_type and c["target"] == target:
-                return
-        self.checks.append(
-            {"type": check_type, "target": target, "last_status": "unknown", "last_check": 0}
-        )
+                return {"ok": True, "message": "already exists"}
+        check = {
+            "type": check_type,
+            "target": target,
+            "name": name or f"{check_type}:{target}",
+            "expected_status": expected_status,
+            "timeout_sec": timeout_sec,
+            "last_status": "unknown",
+            "last_check": 0,
+            "last_latency_ms": 0,
+            "last_error": "",
+            "consecutive_failures": 0,
+            "total_checks": 0,
+            "total_failures": 0,
+        }
+        self.checks.append(check)
+        return {"ok": True, "name": check["name"]}
+
+    def remove_check(self, index: int) -> dict:
+        if 0 <= index < len(self.checks):
+            removed = self.checks.pop(index)
+            return {"ok": True, "removed": removed["name"]}
+        return {"ok": False, "error": "invalid index"}
+
+    def get_history(self, check_key: str = "", limit: int = 50) -> list[dict]:
+        if check_key:
+            return self._history.get(check_key, [])[-limit:]
+        all_history = []
+        for entries in self._history.values():
+            all_history.extend(entries)
+        all_history.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        return all_history[:limit]
 
     async def run_checks(self) -> list[dict]:
         results = []
         for check in self.checks:
-            if check["type"] == "port":
-                r = _check_ports(host="localhost", ports=check["target"])
-                port_results = r.get("results", r.get("ports", []))
-                status = (
-                    "ok"
-                    if all(p.get("status") == "open" for p in port_results)
-                    else "fail"
-                )
-            elif check["type"] == "http":
-                import urllib.request
+            start = time.time()
+            status = "unknown"
+            error = ""
+            latency_ms = 0
 
-                try:
-                    urllib.request.urlopen(check["target"], timeout=5)
+            try:
+                if check["type"] == "port":
+                    r = _check_ports(host="localhost", ports=check["target"])
+                    port_results = r.get("results", r.get("ports", []))
+                    status = "ok" if all(p.get("status") == "open" for p in port_results) else "fail"
+                    if status == "fail":
+                        failed = [p for p in port_results if p.get("status") != "open"]
+                        error = f"Ports closed: {', '.join(str(p.get('port')) for p in failed)}"
+
+                elif check["type"] in ("http", "https"):
+                    import urllib.request
+                    url = check["target"]
+                    if not url.startswith("http"):
+                        url = f"{check['type']}://{url}"
+                    req = urllib.request.Request(url, method="GET")
+                    resp = urllib.request.urlopen(req, timeout=check.get("timeout_sec", 5))
+                    code = resp.getcode()
+                    expected = check.get("expected_status", 200)
+                    if code == expected:
+                        status = "ok"
+                    else:
+                        status = "warn"
+                        error = f"Expected {expected}, got {code}"
+
+                elif check["type"] == "tcp":
+                    import socket
+                    host, _, port_str = check["target"].rpartition(":")
+                    port = int(port_str) if port_str else 80
+                    host = host or "localhost"
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(check.get("timeout_sec", 5))
+                    result = sock.connect_ex((host, port))
+                    sock.close()
+                    status = "ok" if result == 0 else "fail"
+                    if result != 0:
+                        error = f"Connection refused (errno {result})"
+
+                elif check["type"] == "dns":
+                    import socket
+                    socket.getaddrinfo(check["target"], None, socket.AF_INET, socket.SOCK_STREAM)
                     status = "ok"
-                except Exception:
-                    status = "fail"
-            else:
-                status = "unknown"
+
+                elif check["type"] == "ping":
+                    cmd = ["ping", "-c", "1", "-W", str(check.get("timeout_sec", 3)), check["target"]]
+                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=check.get("timeout_sec", 5) + 2)
+                    status = "ok" if r.returncode == 0 else "fail"
+                    if r.returncode != 0:
+                        error = "Host unreachable"
+                    else:
+                        # Extract latency from ping output
+                        import re
+                        m = re.search(r"time=(\d+\.?\d*)", r.stdout)
+                        if m:
+                            latency_ms = float(m.group(1))
+
+                elif check["type"] == "disk":
+                    if _HAS_PSUTIL:
+                        import psutil
+                        usage = psutil.disk_usage(check["target"] or "/")
+                        if usage.percent > 90:
+                            status = "fail"
+                            error = f"Disk {usage.percent}% full"
+                        elif usage.percent > 80:
+                            status = "warn"
+                            error = f"Disk {usage.percent}% full"
+                        else:
+                            status = "ok"
+
+                elif check["type"] == "memory":
+                    if _HAS_PSUTIL:
+                        import psutil
+                        mem = psutil.virtual_memory()
+                        threshold = int(check["target"] or "85")
+                        if mem.percent > threshold:
+                            status = "fail"
+                            error = f"Memory {mem.percent}% (threshold {threshold}%)"
+                        else:
+                            status = "ok"
+
+            except Exception as e:
+                status = "fail"
+                error = str(e)[:200]
+
+            elapsed = time.time() - start
+            if latency_ms == 0:
+                latency_ms = round(elapsed * 1000, 1)
+
             check["last_status"] = status
             check["last_check"] = time.time()
+            check["last_latency_ms"] = latency_ms
+            check["last_error"] = error
+            check["total_checks"] = check.get("total_checks", 0) + 1
+            if status == "fail":
+                check["consecutive_failures"] = check.get("consecutive_failures", 0) + 1
+                check["total_failures"] = check.get("total_failures", 0) + 1
+            else:
+                check["consecutive_failures"] = 0
+
+            # Record history
+            key = self._check_key(check)
+            if key not in self._history:
+                self._history[key] = []
+            self._history[key].append({
+                "timestamp": time.time(),
+                "status": status,
+                "latency_ms": latency_ms,
+                "error": error,
+            })
+            # Keep last 100
+            if len(self._history[key]) > 100:
+                self._history[key] = self._history[key][-100:]
+
             results.append({**check})
         return results
 

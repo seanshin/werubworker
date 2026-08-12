@@ -98,8 +98,16 @@ interface NetworkStats {
 interface HealthCheck {
   type: string;
   target: string;
+  name: string;
   last_status: string;
   last_check: number;
+  last_latency_ms: number;
+  last_error: string;
+  consecutive_failures: number;
+  total_checks: number;
+  total_failures: number;
+  expected_status?: number;
+  timeout_sec?: number;
 }
 
 interface PortStatus {
@@ -1191,80 +1199,162 @@ export function OpsView() {
 
           {/* HEALTH CHECKS TAB (S12) */}
           {activeTab === "health" && (
-            <div className={CARD + " p-5 mb-4"}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[14px] font-semibold text-ink">{t("session:ops.healthChecks")}</h3>
-                <div className="flex gap-2">
-                  <button
-                    className="text-[12.5px] text-accent font-medium"
-                    onClick={runHealthChecks}
-                    disabled={healthRunning}
-                  >
-                    {healthRunning ? t("common:status.loading") : t("session:ops.runChecks")}
-                  </button>
-                  <button className="text-[12.5px] text-accent font-medium" onClick={fetchHealthChecks}>
-                    <Icon name="refresh" size={13} className="inline mr-1" />{t("common:button.refresh")}
-                  </button>
-                </div>
-              </div>
-              {healthChecks.length === 0 ? (
-                <p className="text-[13px] text-muted mb-4">{t("session:ops.noHealthChecks")}</p>
-              ) : (
-                <div className="space-y-2 mb-4">
-                  {healthChecks.map((c, i) => (
-                    <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-paper border border-line">
-                      <span className={"w-2 h-2 rounded-full " +
-                        (c.last_status === "ok" ? "bg-ok" : c.last_status === "fail" ? "bg-err" : "bg-faint")} />
-                      <span className="text-[13px] font-medium text-ink">{c.type}</span>
-                      <span className="text-[12px] text-muted font-mono truncate flex-1">{c.target}</span>
-                      <span className={"text-[11px] px-2 py-0.5 rounded-full font-medium " +
-                        (c.last_status === "ok" ? "bg-ok/10 text-ok" :
-                         c.last_status === "fail" ? "bg-err/10 text-err" : "bg-faint/10 text-faint")}>
-                        {c.last_status}
-                      </span>
-                      {c.last_check > 0 && (
-                        <span className="text-[11px] text-faint">
-                          {new Date(c.last_check * 1000).toLocaleTimeString()}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+            <>
+              {/* Summary bar */}
+              {healthChecks.length > 0 && (
+                <div className="flex gap-3 mb-4">
+                  <div className="flex-1 rounded-lg bg-ok/10 border border-ok/20 p-3 text-center">
+                    <div className="text-[20px] font-bold text-ok">{healthChecks.filter(c => c.last_status === "ok").length}</div>
+                    <div className="text-[11px] text-ok/80">Healthy</div>
+                  </div>
+                  <div className="flex-1 rounded-lg bg-warn/10 border border-warn/20 p-3 text-center">
+                    <div className="text-[20px] font-bold text-warn">{healthChecks.filter(c => c.last_status === "warn").length}</div>
+                    <div className="text-[11px] text-warn/80">Warning</div>
+                  </div>
+                  <div className="flex-1 rounded-lg bg-err/10 border border-err/20 p-3 text-center">
+                    <div className="text-[20px] font-bold text-err">{healthChecks.filter(c => c.last_status === "fail").length}</div>
+                    <div className="text-[11px] text-err/80">Failed</div>
+                  </div>
+                  <div className="flex-1 rounded-lg bg-faint/10 border border-line p-3 text-center">
+                    <div className="text-[20px] font-bold text-faint">{healthChecks.filter(c => c.last_status === "unknown").length}</div>
+                    <div className="text-[11px] text-faint">Pending</div>
+                  </div>
                 </div>
               )}
-              <div className="border-t border-line pt-4">
-                <h4 className="text-[13px] font-semibold text-ink mb-3">{t("session:ops.addCheck")}</h4>
-                <div className="flex gap-2 items-end">
-                  <div>
-                    <label className="block text-[11px] text-muted mb-1">{t("session:ops.checkType")}</label>
-                    <select
-                      className="text-[13px] px-2 py-1.5 rounded-lg border border-line bg-paper text-ink"
-                      value={newCheckType}
-                      onChange={(e) => setNewCheckType(e.target.value)}
+
+              {/* Controls */}
+              <div className={CARD + " p-5 mb-4"}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[14px] font-semibold text-ink">{t("session:ops.healthChecks")}</h3>
+                  <div className="flex gap-2">
+                    <button
+                      className="text-[12.5px] px-3 py-1.5 rounded-lg bg-accent text-white font-medium"
+                      onClick={runHealthChecks}
+                      disabled={healthRunning}
                     >
-                      <option value="port">Port</option>
-                      <option value="http">HTTP</option>
-                    </select>
+                      {healthRunning ? t("common:status.loading") : t("session:ops.runChecks")}
+                    </button>
+                    <button className="text-[12.5px] text-accent font-medium" onClick={fetchHealthChecks}>
+                      <Icon name="refresh" size={13} className="inline mr-1" />{t("common:button.refresh")}
+                    </button>
                   </div>
-                  <div className="flex-1">
-                    <label className="block text-[11px] text-muted mb-1">{t("session:ops.checkTarget")}</label>
-                    <input
-                      type="text"
-                      className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
-                      placeholder={newCheckType === "port" ? "80,443" : "http://localhost:8080"}
-                      value={newCheckTarget}
-                      onChange={(e) => setNewCheckTarget(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && addHealthCheck()}
-                    />
+                </div>
+
+                {/* Check cards */}
+                {healthChecks.length === 0 ? (
+                  <p className="text-[13px] text-muted mb-4">{t("session:ops.noHealthChecks")}</p>
+                ) : (
+                  <div className="space-y-3 mb-4">
+                    {healthChecks.map((c, i) => (
+                      <div key={i} className={"rounded-lg border p-3 " +
+                        (c.last_status === "ok" ? "bg-ok/5 border-ok/20" :
+                         c.last_status === "fail" ? "bg-err/5 border-err/20" :
+                         c.last_status === "warn" ? "bg-warn/5 border-warn/20" :
+                         "bg-paper border-line")}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={"w-2.5 h-2.5 rounded-full " +
+                            (c.last_status === "ok" ? "bg-ok" :
+                             c.last_status === "fail" ? "bg-err" :
+                             c.last_status === "warn" ? "bg-warn" : "bg-faint")} />
+                          <span className="text-[13px] font-semibold text-ink">{c.name || `${c.type}:${c.target}`}</span>
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-faint/10 text-faint font-mono">{c.type}</span>
+                          <span className="text-[11.5px] text-muted font-mono truncate flex-1">{c.target}</span>
+                          <button className="text-[11px] text-err hover:underline" onClick={async () => {
+                            await fetch(`/v1/ops/healthcheck/${i}`, { method: "DELETE" });
+                            fetchHealthChecks();
+                          }}>Remove</button>
+                        </div>
+                        <div className="grid grid-cols-5 gap-2 text-[11px]">
+                          <div>
+                            <div className="text-faint">Status</div>
+                            <div className={"font-semibold " +
+                              (c.last_status === "ok" ? "text-ok" :
+                               c.last_status === "fail" ? "text-err" :
+                               c.last_status === "warn" ? "text-warn" : "text-faint")}>
+                              {c.last_status.toUpperCase()}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-faint">Latency</div>
+                            <div className="text-ink font-medium">{c.last_latency_ms > 0 ? `${c.last_latency_ms}ms` : "—"}</div>
+                          </div>
+                          <div>
+                            <div className="text-faint">Uptime</div>
+                            <div className="text-ink font-medium">
+                              {c.total_checks > 0 ? `${Math.round(((c.total_checks - c.total_failures) / c.total_checks) * 100)}%` : "—"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-faint">Failures</div>
+                            <div className={"font-medium " + (c.consecutive_failures > 0 ? "text-err" : "text-ink")}>
+                              {c.consecutive_failures > 0 ? `${c.consecutive_failures} consecutive` : `${c.total_failures} total`}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-faint">Last Check</div>
+                            <div className="text-ink font-medium">
+                              {c.last_check > 0 ? new Date(c.last_check * 1000).toLocaleTimeString() : "Never"}
+                            </div>
+                          </div>
+                        </div>
+                        {c.last_error && (
+                          <div className="mt-2 text-[11px] text-err bg-err/5 rounded px-2 py-1 font-mono">{c.last_error}</div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  <button
-                    className="text-[12.5px] px-3 py-1.5 rounded-lg bg-accent text-white font-medium"
-                    onClick={addHealthCheck}
-                  >
-                    {t("session:ops.addCheck")}
-                  </button>
+                )}
+
+                {/* Add check form */}
+                <div className="border-t border-line pt-4">
+                  <h4 className="text-[13px] font-semibold text-ink mb-3">{t("session:ops.addCheck")}</h4>
+                  <div className="flex gap-2 items-end flex-wrap">
+                    <div>
+                      <label className="block text-[11px] text-muted mb-1">{t("session:ops.checkType")}</label>
+                      <select
+                        className="text-[13px] px-2 py-1.5 rounded-lg border border-line bg-paper text-ink"
+                        value={newCheckType}
+                        onChange={(e) => setNewCheckType(e.target.value)}
+                      >
+                        <option value="port">Port</option>
+                        <option value="http">HTTP</option>
+                        <option value="https">HTTPS</option>
+                        <option value="tcp">TCP</option>
+                        <option value="dns">DNS</option>
+                        <option value="ping">Ping</option>
+                        <option value="disk">Disk Usage</option>
+                        <option value="memory">Memory</option>
+                      </select>
+                    </div>
+                    <div className="flex-1 min-w-[200px]">
+                      <label className="block text-[11px] text-muted mb-1">{t("session:ops.checkTarget")}</label>
+                      <input
+                        type="text"
+                        className="w-full text-[13px] px-3 py-1.5 rounded-lg border border-line bg-paper text-ink"
+                        placeholder={
+                          newCheckType === "port" ? "80,443,8765" :
+                          newCheckType === "http" || newCheckType === "https" ? "http://localhost:8765/v1/health" :
+                          newCheckType === "tcp" ? "localhost:5432" :
+                          newCheckType === "dns" ? "google.com" :
+                          newCheckType === "ping" ? "8.8.8.8" :
+                          newCheckType === "disk" ? "/" :
+                          newCheckType === "memory" ? "85" : ""
+                        }
+                        value={newCheckTarget}
+                        onChange={(e) => setNewCheckTarget(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && addHealthCheck()}
+                      />
+                    </div>
+                    <button
+                      className="text-[12.5px] px-3 py-1.5 rounded-lg bg-accent text-white font-medium"
+                      onClick={addHealthCheck}
+                    >
+                      {t("session:ops.addCheck")}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </>
           )}
 
           {/* SSH servers */}
