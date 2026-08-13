@@ -198,7 +198,7 @@ class SessionManager(
         # The scheduler also resumes self-wake'd sessions each tick (extra_tick).
         self.task_store = TaskStore(base / "automation.db")
         self.scheduler = Scheduler(
-            self.task_store, self._run_scheduled_task, extra_tick=self.resume_due_wakes
+            self.task_store, self._run_scheduled_task, extra_tick=self._combined_tick
         )
         # Personas: registry + lifecycle state under this manager's data dir. Installed as the
         # process singleton so agents.get_agent resolves persona ids (incl. third-party) here.
@@ -258,6 +258,65 @@ class SessionManager(
     def data_dir(self) -> Path:
         """Base data directory (used by DashboardMixin and monitoring subsystem)."""
         return self._data_base
+
+    # -- monitoring tick (runs every scheduler cycle, ~30s) ----------------------
+
+    async def _combined_tick(self) -> None:
+        """Combined tick: self-wake resume + monitoring collection."""
+        await self.resume_due_wakes()
+        await self._monitoring_tick()
+
+    async def _monitoring_tick(self) -> None:
+        """Collect metrics, run health checks, evaluate alerts — each scheduler tick."""
+        import logging
+
+        log = logging.getLogger(__name__)
+        try:
+            from .dashboard_mixin import DashboardMixin  # noqa: F811 — type check only
+
+            ts = self._get_ts_store()
+            hc = self._get_hc_manager()
+            alert = self._get_alert_engine()
+
+            # 1. Collect local metrics → TimeSeriesStore
+            from ..monitoring.collector import MetricCollector, CollectorConfig
+
+            collector = MetricCollector(
+                ts, secrets=self.secrets, config=CollectorConfig(collect_local=True)
+            )
+            await collector.collect_all()
+
+            # 2. Run health checks
+            await hc.run_checks()
+
+            # 3. Evaluate alert rules against latest metrics
+            latest = ts.query_latest()
+            new_alerts = alert.evaluate(latest)
+
+            # 4. Broadcast new alerts to GUI
+            if new_alerts:
+                try:
+                    await self.broadcast_event({
+                        "type": "monitoring_alert",
+                        "alerts": new_alerts,
+                    })
+                except Exception:
+                    pass
+
+            # 5. Periodic maintenance (every ~10 min = 20 ticks)
+            import time
+
+            if not hasattr(self, "_last_maintenance"):
+                self._last_maintenance = 0.0
+            if time.time() - self._last_maintenance > 600:
+                ts.downsample()
+                ts.prune()
+                hc.prune_results()
+                alert.prune_alerts()
+                self._last_maintenance = time.time()
+
+        except Exception:
+            log.debug("monitoring tick error", exc_info=True)
 
     # -- workspaces -------------------------------------------------------------
     def open_workspace(self, path: str, *, create: bool = False) -> dict[str, Any]:
