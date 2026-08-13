@@ -368,4 +368,256 @@ def wiki_tools(context: Any = None) -> list:
     )
     tools.append(wiki_test_prompt_with_model)
 
+    # -- wiki_create -------------------------------------------------------
+    def wiki_create(
+        name: str,
+        category: str,
+        content: str = "",
+        linked_service: str = "",
+        tags: str = "",
+    ) -> dict:
+        """Create a wiki page with optional template."""
+        import uuid as _uuid  # noqa: F811
+
+        page_id = f"{category}-{name.lower().replace(' ', '-')[:40]}"
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+
+        # 템플릿 적용
+        if not content:
+            from .store import WIKI_TEMPLATES
+
+            tmpl = WIKI_TEMPLATES.get(category)
+            if tmpl:
+                content = tmpl["content"]
+                # 변수 치환
+                for key in (
+                    "name",
+                    "service_name",
+                    "server_name",
+                    "db_name",
+                    "project_name",
+                ):
+                    content = content.replace("{{" + key + "}}", name)
+
+        return wiki_store.create_page(
+            page_id=page_id,
+            name=name,
+            category=category,
+            content=content,
+            linked_service=linked_service,
+            tags=tag_list,
+            updated_by="agent",
+        )
+
+    _attach(
+        wiki_create,
+        _schema(
+            "wiki_create",
+            "Create a wiki page with optional category-based template.",
+            {
+                "name": {"type": "string", "description": "Page name / title"},
+                "category": {
+                    "type": "string",
+                    "description": "Category (e.g. 'infrastructure', 'runbook', 'api')",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Page content (markdown). If empty, a template is applied.",
+                },
+                "linked_service": {
+                    "type": "string",
+                    "description": "Service reference to link (optional)",
+                },
+                "tags": {
+                    "type": "string",
+                    "description": "Comma-separated tags (optional)",
+                },
+            },
+            ["name", "category"],
+        ),
+        approval=True,
+    )
+    tools.append(wiki_create)
+
+    # -- wiki_delete -------------------------------------------------------
+    def wiki_delete(page_id: str) -> dict:
+        """Soft-delete a wiki page."""
+        return wiki_store.delete_page(page_id)
+
+    _attach(
+        wiki_delete,
+        _schema(
+            "wiki_delete",
+            "Soft-delete a wiki page.",
+            {
+                "page_id": {"type": "string", "description": "Wiki page identifier"},
+            },
+            ["page_id"],
+        ),
+        approval=True,
+    )
+    tools.append(wiki_delete)
+
+    # -- wiki_history ------------------------------------------------------
+    def wiki_history(page_id: str) -> dict:
+        """Get version history for a wiki page."""
+        history = wiki_store.get_history(page_id)
+        return {"ok": True, "page_id": page_id, "count": len(history), "history": history}
+
+    _attach(
+        wiki_history,
+        _schema(
+            "wiki_history",
+            "Get version history for a wiki page.",
+            {
+                "page_id": {"type": "string", "description": "Wiki page identifier"},
+            },
+            ["page_id"],
+        ),
+    )
+    tools.append(wiki_history)
+
+    # -- wiki_categories ---------------------------------------------------
+    def wiki_categories() -> dict:
+        """List wiki categories with page counts."""
+        return {"ok": True, "categories": wiki_store.categories()}
+
+    _attach(
+        wiki_categories,
+        _schema(
+            "wiki_categories",
+            "List wiki categories with page counts.",
+            {},
+            [],
+        ),
+    )
+    tools.append(wiki_categories)
+
+    # -- wiki_recent -------------------------------------------------------
+    def wiki_recent(limit: int = 20) -> dict:
+        """List recently modified wiki pages."""
+        return {"ok": True, "pages": wiki_store.recent(limit)}
+
+    _attach(
+        wiki_recent,
+        _schema(
+            "wiki_recent",
+            "List recently modified wiki pages.",
+            {
+                "limit": {
+                    "type": "integer",
+                    "description": "Max number of pages to return (default 20)",
+                },
+            },
+            [],
+        ),
+    )
+    tools.append(wiki_recent)
+
+    # -- wiki_set_credential -----------------------------------------------
+    def wiki_set_credential(
+        page_id: str,
+        key: str,
+        value: str,
+        credential_type: str = "password",
+        expires_at: str = "",
+    ) -> dict:
+        """Store a credential in Vault and update Wiki metadata."""
+        import time as _time
+
+        vault.store(f"{page_id}:{key}", value)
+
+        page = wiki_store.get_page(page_id)
+        if page:
+            creds = page.get("credentials", [])
+            found = False
+            for c in creds:
+                if c.get("key") == key:
+                    c["type"] = credential_type
+                    c["updated_at"] = _time.time()
+                    if expires_at:
+                        c["expires_at"] = expires_at
+                    found = True
+                    break
+            if not found:
+                entry: dict[str, Any] = {
+                    "key": key,
+                    "type": credential_type,
+                    "updated_at": _time.time(),
+                }
+                if expires_at:
+                    entry["expires_at"] = expires_at
+                creds.append(entry)
+            wiki_store.update_page(
+                page_id,
+                credentials=creds,
+                change_note=f"Credential '{key}' updated",
+            )
+
+        if expires_at:
+            wiki_store.add_alert(page_id, key, "expiring", expires_at)
+
+        return {"ok": True, "page_id": page_id, "key": key}
+
+    _attach(
+        wiki_set_credential,
+        _schema(
+            "wiki_set_credential",
+            "Store a credential in Vault and update Wiki metadata.",
+            {
+                "page_id": {"type": "string", "description": "Wiki page identifier"},
+                "key": {"type": "string", "description": "Credential key name"},
+                "value": {"type": "string", "description": "Credential value to store"},
+                "credential_type": {
+                    "type": "string",
+                    "description": "Type of credential (default 'password')",
+                },
+                "expires_at": {
+                    "type": "string",
+                    "description": "Expiration date/time string (optional)",
+                },
+            },
+            ["page_id", "key", "value"],
+        ),
+        approval=True,
+    )
+    tools.append(wiki_set_credential)
+
+    # -- wiki_run_runbook --------------------------------------------------
+    def wiki_run_runbook(page_id: str) -> dict:
+        """Start executing a runbook's steps."""
+        import uuid as _uuid  # noqa: F811
+
+        page = wiki_store.get_page(page_id)
+        if not page or page.get("category") != "runbook":
+            return {"ok": False, "error": "not a runbook page"}
+        steps = (page.get("structured_data") or {}).get("steps", [])
+        execution_id = str(_uuid.uuid4())[:8]
+        wiki_store.record_runbook_execution(
+            execution_id=execution_id,
+            page_id=page_id,
+            steps_total=len(steps),
+        )
+        return {
+            "ok": True,
+            "execution_id": execution_id,
+            "steps": steps,
+            "instruction": (
+                "Execute each step in order and use wiki_update to track progress."
+            ),
+        }
+
+    _attach(
+        wiki_run_runbook,
+        _schema(
+            "wiki_run_runbook",
+            "Start executing a runbook's steps.",
+            {
+                "page_id": {"type": "string", "description": "Wiki page identifier of the runbook"},
+            },
+            ["page_id"],
+        ),
+    )
+    tools.append(wiki_run_runbook)
+
     return tools

@@ -3201,6 +3201,11 @@ def create_app(manager: SessionManager) -> FastAPI:
         filtered = filter_credentials(text)
         return {"ok": True, "original_length": len(text), "filtered": filtered}
 
+    # -- Dashboard & monitoring API routes --
+    from .dashboard_mixin import register_dashboard_routes
+
+    register_dashboard_routes(app, manager)
+
     return app
 
 

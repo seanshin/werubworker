@@ -118,6 +118,9 @@ class TurnEngine:
         # TOOL_FINISHED event can carry the note to the tool card (§25).
         self._standing_notes: dict[str, str] = {}
         self._interrupt_hooks: list[Callable[[], None]] = list(interrupt_hooks or [])
+        # Optional post-tool hook: called after each tool execution with (tool_name, args, result).
+        # Used by WikiAutoSync to update Wiki structured_data from tool results.
+        self.tool_result_hook: Optional[Callable[[str, dict, Any], None]] = None
 
     # -- external controls ------------------------------------------------------
     def request_interrupt(self) -> None:
@@ -785,6 +788,12 @@ class TurnEngine:
             result_preview=_preview(result),
         )
         rule = self._standing_notes.pop(tool_call.id, "")
+        # Post-tool hook: WikiAutoSync uses this to update Wiki structured_data.
+        if self.tool_result_hook and status == "ok" and isinstance(result, dict):
+            try:
+                self.tool_result_hook(tool_call.name, tool_call.arguments, result)
+            except Exception:
+                pass  # Wiki sync failure must never break the turn loop
         return Event(
             EventType.TOOL_FINISHED,
             {

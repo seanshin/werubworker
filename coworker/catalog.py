@@ -26,6 +26,7 @@ from .tools.cloud_infra import cloud_infra_tools
 from .tools.monitoring_tools import monitoring_tools
 from .tools.network_diag import network_diag_tools
 from .tools.security_scan import security_scan_tools
+from .tools.dev_setup import dev_setup_tools
 from .tools.server_setup import server_setup_tools
 from .tools.service_config import service_config_tools
 from .tools.code_review import code_review_tools
@@ -146,6 +147,10 @@ def _code_review(context: AgentContext) -> list:
 
 def _monitoring(context: AgentContext) -> list:
     return monitoring_tools(context)
+
+
+def _dev_setup(context: AgentContext) -> list:
+    return dev_setup_tools(context)
 
 
 def _security_scan(context: AgentContext) -> list:
@@ -314,6 +319,14 @@ _CAPS: list[Capability] = [
         build=_service_config,
         requires=("secrets",),
         risk=(RiskClass.EXEC,),
+    ),
+    Capability(
+        id="dev_setup",
+        name="Development environment",
+        description="Scan projects, manage Git integration, and create dev environment docs.",
+        build=_dev_setup,
+        requires=("workspace", "secrets"),
+        risk=(RiskClass.READ, RiskClass.WRITE_LOCAL),
     ),
     Capability(
         id="security_scan",

@@ -71,6 +71,31 @@ WIKI_TEMPLATES: dict[str, dict] = {
         "content": "# {{system_name}}\n\n## Overview\n\n## Components\n\n## Data Flow\n\n```mermaid\ngraph LR\n  A[Client] --> B[API]\n  B --> C[Database]\n```\n\n## Dependencies\n\n## Notes\n",
         "structured_data": {"components": [], "dependencies": []},
     },
+    "development": {
+        "name": "Development Environment",
+        "content": "# {{project_name}}\n\n## 기술 스택\n\n## 개발 환경 설정\n\n```bash\n# 의존성 설치\n\n# 개발 서버 실행\n\n# 테스트 실행\n```\n\n## CI/CD\n\n## 환경 변수\n\n| 변수명 | 설명 | 필수 |\n|--------|------|------|\n\n## 배포\n\n## 메모\n",
+        "structured_data": {"repo_url": "", "language": "", "framework": "", "ci": ""},
+    },
+    "config": {
+        "name": "Configuration File",
+        "content": "# {{config_name}}\n\n## 서비스\n\n## 설정 내용\n\n```\n\n```\n\n## 변경 이력\n",
+        "structured_data": {"config_type": "", "service": "", "server": ""},
+    },
+    "incident": {
+        "name": "Incident Report",
+        "content": "# 인시던트: {{incident_name}}\n\n## 요약\n\n## 심각도\n\n## 영향 범위\n\n## 타임라인\n\n| 시각 | 내용 |\n|------|------|\n\n## 근본 원인\n\n## 조치 내역\n\n## 재발 방지\n",
+        "structured_data": {"severity": "", "status": "", "affected_services": [], "rca": ""},
+    },
+    "network": {
+        "name": "Network Configuration",
+        "content": "# 네트워크: {{network_name}}\n\n## 구성\n- CIDR: \n- Gateway: \n- DNS: \n\n## 방화벽 규칙\n\n| 포트 | 프로토콜 | 소스 | 설명 |\n|------|---------|------|------|\n\n## VPN\n\n## 메모\n",
+        "structured_data": {"cidr": "", "gateway": "", "dns": [], "firewall_rules": []},
+    },
+    "backup": {
+        "name": "Backup Configuration",
+        "content": "# 백업: {{backup_name}}\n\n## 대상\n\n## 스케줄\n\n## 보관 정책\n- 보관 기간: \n- 최대 보관 수: \n\n## 복원 절차\n\n## 마지막 검증\n",
+        "structured_data": {"schedule": "", "retention_days": 0, "target": "", "method": ""},
+    },
 }
 
 

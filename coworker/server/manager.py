@@ -95,6 +95,7 @@ from ..wiki.vault import Vault
 from ..workspace_trust import WorkspaceTrustStore
 from .automation_mixin import AutomationMixin, _epoch, _last_assistant_text, _recent_files
 from .connector_mixin import ConnectorsMixin
+from .dashboard_mixin import DashboardMixin
 from .engine_cache import EngineCache
 from .inbox_mixin import InboxMixin
 from .provider_mixin import ProviderMixin
@@ -123,7 +124,8 @@ def _approval_body(request) -> str:
 
 
 class SessionManager(
-    SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMixin, InboxMixin, SkillsMixin
+    SettingsMixin, ProviderMixin, ConnectorsMixin, AutomationMixin, InboxMixin, SkillsMixin,
+    DashboardMixin,
 ):
     def __init__(
         self,
@@ -247,6 +249,15 @@ class SessionManager(
         # Dead-letter: inbound messages with no destination + background-turn failures, so neither
         # vanishes silently (a debugging/visibility surface, not a redelivery queue).
         self.unrouted = UnroutedStore(base / "unrouted.json")
+        # Wiki auto-sync: updates Wiki structured_data when tools execute (server_status, db_status…)
+        from ..wiki.sync import WikiAutoSync
+
+        self.wiki_sync = WikiAutoSync(self.wiki_store, self.vault)
+
+    @property
+    def data_dir(self) -> Path:
+        """Base data directory (used by DashboardMixin and monitoring subsystem)."""
+        return self._data_base
 
     # -- workspaces -------------------------------------------------------------
     def open_workspace(self, path: str, *, create: bool = False) -> dict[str, Any]:
@@ -486,6 +497,8 @@ class SessionManager(
 
             engine.compaction_state = CompactionState.from_dict(record.compaction)
         engine.compaction_settings = self.compaction_settings
+        # WikiAutoSync: update Wiki structured_data from tool execution results.
+        engine.tool_result_hook = self.wiki_sync.on_tool_result
         self._engines[session_id] = engine
         if is_new_session:
             self._emit_session_created(session_id, agent_name)
