@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.1.0] - 2026-08-14
+
+### Added
+- MCP 모니터링 서버: 10개 도구를 외부 AI (Claude Desktop, Cursor, Claude Code)에 노출
+  - metrics_latest, metrics_query, healthcheck_list/run, active_alerts, alert_rules
+  - incidents_list/get, audit_recent, dashboard_overview
+- MCP 설정 가이드 (docs/mcp-setup.md)
+- pyproject.toml: werubworker-mcp-monitoring 진입점 추가
+
+---
+
 ## [2.0.3] - 2026-08-13
 
 ### Added

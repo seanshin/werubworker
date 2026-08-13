@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coworker"
-version = "2.0.3"
+version = "2.1.0"
 description = "WeruBWorker — provider-agnostic agentic coworker runtime"
 requires-python = ">=3.10"
 dependencies = [
@@ -57,6 +57,7 @@ azure = ["azure-mgmt-compute>=30", "azure-mgmt-containerservice>=28", "azure-ide
 werubworker = "coworker.cli:main"
 werubworker-server = "coworker.server.run:main"
 werubworker-connectors = "coworker.connectors.cli:main"
+werubworker-mcp-monitoring = "coworker.mcp.monitoring_server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
