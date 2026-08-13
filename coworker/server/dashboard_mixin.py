@@ -134,42 +134,8 @@ def register_dashboard_routes(app, manager) -> None:
     async def api_audit_recent(limit: int = 50):
         return manager.dashboard_audit_recent(limit)
 
-    # -- Wiki API --
-
-    @app.get("/v1/wiki/pages")
-    async def api_wiki_pages(category: str = "", query: str = ""):
-        if not hasattr(manager, "wiki_store") or not manager.wiki_store:
-            return {"ok": False, "error": "wiki not configured"}
-        pages = manager.wiki_store.list_pages(category=category, query=query)
-        return {"ok": True, "count": len(pages), "pages": pages}
-
-    @app.get("/v1/wiki/pages/{page_id}")
-    async def api_wiki_page(page_id: str):
-        if not hasattr(manager, "wiki_store") or not manager.wiki_store:
-            return {"ok": False, "error": "wiki not configured"}
-        page = manager.wiki_store.get_page(page_id)
-        if page is None:
-            return {"ok": False, "error": f"page '{page_id}' not found"}
-        return {"ok": True, "page": page}
-
-    @app.get("/v1/wiki/categories")
-    async def api_wiki_categories():
-        if not hasattr(manager, "wiki_store") or not manager.wiki_store:
-            return {"ok": False, "error": "wiki not configured"}
-        return {"ok": True, "categories": manager.wiki_store.categories()}
-
-    @app.get("/v1/wiki/recent")
-    async def api_wiki_recent(limit: int = 20):
-        if not hasattr(manager, "wiki_store") or not manager.wiki_store:
-            return {"ok": False, "error": "wiki not configured"}
-        return {"ok": True, "pages": manager.wiki_store.recent(limit)}
-
-    @app.get("/v1/wiki/search")
-    async def api_wiki_search(q: str = ""):
-        if not hasattr(manager, "wiki_store") or not manager.wiki_store:
-            return {"ok": False, "error": "wiki not configured"}
-        results = manager.wiki_store.search_fts(q)
-        return {"ok": True, "count": len(results), "results": results}
+    # Wiki API는 app.py에 이미 구현되어 있으므로 여기서 중복 등록하지 않음.
+    # (GET /v1/wiki, /v1/wiki/{page_id}, /v1/wiki/categories 등 — app.py 라인 2759~2899)
 
     # -- Infrastructure API --
 
