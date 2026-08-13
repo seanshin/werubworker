@@ -48,6 +48,10 @@ browser = ["playwright>=1.44"]
 bedrock = ["boto3>=1.34"]
 # Argon2id KDF for vault — optional, falls back to PBKDF2 without it.
 argon2 = ["argon2-cffi>=23"]
+# GCP cloud connector (lazy-imported; falls back to REST API error without it).
+gcp = ["google-cloud-compute>=1.14", "google-cloud-container>=2.30", "google-auth>=2.23"]
+# Azure cloud connector (lazy-imported; falls back to error without it).
+azure = ["azure-mgmt-compute>=30", "azure-mgmt-containerservice>=28", "azure-identity>=1.15"]
 
 [project.scripts]
 werubworker = "coworker.cli:main"

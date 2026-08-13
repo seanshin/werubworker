@@ -59,11 +59,12 @@
 
 | 영역 | 설명 | 상태 |
 |------|------|------|
-| **통합 모니터링** | 멀티 서버 메트릭 수집, 시계열 DB, 헬스체크, 로그 집계 | 확장 중 |
-| **실시간 대시보드** | REST/WebSocket API, 인프라 토폴로지 맵, 비용 분석 | 확장 중 |
-| **알림 & 인시던트** | 규칙 기반 알림, 에스컬레이션, 인시던트 타임라인, AI 사후분석 | 확장 중 |
-| **인프라 자동화** | 자동 복구, IaC 연동, CI/CD 확장, 서비스 설정 생성 | 확장 중 |
-| **보안 & 컴플라이언스** | 포트/SSL 스캔, 취약점 검사, 접근 감사, 인증서 관리 | 확장 중 |
+| **통합 모니터링** | 멀티 서버 메트릭 수집, 시계열 DB, 헬스체크, 로그 집계 | ✅ 구현 완료 |
+| **실시간 대시보드** | REST API 12개 엔드포인트, 인프라 토폴로지 맵, Wiki API | ✅ 구현 완료 |
+| **알림 & 인시던트** | 규칙 기반 알림, 에스컬레이션, 인시던트 타임라인, 자동 복구 | ✅ 구현 완료 |
+| **인프라 자동화** | Terraform/Ansible IaC, 서비스 설정 생성, 서버 온보딩 워크플로우 | ✅ 구현 완료 |
+| **보안 & 컴플라이언스** | 포트/SSL 스캔, 취약점 검사, 접근 감사, 인증서 관리 | ✅ 구현 완료 |
+| **멀티 클라우드** | AWS + Cloudflare + Wasabi + GCP + Azure (선택적 SDK) | ✅ 구현 완료 |
 
 ---
 
@@ -118,13 +119,17 @@
 │  │  └────┬─────┘  └─────┬─────┘  └─────────────────────┘  │    │
 │  │       │              │                                   │    │
 │  │  ┌────▼──────────────▼──────────────────────────────┐   │    │
-│  │  │              도구 카탈로그 (54개)                   │   │    │
+│  │  │           도구 카탈로그 (100+, 21 Capability)        │   │    │
 │  │  ├──────┬──────┬──────┬──────┬──────┬──────┬────────┤   │    │
 │  │  │서버  │SSH   │Docker│ K8s  │  DB  │클라우드│CI/CD  │   │    │
-│  │  │모니터│원격  │컨테이너│클러스터│쿼리  │AWS/CF │빌드   │   │    │
-│  │  │(6)  │(7)   │(7)   │(6)   │(4)   │(10)  │(5)    │   │    │
+│  │  │모니터│원격  │컨테이너│클러스터│쿼리  │AWS/GCP│빌드   │   │    │
+│  │  │(8)  │(7)   │(11)  │(11)  │(4)   │(18)  │(5)    │   │    │
+│  │  ├──────┼──────┼──────┼──────┼──────┼──────┼────────┤   │    │
+│  │  │모니터│보안  │네트워│인증서 │IaC   │서버  │서비스  │   │    │
+│  │  │링   │스캔  │크진단│관리  │TF/AN │온보딩│설정   │   │    │
+│  │  │(10) │(5)   │(5)   │(3)   │(5)   │(4)  │(5)    │   │    │
 │  │  ├──────┴──────┴──────┴──────┴──────┴──────┴────────┤   │    │
-│  │  │코드리뷰(3) │ 위키(6)  │ 파일/셸/검색/Git/투두     │   │    │
+│  │  │코드리뷰(3) │ 위키(13) │ 개발환경(3) │ 기타       │   │    │
 │  │  └──────────────────────────────────────────────────┘   │    │
 │  │                                                          │    │
 │  │  ┌──────────────────────────────────────────────────┐   │    │
@@ -299,7 +304,7 @@ werubworker/
 
 ## 📈 확장 로드맵
 
-### Phase 1: 기반 강화
+### Phase 1: 기반 강화 ✅
 
 | 모듈 | 파일 | 설명 |
 |------|------|------|
@@ -309,7 +314,7 @@ werubworker/
 | 헬스체크 매니저 | `monitoring/healthcheck.py` | HTTP/TCP/DNS/SSL/Docker/K8s 체크 |
 | 서버 모니터 확장 | `tools/server_monitor.py` | 원격 서버 + GPU + 네트워크 통계 |
 
-### Phase 2: 운영 자동화
+### Phase 2: 운영 자동화 ✅
 
 | 모듈 | 파일 | 설명 |
 |------|------|------|
@@ -320,7 +325,7 @@ werubworker/
 | 서비스 설정 | `tools/service_config.py` | Nginx/systemd/Compose 생성 + 의존관계 맵 |
 | Wiki 동기화 | `wiki/sync.py` | 도구 실행 결과 → Wiki 자동 업데이트 |
 
-### Phase 3: 대시보드 & 확장
+### Phase 3: 대시보드 & 확장 ✅
 
 | 모듈 | 파일 | 설명 |
 |------|------|------|
@@ -329,14 +334,15 @@ werubworker/
 | Docker 확장 | `tools/docker_mgmt.py` | inspect, networks, volumes, prune |
 | K8s 확장 | `tools/k8s_mgmt.py` | nodes, top, ingress, HPA, 멀티클러스터 |
 
-### Phase 4: 멀티 클라우드 & IaC
+### Phase 4: 멀티 클라우드 & IaC ✅
 
 | 모듈 | 파일 | 설명 |
 |------|------|------|
-| GCP 연동 | `connectors/cloud/gcp.py` | Compute Engine, GKE |
-| Azure 연동 | `connectors/cloud/azure.py` | VM, AKS |
-| IaC 도구 | `tools/iac.py` | Terraform plan/state, Ansible playbook |
-| 인증서 관리 | `tools/cert_mgmt.py` | SSL 모니터링 + 갱신 |
+| GCP 연동 | `connectors/cloud/gcp.py` | Compute Engine, GKE (SDK 또는 REST fallback) |
+| Azure 연동 | `connectors/cloud/azure.py` | VM, AKS (SDK 또는 REST fallback) |
+| IaC 도구 | `tools/iac.py` | Terraform plan/state/output, Ansible inventory/playbook |
+| 인증서 관리 | `tools/cert_mgmt.py` | SSL 모니터링, 만료 알림, Let's Encrypt 갱신 |
+| SSH 터널링 | `connectors/ssh/tunnel.py` | 포트 포워딩 (TunnelManager) |
 
 > 상세 설계: [cloud-server-ops-expansion-design.md](docs/cloud-server-ops-expansion-design.md)
 

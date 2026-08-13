@@ -31,6 +31,8 @@ SRE_CAPABILITIES = [
     "service_config",   # service registration + config management
     "security_scan",    # port scan, SSL check, vulnerability assessment
     "network_diag",     # traceroute, DNS, bandwidth testing
+    "iac",              # Terraform, Ansible
+    "cert_mgmt",        # SSL certificate monitoring and renewal
 ]
 
 SRE_INSTRUCTIONS = (

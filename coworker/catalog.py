@@ -26,7 +26,9 @@ from .tools.cloud_infra import cloud_infra_tools
 from .tools.monitoring_tools import monitoring_tools
 from .tools.network_diag import network_diag_tools
 from .tools.security_scan import security_scan_tools
+from .tools.cert_mgmt import cert_mgmt_tools
 from .tools.dev_setup import dev_setup_tools
+from .tools.iac import iac_tools
 from .tools.server_setup import server_setup_tools
 from .tools.service_config import service_config_tools
 from .tools.code_review import code_review_tools
@@ -118,7 +120,15 @@ def _ci_cd(context: AgentContext) -> list:
 
 
 def _cloud_infra(context: AgentContext) -> list:
-    return cloud_infra_tools(context)  # aws_ec2_list, cf_dns_list, wasabi_list, …
+    tools = cloud_infra_tools(context)  # aws_ec2_list, cf_dns_list, wasabi_list, …
+    # Optionally extend with GCP and Azure tools if credentials are configured.
+    secrets = getattr(context, "secrets", None)
+    if secrets:
+        from .connectors.cloud.gcp import register as gcp_register
+        from .connectors.cloud.azure import register as azure_register
+        gcp_register(secrets, tools)
+        azure_register(secrets, tools)
+    return tools
 
 
 def _database(context: AgentContext) -> list:
@@ -147,6 +157,14 @@ def _code_review(context: AgentContext) -> list:
 
 def _monitoring(context: AgentContext) -> list:
     return monitoring_tools(context)
+
+
+def _iac(context: AgentContext) -> list:
+    return iac_tools(context)
+
+
+def _cert_mgmt(context: AgentContext) -> list:
+    return cert_mgmt_tools(context)
 
 
 def _dev_setup(context: AgentContext) -> list:
@@ -343,6 +361,22 @@ _CAPS: list[Capability] = [
         build=_network_diag,
         requires=(),
         risk=(RiskClass.READ,),
+    ),
+    Capability(
+        id="iac",
+        name="Infrastructure as Code",
+        description="Terraform plan/state/output, Ansible inventory/playbook management.",
+        build=_iac,
+        requires=("workspace", "executor"),
+        risk=(RiskClass.EXEC,),
+    ),
+    Capability(
+        id="cert_mgmt",
+        name="Certificate management",
+        description="SSL/TLS certificate monitoring, expiry alerts, and renewal triggers.",
+        build=_cert_mgmt,
+        requires=("secrets",),
+        risk=(RiskClass.EXEC,),
     ),
 ]
 
