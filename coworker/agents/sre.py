@@ -27,6 +27,8 @@ SRE_CAPABILITIES = [
     # -- SRE extensions --
     "monitoring",       # time-series collection + health checks + alerting
     "ci_cd",            # CI/CD pipelines
+    "server_setup",     # server onboarding + wiki auto-generation
+    "service_config",   # service registration + config management
 ]
 
 SRE_INSTRUCTIONS = (

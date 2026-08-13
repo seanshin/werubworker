@@ -24,6 +24,8 @@ from .risk import RiskClass
 from .tools.ci_cd import ci_cd_tools
 from .tools.cloud_infra import cloud_infra_tools
 from .tools.monitoring_tools import monitoring_tools
+from .tools.server_setup import server_setup_tools
+from .tools.service_config import service_config_tools
 from .tools.code_review import code_review_tools
 from .tools.db_mgmt import db_tools
 from .tools.docker_mgmt import docker_tools
@@ -142,6 +144,14 @@ def _code_review(context: AgentContext) -> list:
 
 def _monitoring(context: AgentContext) -> list:
     return monitoring_tools(context)
+
+
+def _server_setup(context: AgentContext) -> list:
+    return server_setup_tools(context)
+
+
+def _service_config(context: AgentContext) -> list:
+    return service_config_tools(context)
 
 
 def _ssh(context: AgentContext) -> list:
@@ -278,6 +288,22 @@ _CAPS: list[Capability] = [
         build=_monitoring,
         requires=("secrets",),
         risk=(RiskClass.READ, RiskClass.EXTERNAL),
+    ),
+    Capability(
+        id="server_setup",
+        name="Server onboarding",
+        description="Register servers with connection testing and auto Wiki documentation.",
+        build=_server_setup,
+        requires=("secrets",),
+        risk=(RiskClass.EXEC, RiskClass.EXTERNAL),
+    ),
+    Capability(
+        id="service_config",
+        name="Service configuration",
+        description="Register services, manage configs (nginx/systemd/compose), and dependency mapping.",
+        build=_service_config,
+        requires=("secrets",),
+        risk=(RiskClass.EXEC,),
     ),
 ]
 

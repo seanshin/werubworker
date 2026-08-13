@@ -4,7 +4,7 @@ name: SRE Coworker
 icon: shield
 tagline: Monitor, alert, and remediate — proactive infrastructure reliability
 family: knowledge
-tools: [files, search, shell, todo, server_monitor, ssh, docker, k8s, database, cloud_infra, wiki, monitoring, ci_cd]
+tools: [files, search, shell, todo, server_monitor, ssh, docker, k8s, database, cloud_infra, wiki, monitoring, ci_cd, server_setup, service_config]
 messaging: true
 connectors: true
 recommended_models: [anthropic:claude-opus-4-8, openai:gpt-5.5]
