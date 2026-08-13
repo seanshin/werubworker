@@ -1153,6 +1153,11 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     _metrics_store = _MetricsStore(manager._data_base)
 
+    # v2.0: Monitoring subsystem — TimeSeriesStore for long-term metrics
+    from ..monitoring.timeseries import TimeSeriesStore as _TSStore
+
+    _ts_store = _TSStore(manager._data_base)
+
     @app.get("/v1/ops/alerts/config")
     def ops_alerts_config_get() -> dict[str, Any]:
         """Return current alert threshold config."""
@@ -1183,6 +1188,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         disk = status.get("disk_root", {}).get("percent", 0) if isinstance(status.get("disk_root"), dict) else 0
         try:
             _metrics_store.record("local", cpu, mem, disk)
+            _ts_store.record("__local__", cpu=cpu, memory=mem, disk=disk)
         except Exception:
             pass  # never fail the status endpoint for metrics
 
@@ -1265,48 +1271,74 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     # -- Health check schedule (S12) --------------------------------------------
 
+    # v2.0: Use persistent HealthCheckManager instead of in-memory HealthChecker
+    from ..monitoring.healthcheck import HealthCheckManager as _HCManager, HealthCheckRule as _HCRule
+
+    _hc_manager = _HCManager(manager._data_base)
+
+    # Legacy in-memory checker kept for backward compat
     from ..tools.server_monitor import HealthChecker as _HealthChecker
 
     _health_checker = _HealthChecker()
 
     @app.get("/v1/ops/healthcheck")
     def ops_healthcheck_list() -> dict[str, Any]:
-        """List configured health checks + last status."""
-        return {"ok": True, "checks": list(_health_checker.checks), "enabled": _health_checker.enabled}
+        """List configured health checks (persistent + legacy)."""
+        persistent = _hc_manager.list_checks(enabled_only=False)
+        legacy = list(_health_checker.checks)
+        return {"ok": True, "checks": persistent, "legacy_checks": legacy,
+                "enabled": _health_checker.enabled}
 
     @app.post("/v1/ops/healthcheck")
     def ops_healthcheck_add(body: dict) -> dict[str, Any]:
-        """Add a health check. Types: port, http, https, tcp, dns, ping, disk, memory."""
+        """Add a health check (saved to persistent store)."""
         body = body or {}
         check_type = str(body.get("type", "")).strip()
         target = str(body.get("target", "")).strip()
+        name = str(body.get("name", "")).strip() or f"{check_type}:{target}"
         if not check_type or not target:
             return {"ok": False, "error": "type and target required"}
-        result = _health_checker.add_check(
-            check_type=check_type,
-            target=target,
-            name=str(body.get("name", "")).strip(),
-            expected_status=int(body.get("expected_status", 200)),
-            timeout_sec=int(body.get("timeout_sec", 5)),
+        # Map legacy types to new types
+        type_map = {"port": "tcp", "https": "http"}
+        hc_type = type_map.get(check_type, check_type)
+        rule = _HCRule(
+            id="", name=name, type=hc_type, target=target,
+            timeout_seconds=int(body.get("timeout_sec", 5)),
         )
-        _health_checker.enabled = True
-        return {**result, "checks": list(_health_checker.checks)}
+        import os
+        rule.id = f"hc-{os.urandom(4).hex()}"
+        result = _hc_manager.add_check(rule)
+        checks = _hc_manager.list_checks(enabled_only=False)
+        return {**result, "checks": checks}
 
     @app.delete("/v1/ops/healthcheck/{index}")
-    def ops_healthcheck_remove(index: int) -> dict[str, Any]:
-        """Remove a health check by index."""
-        result = _health_checker.remove_check(index)
-        return {**result, "checks": list(_health_checker.checks)}
+    def ops_healthcheck_remove(index: int | str) -> dict[str, Any]:
+        """Remove a health check by ID or legacy index."""
+        check_id = str(index)
+        result = _hc_manager.remove_check(check_id)
+        if not result.get("ok"):
+            # Fallback to legacy index
+            try:
+                result = _health_checker.remove_check(int(index))
+            except (ValueError, IndexError):
+                pass
+        checks = _hc_manager.list_checks(enabled_only=False)
+        return {**result, "checks": checks}
 
     @app.post("/v1/ops/healthcheck/run")
     async def ops_healthcheck_run() -> dict[str, Any]:
-        """Run all configured health checks now."""
-        results = await _health_checker.run_checks()
-        return {"ok": True, "results": results}
+        """Run all persistent health checks now."""
+        results = await _hc_manager.run_checks()
+        return {"ok": True, "results": [r if isinstance(r, dict) else r.to_dict() for r in results]}
 
     @app.get("/v1/ops/healthcheck/history")
-    def ops_healthcheck_history(key: str = "") -> dict[str, Any]:
-        """Get health check history."""
+    def ops_healthcheck_history(key: str = "", check_id: str = "") -> dict[str, Any]:
+        """Get health check history (persistent or legacy)."""
+        cid = check_id or key
+        if cid:
+            history = _hc_manager.get_history(cid, hours=24)
+            uptime = _hc_manager.uptime_percentage(cid, days=7)
+            return {"ok": True, "check_id": cid, "history": history, "uptime_pct": uptime}
         return {"ok": True, "history": _health_checker.get_history(key)}
 
     # -- Docker REST endpoints --------------------------------------------------
