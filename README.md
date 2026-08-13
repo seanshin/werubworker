@@ -1,6 +1,8 @@
 # WeruBWorker
 
-**로컬 우선 AI 에이전트 플랫폼** — 서버 관리, 개발 관리, 인프라 운영을 위한 통합 도구
+**AI 에이전트 기반 통합 클라우드·서버 관리 및 운영 모니터링 플랫폼**
+
+서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다.
 
 > 📌 [OpenWorker](https://github.com/andrewyng/openworker) (MIT License) 기반으로 독립 개발
 
@@ -8,16 +10,60 @@
 
 ## 📋 목차
 
+- [서비스 비전](#-서비스-비전)
 - [주요 기능](#-주요-기능)
 - [아키텍처](#-아키텍처)
+- [서비스 위키 리포지토리](#-서비스-위키--설정-리포지토리)
 - [에이전트](#-에이전트)
-- [도구 (54개)](#-도구-54개)
+- [도구 (54개+)](#-도구-54개)
+- [확장 로드맵](#-확장-로드맵)
+- [개발팀 구성](#-개발팀-구성)
 - [빠른 시작](#-빠른-시작)
 - [GUI 페이지](#-gui-페이지)
 - [보안](#-보안)
 - [테스트](#-테스트)
 - [문서](#-문서)
 - [라이선스](#-라이선스)
+
+---
+
+## 🎯 서비스 비전
+
+**WeruBWorker Ops Platform** — AI 에이전트가 인프라를 관리하고, 서비스 위키가 모든 설정의 단일 진실 소스(Single Source of Truth)가 되는 통합 운영 플랫폼
+
+### 핵심 설계 철학
+
+```
+세션에서 입력/수집 → Wiki에 구조화 저장 → 서비스 연동 시 자동 참조
+      │                    │                       │
+      │                    │                       ├─ SSH 접속: Wiki에서 호스트/포트/키 로드
+      │                    │                       ├─ DB 연결: Wiki에서 설정 + Vault에서 비밀번호
+      │                    │                       ├─ 배포: Wiki 런북 단계별 실행
+      │                    │                       ├─ 인시던트: Wiki에서 영향 서비스 자동 매핑
+      │                    │                       └─ 모니터링: Wiki에서 헬스체크 대상 로드
+      │                    │
+      │                    ├─ structured_data: 프로그래밍 접근 가능한 JSON
+      │                    ├─ credentials: Vault 암호화 연동
+      │                    ├─ linked_service: ServiceRegistry 자동 연결
+      │                    ├─ version_history: 모든 변경 추적
+      │                    └─ FTS5: 자연어 검색 + [[위키링크]]
+      │
+      ├─ register_server() → server Wiki 자동 생성
+      ├─ register_database() → database Wiki 자동 생성
+      ├─ register_service() → service Wiki 자동 생성
+      ├─ 도구 실행 → WikiAutoSync가 상태 자동 업데이트
+      └─ AI 분석 → wiki_analyze()로 자격증명 자동 추출
+```
+
+### 5대 핵심 영역
+
+| 영역 | 설명 | 상태 |
+|------|------|------|
+| **통합 모니터링** | 멀티 서버 메트릭 수집, 시계열 DB, 헬스체크, 로그 집계 | 확장 중 |
+| **실시간 대시보드** | REST/WebSocket API, 인프라 토폴로지 맵, 비용 분석 | 확장 중 |
+| **알림 & 인시던트** | 규칙 기반 알림, 에스컬레이션, 인시던트 타임라인, AI 사후분석 | 확장 중 |
+| **인프라 자동화** | 자동 복구, IaC 연동, CI/CD 확장, 서비스 설정 생성 | 확장 중 |
+| **보안 & 컴플라이언스** | 포트/SSL 스캔, 취약점 검사, 접근 감사, 인증서 관리 | 확장 중 |
 
 ---
 
@@ -35,6 +81,10 @@
 | 🌐 **한국어 지원** | 전체 UI 한국어/영어 전환 (1,100+ 번역 키), 에이전트 한국어 응답 |
 | 📊 **실시간 모니터링** | CPU/메모리/디스크 차트, 10초 자동 폴링, 스파크라인 그래프 |
 | 🔗 **25+ 서비스 연동** | Slack, GitHub, Gmail, Jira, HubSpot, Notion, Linear 등 |
+| 📋 **서비스 위키 리포지토리** | 서버/DB/서비스 설정의 중앙 저장소, 자동 문서화, 서비스 연동 허브 |
+| 🔔 **알림 & 인시던트** | 임계값 기반 알림, 에스컬레이션, 자동 복구, AI 사후분석 (확장 중) |
+| 🏗 **서버 온보딩** | SSH 연결 테스트 → 정보 수집 → Wiki 자동 생성 워크플로우 |
+| ⚙️ **설정 자동 생성** | Nginx, systemd, Docker Compose 설정 생성 및 버전 관리 (확장 중) |
 
 ---
 
@@ -218,17 +268,120 @@ werubworker/
 
 ---
 
+## 📚 서비스 위키 = 설정 리포지토리
+
+서비스 위키의 핵심 목적은 단순 문서가 아니라, 모든 인프라·서비스 설정 정보를 **세션에서 저장하고, 분석하고, 실 서비스 연동 시 활용하는 중앙 리포지토리**입니다.
+
+### 3대 핵심 역할
+
+| 역할 | 설명 | 기반 기술 |
+|------|------|----------|
+| **저장 (Store)** | 서버/DB/서비스/API 키/인증서/배포 설정을 `structured_data` JSON으로 구조화 저장 | SQLite + FTS5 + Vault |
+| **분석 (Analyze)** | 의존관계 분석, 변경 추적, 만료 감지, 스키마 비교, 보안 감사 | ServiceRegistry + WikiAutoSync |
+| **연동 (Connect)** | SSH 접속/DB 연결/배포 시 Wiki에서 설정 자동 로드, 자연어 서비스 참조 해석 | ServiceResolver + linked_service |
+
+### Wiki 카테고리 체계
+
+| 카테고리 | 용도 | 자동 생성 |
+|---------|------|----------|
+| `server` | 서버 연결 정보, OS, 실행 서비스 | `register_server()` 시 |
+| `database` | DB 설정, 스키마, ERD, 백업 정책 | `register_database()` 시 |
+| `service` | 서비스 설정, 헬스체크, 의존관계 | `register_service()` 시 |
+| `config` | Nginx/systemd/Compose 설정 파일 (버전 관리) | 설정 생성 시 |
+| `runbook` | 배포/장애 대응 런북 (단계별 실행 추적) | `setup_deployment()` 시 |
+| `development` | 개발 환경, 기술 스택, Git 연동 | `create_dev_wiki()` 시 |
+| `cloud` | 클라우드 제공자 계정, 리전, 서비스 | 수동 |
+| `api_doc` | API 문서, 엔드포인트, 인증 | 수동 |
+| `incident` | 인시던트 보고서, 타임라인, RCA | AI 자동 생성 |
+| `architecture` | 시스템 아키텍처, 컴포넌트, 데이터 흐름 | 수동 |
+
+---
+
+## 📈 확장 로드맵
+
+### Phase 1: 기반 강화
+
+| 모듈 | 파일 | 설명 |
+|------|------|------|
+| 시계열 저장소 | `monitoring/timeseries.py` | SQLite 기반 다운샘플링 (1m→5m→1h→1d) |
+| 메트릭 수집기 | `monitoring/collector.py` | SSH 병렬 수집, asyncio |
+| 알림 엔진 | `monitoring/alerting.py` | 규칙 평가 + Slack/Telegram 발송 |
+| 헬스체크 매니저 | `monitoring/healthcheck.py` | HTTP/TCP/DNS/SSL/Docker/K8s 체크 |
+| 서버 모니터 확장 | `tools/server_monitor.py` | 원격 서버 + GPU + 네트워크 통계 |
+
+### Phase 2: 운영 자동화
+
+| 모듈 | 파일 | 설명 |
+|------|------|------|
+| 인시던트 관리 | `monitoring/incidents.py` | 타임라인 + 에스컬레이션 + AI 사후분석 |
+| 자동 복구 | `monitoring/remediation.py` | 디스크 정리, 서비스 재시작, Pod 삭제 |
+| 로그 집계 | `monitoring/log_aggregator.py` | 다중 서버 패턴 매칭 + 이상 탐지 |
+| 서버 온보딩 | `tools/server_setup.py` | 등록 → 테스트 → Wiki 자동 생성 |
+| 서비스 설정 | `tools/service_config.py` | Nginx/systemd/Compose 생성 + 의존관계 맵 |
+| Wiki 동기화 | `wiki/sync.py` | 도구 실행 결과 → Wiki 자동 업데이트 |
+
+### Phase 3: 대시보드 & 확장
+
+| 모듈 | 파일 | 설명 |
+|------|------|------|
+| 대시보드 API | `server/dashboard_mixin.py` | REST + WebSocket 실시간 스트리밍 |
+| 보안 스캔 | `tools/security_scan.py` | 포트 스캔, SSL 검증, 취약점 검사 |
+| Docker 확장 | `tools/docker_mgmt.py` | inspect, networks, volumes, prune |
+| K8s 확장 | `tools/k8s_mgmt.py` | nodes, top, ingress, HPA, 멀티클러스터 |
+
+### Phase 4: 멀티 클라우드 & IaC
+
+| 모듈 | 파일 | 설명 |
+|------|------|------|
+| GCP 연동 | `connectors/cloud/gcp.py` | Compute Engine, GKE |
+| Azure 연동 | `connectors/cloud/azure.py` | VM, AKS |
+| IaC 도구 | `tools/iac.py` | Terraform plan/state, Ansible playbook |
+| 인증서 관리 | `tools/cert_mgmt.py` | SSL 모니터링 + 갱신 |
+
+> 상세 설계: [cloud-server-ops-expansion-design.md](docs/cloud-server-ops-expansion-design.md)
+
+---
+
+## 👥 개발팀 구성
+
+병렬 개발을 위한 에이전트 기반 개발팀 페르소나:
+
+| 역할 | 페르소나 ID | 담당 영역 |
+|------|-----------|----------|
+| **개발팀장** | `tech-lead` | 아키텍처, catalog.py, agents/sre.py, 코드 리뷰, 인터페이스 정의 |
+| **백엔드 개발자** | `backend-dev` | monitoring/, tools/ 핵심 로직, 시계열 DB, 알림 엔진 |
+| **UI 개발자** | `ui-dev` | dashboard_mixin.py, REST API, WebSocket 스트리밍 |
+| **QA 엔지니어** | `qa-engineer` | pytest 테스트, mock 전략, 커버리지 |
+| **기획자** | `planner` | 기획서, Wiki 카테고리/템플릿, 사용자 시나리오 |
+
+> 상세 조율 가이드: [docs/dev-team/TEAM-COORDINATION.md](docs/dev-team/TEAM-COORDINATION.md)
+
+---
+
 ## 🤖 에이전트
 
-### 5개 에이전트
+### 운영 에이전트
+
+| 에이전트 | 용도 | 도구 | 특징 |
+|----------|------|------|------|
+| **Ops** | 서버 운영, 인프라 관리 | 모니터링, SSH, Docker, K8s, DB, 클라우드 (30개) | 승인 기반 실행 |
+| **SRE** | 통합 모니터링, 인시던트 대응, 자동 복구 | Ops 전체 + 모니터링 + 인시던트 + 보안 (확장 중) | 사전 예방적 |
+
+### 개발 에이전트
+
+| 에이전트 | 용도 | 도구 | 특징 |
+|----------|------|------|------|
+| **Code** | 코딩, 디버깅, 리팩토링 | 파일, Git, 검색, 셸, 투두 | explorer 서브에이전트 |
+| **Dev** | 개발 관리, CI/CD | 파일, Git, CI/CD, 코드 리뷰 (8개) | PR 분석, 보안 스캔 |
+| **Tech Lead** | 아키텍처, 코드 리뷰, 팀 조율 | 전체 도구 (14개 capability) | 병렬 개발 조율 |
+| **Backend Dev** | 백엔드 핵심 로직 구현 | 파일, Git, DB, Docker, K8s, SSH (12개) | 도구 패턴 준수 |
+
+### 기본 에이전트
 
 | 에이전트 | 용도 | 도구 | 특징 |
 |----------|------|------|------|
 | **Cowork** | 지식작업, 분석, 보고서 | 파일, 검색, 셸, 투두 | 다중 루트 워크스페이스 |
-| **Code** | 코딩, 디버깅, 리팩토링 | 파일, Git, 검색, 셸, 투두 | explorer 서브에이전트 |
 | **Chat** | 단순 대화, 질문 답변 | 없음 | 도구 없이 대화만 |
-| **Ops** | 서버 운영, 인프라 관리 | 모니터링, SSH, Docker, K8s, DB, 클라우드 (30개) | 승인 기반 실행 |
-| **Dev** | 개발 관리, CI/CD | 파일, Git, CI/CD, 코드 리뷰 (8개) | PR 분석, 보안 스캔 |
 
 모든 에이전트는 한국어로 응답합니다.
 
@@ -454,6 +607,15 @@ cd surfaces/gui && npx tsc --noEmit
 ---
 
 ## 📖 문서
+
+### 핵심 설계서
+
+| 문서 | 설명 |
+|------|------|
+| [**클라우드·서버 확장 설계서**](docs/cloud-server-ops-expansion-design.md) | 통합 모니터링, 알림, 인시던트, 서비스 위키 리포지토리 확장 설계 (2,700줄+) |
+| [**개발팀 조율 가이드**](docs/dev-team/TEAM-COORDINATION.md) | 병렬 개발 규칙, 작업 분배, 충돌 방지, 인터페이스 계약 |
+
+### 기존 문서
 
 | 문서 | 설명 |
 |------|------|
