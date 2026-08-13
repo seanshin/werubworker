@@ -447,3 +447,38 @@ class IncidentManager:
                 ),
             )
         return {"ok": True, "postmortem_page_id": page_id}
+
+    async def sync_to_gitea(self, incident_id: str, secrets=None) -> dict:
+        """인시던트를 Gitea Issue로 동기화 (itms.weve.io.kr 등)."""
+        from ..connectors.gitea import get_gitea_connector
+
+        connector = get_gitea_connector(secrets) if secrets else None
+        if not connector:
+            return {"ok": False, "error": "Gitea not configured"}
+
+        inc = self.get(incident_id)
+        if not inc:
+            return {"ok": False, "error": "incident not found"}
+
+        title = f"[{inc['severity']}] {inc['title']}"
+        timeline_md = "\n".join(
+            f"- **{t.get('type', '')}** ({t.get('author', '')}): {t.get('content', '')}"
+            for t in inc.get("timeline", [])
+        )
+        body = (
+            f"## 인시던트 보고서\n\n"
+            f"- **심각도**: {inc['severity']}\n"
+            f"- **상태**: {inc['status']}\n"
+            f"- **영향 서비스**: {', '.join(inc.get('affected_services', []))}\n\n"
+            f"## 타임라인\n\n{timeline_md}\n"
+        )
+        labels = [f"incident:{inc['severity'].lower()}", "auto-created"]
+        result = await connector.create_issue(title, body, labels)
+        if isinstance(result, dict) and result.get("number"):
+            self.add_timeline(
+                incident_id, "note",
+                f"Gitea Issue #{result['number']} 생성됨",
+                author="system",
+                metadata={"gitea_issue": result.get("number")},
+            )
+        return {"ok": True, "issue": result}
