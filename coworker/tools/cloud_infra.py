@@ -727,4 +727,223 @@ def cloud_infra_tools(context: Any = None) -> list:
         )
     )
 
+    # ===== AWS extended tools =====
+
+    # -- aws_rds_status --
+    def aws_rds_status(region: str = "") -> dict:
+        """RDS 인스턴스 목록 및 상태 (엔드포인트, 엔진, 크기, 상태, 스토리지)."""
+        creds = _aws_creds(secrets)
+        if not creds:
+            return {"ok": False, "error": "AWS credentials not configured"}
+        try:
+            client = _boto3_client("rds", creds, region=region or None)
+            resp = client.describe_db_instances()
+            instances = []
+            for db in resp.get("DBInstances", []):
+                instances.append(
+                    {
+                        "id": db.get("DBInstanceIdentifier"),
+                        "engine": f"{db.get('Engine')} {db.get('EngineVersion', '')}",
+                        "class": db.get("DBInstanceClass"),
+                        "status": db.get("DBInstanceStatus"),
+                        "endpoint": db.get("Endpoint", {}).get("Address"),
+                        "port": db.get("Endpoint", {}).get("Port"),
+                        "storage_gb": db.get("AllocatedStorage"),
+                        "multi_az": db.get("MultiAZ"),
+                        "storage_type": db.get("StorageType"),
+                    }
+                )
+            return {"ok": True, "count": len(instances), "instances": instances}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    tools.append(
+        _attach(
+            aws_rds_status,
+            _schema(
+                "aws_rds_status",
+                "RDS 인스턴스 목록 및 상태 (엔드포인트, 엔진, 크기, 상태, 스토리지).",
+                {
+                    "region": {
+                        "type": "string",
+                        "description": "AWS region (default: from credentials).",
+                    }
+                },
+                [],
+            ),
+            caps=["cloud_infra"],
+        )
+    )
+
+    # -- aws_elb_status --
+    def aws_elb_status(region: str = "") -> dict:
+        """ELB/ALB/NLB 로드밸런서 목록 및 상태."""
+        creds = _aws_creds(secrets)
+        if not creds:
+            return {"ok": False, "error": "AWS credentials not configured"}
+        try:
+            client = _boto3_client("elbv2", creds, region=region or None)
+            resp = client.describe_load_balancers()
+            lbs = []
+            for lb in resp.get("LoadBalancers", []):
+                lbs.append(
+                    {
+                        "name": lb.get("LoadBalancerName"),
+                        "dns": lb.get("DNSName"),
+                        "type": lb.get("Type"),
+                        "scheme": lb.get("Scheme"),
+                        "state": lb.get("State", {}).get("Code"),
+                        "vpc": lb.get("VpcId"),
+                        "az": [
+                            az.get("ZoneName")
+                            for az in lb.get("AvailabilityZones", [])
+                        ],
+                    }
+                )
+            return {"ok": True, "count": len(lbs), "load_balancers": lbs}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    tools.append(
+        _attach(
+            aws_elb_status,
+            _schema(
+                "aws_elb_status",
+                "ELB/ALB/NLB 로드밸런서 목록 및 상태.",
+                {
+                    "region": {
+                        "type": "string",
+                        "description": "AWS region (default: from credentials).",
+                    }
+                },
+                [],
+            ),
+            caps=["cloud_infra"],
+        )
+    )
+
+    # -- aws_route53_list --
+    def aws_route53_list(zone_id: str = "") -> dict:
+        """Route53 호스팅 존 목록 또는 특정 존의 레코드 목록."""
+        creds = _aws_creds(secrets)
+        if not creds:
+            return {"ok": False, "error": "AWS credentials not configured"}
+        try:
+            client = _boto3_client("route53", creds)
+            if not zone_id:
+                resp = client.list_hosted_zones()
+                zones = [
+                    {
+                        "id": z["Id"].split("/")[-1],
+                        "name": z["Name"],
+                        "count": z.get("ResourceRecordSetCount", 0),
+                        "private": z.get("Config", {}).get("PrivateZone", False),
+                    }
+                    for z in resp.get("HostedZones", [])
+                ]
+                return {"ok": True, "zones": zones}
+            resp = client.list_resource_record_sets(
+                HostedZoneId=zone_id, MaxItems="100"
+            )
+            records = [
+                {
+                    "name": r["Name"],
+                    "type": r["Type"],
+                    "ttl": r.get("TTL"),
+                    "values": [
+                        v.get("Value") for v in r.get("ResourceRecords", [])
+                    ],
+                }
+                for r in resp.get("ResourceRecordSets", [])
+            ]
+            return {
+                "ok": True,
+                "zone_id": zone_id,
+                "count": len(records),
+                "records": records,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    tools.append(
+        _attach(
+            aws_route53_list,
+            _schema(
+                "aws_route53_list",
+                "Route53 호스팅 존 목록 또는 특정 존의 레코드 목록.",
+                {
+                    "zone_id": {
+                        "type": "string",
+                        "description": "Hosted zone ID. Empty = list all zones.",
+                    }
+                },
+                [],
+            ),
+            caps=["cloud_infra"],
+        )
+    )
+
+    # -- aws_iam_audit --
+    def aws_iam_audit() -> dict:
+        """IAM 사용자 목록 + 마지막 로그인 + MFA 상태 + 액세스 키 나이."""
+        creds = _aws_creds(secrets)
+        if not creds:
+            return {"ok": False, "error": "AWS credentials not configured"}
+        try:
+            client = _boto3_client("iam", creds)
+            resp = client.list_users()
+            users = []
+            for u in resp.get("Users", []):
+                username = u.get("UserName")
+                # MFA 체크
+                try:
+                    mfa = client.list_mfa_devices(UserName=username)
+                    has_mfa = len(mfa.get("MFADevices", [])) > 0
+                except Exception:
+                    has_mfa = False
+                # 액세스 키 나이
+                try:
+                    keys = client.list_access_keys(UserName=username)
+                    key_ages = []
+                    for k in keys.get("AccessKeyMetadata", []):
+                        created = k.get("CreateDate")
+                        if created:
+                            age_days = (
+                                datetime.now(timezone.utc) - created
+                            ).days
+                            key_ages.append(
+                                {
+                                    "key_id": k["AccessKeyId"][-4:],
+                                    "age_days": age_days,
+                                    "status": k["Status"],
+                                }
+                            )
+                except Exception:
+                    key_ages = []
+                users.append(
+                    {
+                        "username": username,
+                        "created": str(u.get("CreateDate", "")),
+                        "last_login": str(u.get("PasswordLastUsed", "never")),
+                        "mfa_enabled": has_mfa,
+                        "access_keys": key_ages,
+                    }
+                )
+            return {"ok": True, "count": len(users), "users": users}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    tools.append(
+        _attach(
+            aws_iam_audit,
+            _schema(
+                "aws_iam_audit",
+                "IAM 사용자 목록 + 마지막 로그인 + MFA 상태 + 액세스 키 나이.",
+                {},
+                [],
+            ),
+            caps=["cloud_infra"],
+        )
+    )
+
     return tools

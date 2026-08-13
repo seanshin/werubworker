@@ -24,6 +24,8 @@ from .risk import RiskClass
 from .tools.ci_cd import ci_cd_tools
 from .tools.cloud_infra import cloud_infra_tools
 from .tools.monitoring_tools import monitoring_tools
+from .tools.network_diag import network_diag_tools
+from .tools.security_scan import security_scan_tools
 from .tools.server_setup import server_setup_tools
 from .tools.service_config import service_config_tools
 from .tools.code_review import code_review_tools
@@ -144,6 +146,14 @@ def _code_review(context: AgentContext) -> list:
 
 def _monitoring(context: AgentContext) -> list:
     return monitoring_tools(context)
+
+
+def _security_scan(context: AgentContext) -> list:
+    return security_scan_tools(context)
+
+
+def _network_diag(context: AgentContext) -> list:
+    return network_diag_tools(context)
 
 
 def _server_setup(context: AgentContext) -> list:
@@ -304,6 +314,22 @@ _CAPS: list[Capability] = [
         build=_service_config,
         requires=("secrets",),
         risk=(RiskClass.EXEC,),
+    ),
+    Capability(
+        id="security_scan",
+        name="Security scanning",
+        description="Port scanning, SSL verification, auth log analysis, vulnerability checks.",
+        build=_security_scan,
+        requires=("secrets",),
+        risk=(RiskClass.READ, RiskClass.EXTERNAL),
+    ),
+    Capability(
+        id="network_diag",
+        name="Network diagnostics",
+        description="Traceroute, MTR, DNS lookup/propagation, bandwidth testing.",
+        build=_network_diag,
+        requires=(),
+        risk=(RiskClass.READ,),
     ),
 ]
 

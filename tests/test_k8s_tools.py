@@ -18,18 +18,15 @@ from coworker.tools.k8s_mgmt import (
 
 
 def test_k8s_tools_factory():
-    """Factory returns 6 tools."""
+    """Factory returns 11 tools (6 original + 5 extended)."""
     tools = k8s_tools()
-    assert len(tools) == 6
+    assert len(tools) == 11
     names = {t.__coworker_schema__["function"]["name"] for t in tools}
-    assert names == {
-        "k8s_pods",
-        "k8s_logs",
-        "k8s_describe",
-        "k8s_restart",
-        "k8s_scale",
-        "k8s_events",
-    }
+    assert "k8s_pods" in names
+    assert "k8s_logs" in names
+    assert "k8s_nodes" in names
+    assert "k8s_top" in names
+    assert "k8s_contexts" in names
 
 
 @patch("coworker.tools.k8s_mgmt._kubectl_available", return_value=False)

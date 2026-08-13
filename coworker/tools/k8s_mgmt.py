@@ -376,10 +376,99 @@ _K8S_EVENTS_SCHEMA = {
                 },
                 "type": {
                     "type": "string",
-                    "description": "Event type filter: 'Warning', 'Normal', or '' for all (default: 'Warning').",
+                    "description": (
+                        "Event type filter: 'Warning', 'Normal', "
+                        "or '' for all (default: 'Warning')."
+                    ),
                 },
             },
         },
+    },
+}
+
+_K8S_NODES_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "k8s_nodes",
+        "description": "노드 목록, 상태, 리소스 할당량. Read-only.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+_K8S_TOP_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "k8s_top",
+        "description": (
+            "kubectl top nodes/pods — 실시간 리소스 사용량 "
+            "(metrics-server 필요). Read-only."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "resource": {
+                    "type": "string",
+                    "description": (
+                        "Resource type: 'nodes' or 'pods' (default: 'nodes')."
+                    ),
+                },
+                "namespace": {
+                    "type": "string",
+                    "description": (
+                        "Namespace for pods (default: all namespaces)."
+                    ),
+                },
+            },
+        },
+    },
+}
+
+_K8S_INGRESS_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "k8s_ingress",
+        "description": "Ingress 규칙 및 TLS 상태. Read-only.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "namespace": {
+                    "type": "string",
+                    "description": (
+                        "Namespace (default: all namespaces)."
+                    ),
+                },
+            },
+        },
+    },
+}
+
+_K8S_HPA_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "k8s_hpa",
+        "description": (
+            "HPA (Horizontal Pod Autoscaler) 상태 및 스케일링 이력. Read-only."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "namespace": {
+                    "type": "string",
+                    "description": (
+                        "Namespace (default: all namespaces)."
+                    ),
+                },
+            },
+        },
+    },
+}
+
+_K8S_CONTEXTS_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "k8s_contexts",
+        "description": "kubectl config 컨텍스트 목록 및 현재 컨텍스트. Read-only.",
+        "parameters": {"type": "object", "properties": {}},
     },
 }
 
@@ -422,6 +511,130 @@ def k8s_tools(context: Any = None) -> list:
         """List recent cluster events, filtered by type."""
         return _k8s_events(namespace, type)
 
+    def k8s_nodes() -> dict:
+        """노드 목록, 상태, 리소스 할당량."""
+        stdout, stderr, rc = _run_kubectl(["get", "nodes", "-o", "json"])
+        if rc != 0:
+            return {"ok": False, "error": stderr or "kubectl command failed"}
+        data = _parse_json_or_text(stdout)
+        if isinstance(data, dict) and "items" in data:
+            nodes = []
+            for n in data["items"]:
+                meta = n.get("metadata", {})
+                status = n.get("status", {})
+                conditions = {
+                    c["type"]: c["status"]
+                    for c in status.get("conditions", [])
+                }
+                cap = status.get("capacity", {})
+                alloc = status.get("allocatable", {})
+                nodes.append({
+                    "name": meta.get("name"),
+                    "ready": conditions.get("Ready") == "True",
+                    "cpu_capacity": cap.get("cpu"),
+                    "memory_capacity": cap.get("memory"),
+                    "cpu_allocatable": alloc.get("cpu"),
+                    "memory_allocatable": alloc.get("memory"),
+                    "os": status.get("nodeInfo", {}).get("osImage"),
+                    "kubelet": (
+                        status.get("nodeInfo", {}).get("kubeletVersion")
+                    ),
+                })
+            return {"ok": True, "count": len(nodes), "nodes": nodes}
+        return {"ok": True, "data": data}
+
+    def k8s_top(resource: str = "nodes", namespace: str = "") -> dict:
+        """kubectl top nodes/pods — 실시간 리소스 사용량."""
+        args = ["top", resource]
+        if namespace and resource == "pods":
+            args += ["-n", namespace]
+        elif resource == "pods":
+            args += ["--all-namespaces"]
+        stdout, stderr, rc = _run_kubectl(args)
+        output = stdout if rc == 0 else stderr
+        return {"ok": rc == 0, "resource": resource, "output": output}
+
+    def k8s_ingress(namespace: str = "") -> dict:
+        """Ingress 규칙 및 TLS 상태."""
+        args = ["get", "ingress", "-o", "json"]
+        if namespace:
+            args += ["-n", namespace]
+        else:
+            args += ["--all-namespaces"]
+        stdout, stderr, rc = _run_kubectl(args)
+        if rc != 0:
+            return {"ok": False, "error": stderr or "kubectl command failed"}
+        data = _parse_json_or_text(stdout)
+        if isinstance(data, dict) and "items" in data:
+            ingresses = []
+            for ing in data["items"]:
+                meta = ing.get("metadata", {})
+                spec = ing.get("spec", {})
+                tls = spec.get("tls", [])
+                rules = spec.get("rules", [])
+                hosts = [r.get("host", "") for r in rules]
+                ingresses.append({
+                    "name": meta.get("name"),
+                    "namespace": meta.get("namespace"),
+                    "hosts": hosts,
+                    "tls": bool(tls),
+                    "tls_hosts": [
+                        h for t in tls for h in t.get("hosts", [])
+                    ],
+                    "rules_count": len(rules),
+                })
+            return {
+                "ok": True,
+                "count": len(ingresses),
+                "ingresses": ingresses,
+            }
+        return {"ok": True, "data": data}
+
+    def k8s_hpa(namespace: str = "") -> dict:
+        """HPA (Horizontal Pod Autoscaler) 상태 및 스케일링 이력."""
+        args = ["get", "hpa", "-o", "json"]
+        if namespace:
+            args += ["-n", namespace]
+        else:
+            args += ["--all-namespaces"]
+        stdout, stderr, rc = _run_kubectl(args)
+        if rc != 0:
+            return {"ok": False, "error": stderr or "kubectl command failed"}
+        data = _parse_json_or_text(stdout)
+        if isinstance(data, dict) and "items" in data:
+            hpas = []
+            for h in data["items"]:
+                meta = h.get("metadata", {})
+                spec = h.get("spec", {})
+                status = h.get("status", {})
+                hpas.append({
+                    "name": meta.get("name"),
+                    "namespace": meta.get("namespace"),
+                    "target": (
+                        spec.get("scaleTargetRef", {}).get("name")
+                    ),
+                    "min_replicas": spec.get("minReplicas"),
+                    "max_replicas": spec.get("maxReplicas"),
+                    "current_replicas": status.get("currentReplicas"),
+                    "desired_replicas": status.get("desiredReplicas"),
+                })
+            return {"ok": True, "count": len(hpas), "hpas": hpas}
+        return {"ok": True, "data": data}
+
+    def k8s_contexts() -> dict:
+        """kubectl config 컨텍스트 목록 및 현재 컨텍스트."""
+        stdout, _stderr, _rc = _run_kubectl(
+            ["config", "get-contexts", "-o", "name"]
+        )
+        cur_stdout, _cur_stderr, _cur_rc = _run_kubectl(
+            ["config", "current-context"]
+        )
+        contexts = [
+            c.strip() for c in stdout.strip().split("\n") if c.strip()
+        ]
+        current = cur_stdout.strip()
+        return {"ok": True, "current": current, "contexts": contexts}
+
     _read_meta = ai.ToolMetadata(
         category="k8s",
         risk_level="low",
@@ -443,6 +656,11 @@ def k8s_tools(context: Any = None) -> list:
         (k8s_restart, _K8S_RESTART_SCHEMA, _write_meta),
         (k8s_scale, _K8S_SCALE_SCHEMA, _write_meta),
         (k8s_events, _K8S_EVENTS_SCHEMA, _read_meta),
+        (k8s_nodes, _K8S_NODES_SCHEMA, _read_meta),
+        (k8s_top, _K8S_TOP_SCHEMA, _read_meta),
+        (k8s_ingress, _K8S_INGRESS_SCHEMA, _read_meta),
+        (k8s_hpa, _K8S_HPA_SCHEMA, _read_meta),
+        (k8s_contexts, _K8S_CONTEXTS_SCHEMA, _read_meta),
     ]:
         wrapped = ai.tool(fn, metadata=meta)
         wrapped.__coworker_schema__ = schema

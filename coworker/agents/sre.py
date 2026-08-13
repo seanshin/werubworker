@@ -29,6 +29,8 @@ SRE_CAPABILITIES = [
     "ci_cd",            # CI/CD pipelines
     "server_setup",     # server onboarding + wiki auto-generation
     "service_config",   # service registration + config management
+    "security_scan",    # port scan, SSL check, vulnerability assessment
+    "network_diag",     # traceroute, DNS, bandwidth testing
 ]
 
 SRE_INSTRUCTIONS = (

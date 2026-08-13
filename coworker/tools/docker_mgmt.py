@@ -345,6 +345,91 @@ _DOCKER_IMAGES_SCHEMA = {
     },
 }
 
+_DOCKER_INSPECT_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "docker_inspect",
+        "description": (
+            "컨테이너 상세 설정 조회 (네트워크, 볼륨, 환경변수, 포트 매핑). Read-only."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "container": {
+                    "type": "string",
+                    "description": "Container name or ID.",
+                },
+                "server": {
+                    "type": "string",
+                    "description": "Server to query: 'local' or an SSH target.",
+                },
+            },
+            "required": ["container"],
+        },
+    },
+}
+
+_DOCKER_NETWORKS_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "docker_networks",
+        "description": "Docker 네트워크 목록 및 연결된 컨테이너. Read-only.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "server": {
+                    "type": "string",
+                    "description": "Server to query: 'local' or an SSH target.",
+                },
+            },
+        },
+    },
+}
+
+_DOCKER_VOLUMES_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "docker_volumes",
+        "description": "Docker 볼륨 목록 (사용량 포함). Read-only.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "server": {
+                    "type": "string",
+                    "description": "Server to query: 'local' or an SSH target.",
+                },
+            },
+        },
+    },
+}
+
+_DOCKER_PRUNE_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "docker_prune",
+        "description": (
+            "미사용 Docker 리소스 정리. target: all, containers, images, "
+            "volumes, networks. Requires approval."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "description": (
+                        "Prune target: 'all', 'containers', 'images', "
+                        "'volumes', 'networks' (default: 'all')."
+                    ),
+                },
+                "server": {
+                    "type": "string",
+                    "description": "Server to target: 'local' or an SSH target.",
+                },
+            },
+        },
+    },
+}
+
 
 # ---------------------------------------------------------------------------
 # Public factory -- called by catalog.py
@@ -383,6 +468,83 @@ def docker_tools(context: Any = None) -> list:
         """List Docker images."""
         return _docker_images(server)
 
+    def docker_inspect(container: str, server: str = "local") -> dict:
+        """컨테이너 상세 설정 조회 (네트워크, 볼륨, 환경변수, 포트 매핑)."""
+        cmd = ["docker", "inspect", container, "--format", "{{json .}}"]
+        r = _run_cmd(cmd, server)
+        if not r["ok"]:
+            return r
+        try:
+            data = _json.loads(r["stdout"])
+            # 주요 정보만 추출
+            if isinstance(data, list) and data:
+                data = data[0]
+            summary = {
+                "name": data.get("Name", ""),
+                "image": data.get("Config", {}).get("Image", ""),
+                "state": data.get("State", {}),
+                "ports": data.get("NetworkSettings", {}).get("Ports", {}),
+                "mounts": [
+                    {
+                        "source": m.get("Source"),
+                        "destination": m.get("Destination"),
+                        "mode": m.get("Mode"),
+                    }
+                    for m in data.get("Mounts", [])
+                ],
+                "env": data.get("Config", {}).get("Env", []),
+                "networks": list(
+                    data.get("NetworkSettings", {}).get("Networks", {}).keys()
+                ),
+                "restart_count": data.get("RestartCount", 0),
+                "created": data.get("Created", ""),
+            }
+            return {"ok": True, "container": container, **summary}
+        except Exception:
+            return {"ok": True, "container": container, "raw": r["stdout"][:2000]}
+
+    def docker_networks(server: str = "local") -> dict:
+        """Docker 네트워크 목록 및 연결된 컨테이너."""
+        cmd = ["docker", "network", "ls", "--format", "{{json .}}"]
+        r = _run_cmd(cmd, server)
+        if not r["ok"]:
+            return r
+        networks = []
+        for line in r["stdout"].strip().split("\n"):
+            if line.strip():
+                try:
+                    networks.append(_json.loads(line))
+                except Exception:
+                    pass
+        return {"ok": True, "count": len(networks), "networks": networks}
+
+    def docker_volumes(server: str = "local") -> dict:
+        """Docker 볼륨 목록 (사용량 포함)."""
+        cmd = ["docker", "volume", "ls", "--format", "{{json .}}"]
+        r = _run_cmd(cmd, server)
+        if not r["ok"]:
+            return r
+        volumes = []
+        for line in r["stdout"].strip().split("\n"):
+            if line.strip():
+                try:
+                    volumes.append(_json.loads(line))
+                except Exception:
+                    pass
+        return {"ok": True, "count": len(volumes), "volumes": volumes}
+
+    def docker_prune(target: str = "all", server: str = "local") -> dict:
+        """미사용 Docker 리소스 정리 (requires approval)."""
+        targets = {
+            "all": ["docker", "system", "prune", "-af", "--volumes"],
+            "containers": ["docker", "container", "prune", "-f"],
+            "images": ["docker", "image", "prune", "-af"],
+            "volumes": ["docker", "volume", "prune", "-af"],
+            "networks": ["docker", "network", "prune", "-f"],
+        }
+        cmd = targets.get(target, targets["all"])
+        return _run_cmd(cmd, server)
+
     _read_meta = ai.ToolMetadata(
         category="docker",
         risk_level="low",
@@ -406,6 +568,10 @@ def docker_tools(context: Any = None) -> list:
         (docker_compose_up, _DOCKER_COMPOSE_UP_SCHEMA, _write_meta),
         (docker_stats, _DOCKER_STATS_SCHEMA, _read_meta),
         (docker_images, _DOCKER_IMAGES_SCHEMA, _read_meta),
+        (docker_inspect, _DOCKER_INSPECT_SCHEMA, _read_meta),
+        (docker_networks, _DOCKER_NETWORKS_SCHEMA, _read_meta),
+        (docker_volumes, _DOCKER_VOLUMES_SCHEMA, _read_meta),
+        (docker_prune, _DOCKER_PRUNE_SCHEMA, _write_meta),
     ]:
         wrapped = ai.tool(fn, metadata=meta)
         wrapped.__coworker_schema__ = schema

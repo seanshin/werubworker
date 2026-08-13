@@ -98,9 +98,9 @@ def test_run_cmd_remote_wraps_ssh(mock_run):
 
 
 def test_docker_tools_factory():
-    """Factory returns 7 tools."""
+    """Factory returns 11 tools (7 original + 4 extended)."""
     tools = docker_tools()
-    assert len(tools) == 7
+    assert len(tools) == 11
     names = {t.__coworker_schema__["function"]["name"] for t in tools}
     assert "docker_ps" in names
     assert "docker_logs" in names
