@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.1] - 2026-08-13
+
+### Fixed
+- GUI OpsView 연동: 신규 모니터링 시스템을 기존 `/v1/ops/*` API에 통합
+- `/v1/ops/local-status`: TimeSeriesStore에 메트릭 자동 기록 (장기 보관)
+- `/v1/ops/healthcheck`: 영속 HealthCheckManager 연동 (SQLite 저장)
+- Dashboard Wiki API 중복 라우트 충돌 해소
+- 서비스 시작 스크립트 (`start.sh`) 추가
+
+---
+
 ## [2.0.0] - 2026-08-13
 
 ### Added — 모니터링 서브시스템
