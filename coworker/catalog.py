@@ -23,6 +23,7 @@ from .agents.base import AgentContext
 from .risk import RiskClass
 from .tools.ci_cd import ci_cd_tools
 from .tools.cloud_infra import cloud_infra_tools
+from .tools.monitoring_tools import monitoring_tools
 from .tools.code_review import code_review_tools
 from .tools.db_mgmt import db_tools
 from .tools.docker_mgmt import docker_tools
@@ -137,6 +138,10 @@ def _wiki(context: AgentContext) -> list:
 
 def _code_review(context: AgentContext) -> list:
     return code_review_tools(context)  # review_pr, review_security, review_test_coverage
+
+
+def _monitoring(context: AgentContext) -> list:
+    return monitoring_tools(context)
 
 
 def _ssh(context: AgentContext) -> list:
@@ -265,6 +270,14 @@ _CAPS: list[Capability] = [
         build=_wiki,
         requires=("secrets",),
         risk=(RiskClass.READ,),
+    ),
+    Capability(
+        id="monitoring",
+        name="Infrastructure monitoring",
+        description="Multi-server metrics collection, health checks, alerting, and uptime tracking.",
+        build=_monitoring,
+        requires=("secrets",),
+        risk=(RiskClass.READ, RiskClass.EXTERNAL),
     ),
 ]
 
