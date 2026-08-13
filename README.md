@@ -1,8 +1,13 @@
-# WeruBWorker
+# WeruBWorker v2.0
 
 **AI 에이전트 기반 통합 클라우드·서버 관리 및 운영 모니터링 플랫폼**
 
 서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다.
+
+[![Version](https://img.shields.io/badge/version-2.0.0-blue)]()
+[![Tests](https://img.shields.io/badge/tests-1%2C226%20passed-brightgreen)]()
+[![Tools](https://img.shields.io/badge/tools-100%2B-orange)]()
+[![Capabilities](https://img.shields.io/badge/capabilities-23-purple)]()
 
 > 📌 [OpenWorker](https://github.com/andrewyng/openworker) (MIT License) 기반으로 독립 개발
 
@@ -177,33 +182,47 @@
 ```
 werubworker/
 ├── coworker/                      # Python 백엔드
-│   ├── agents/                    # 에이전트 정의
-│   │   ├── code.py               #   Code (코딩)
-│   │   ├── cowork.py             #   Cowork (지식작업)
-│   │   ├── chat.py               #   Chat (대화)
-│   │   ├── ops.py                #   Ops (서버 운영)
-│   │   └── dev.py                #   Dev (개발 관리)
-│   ├── tools/                     # 도구 모듈 (54개)
-│   │   ├── server_monitor.py     #   서버 모니터링 (6)
-│   │   ├── docker_mgmt.py        #   Docker 관리 (7)
-│   │   ├── k8s_mgmt.py           #   Kubernetes (6)
+│   ├── monitoring/                # 모니터링 서브시스템 (v2.0)
+│   │   ├── timeseries.py         #   시계열 저장소 (4단계 다운샘플링)
+│   │   ├── collector.py          #   멀티 서버 메트릭 수집기
+│   │   ├── healthcheck.py        #   8종 헬스체크 매니저
+│   │   ├── alerting.py           #   규칙 기반 알림 엔진
+│   │   ├── incidents.py          #   인시던트 관리 + 타임라인
+│   │   ├── remediation.py        #   자동 복구 엔진 (7 기본 액션)
+│   │   ├── log_aggregator.py     #   다중 서버 로그 집계
+│   │   └── audit_ops.py          #   운영 감사 로그
+│   ├── agents/                    # 에이전트 정의 (11개 페르소나)
+│   │   ├── code.py / cowork.py / chat.py / ops.py / dev.py
+│   │   └── sre.py                #   SRE (21 capability, 100+ 도구)
+│   ├── tools/                     # 도구 모듈 (100+)
+│   │   ├── server_monitor.py     #   서버 모니터링 (8)
+│   │   ├── docker_mgmt.py        #   Docker 관리 (11)
+│   │   ├── k8s_mgmt.py           #   Kubernetes (11)
 │   │   ├── db_mgmt.py            #   데이터베이스 (4)
-│   │   ├── cloud_infra.py        #   클라우드 인프라 (10)
-│   │   ├── ci_cd.py              #   CI/CD (5)
-│   │   ├── code_review.py        #   코드 리뷰 (3)
-│   │   ├── shell.py              #   셸 명령
-│   │   ├── files.py              #   파일 읽기/쓰기
+│   │   ├── cloud_infra.py        #   클라우드 인프라 (18 + GCP/Azure)
+│   │   ├── monitoring_tools.py   #   모니터링 도구 (10)
+│   │   ├── server_setup.py       #   서버 온보딩 (4)
+│   │   ├── service_config.py     #   서비스 설정 (5)
+│   │   ├── security_scan.py      #   보안 스캔 (5)
+│   │   ├── network_diag.py       #   네트워크 진단 (5)
+│   │   ├── iac.py                #   IaC - Terraform/Ansible (5)
+│   │   ├── cert_mgmt.py          #   인증서 관리 (3)
+│   │   ├── dev_setup.py          #   개발 환경 (3)
+│   │   ├── ci_cd.py / code_review.py / shell.py / files.py
 │   │   └── ...
 │   ├── connectors/                # 외부 서비스 연동 (25+)
-│   │   ├── ssh/                  #   SSH 커넥터 (7 도구 + API)
+│   │   ├── ssh/                  #   SSH 커넥터 (7 도구 + 터널링)
+│   │   ├── cloud/gcp.py          #   GCP (Compute, GKE)
+│   │   ├── cloud/azure.py        #   Azure (VM, AKS)
 │   │   ├── tools/                #   커넥터별 도구 모듈 (29파일)
 │   │   └── ...
-│   ├── wiki/                      # 서비스 위키
-│   │   ├── store.py              #   SQLite 저장소
+│   ├── wiki/                      # 서비스 위키 (설정 리포지토리)
+│   │   ├── store.py              #   SQLite 저장소 (15 카테고리)
 │   │   ├── vault.py              #   암호화 볼트 (AES-256)
 │   │   ├── analyzer.py           #   AI 문서 분석기
-│   │   ├── sync.py               #   secrets.json 동기화
-│   │   └── tools.py              #   에이전트 도구 (6)
+│   │   ├── sync.py               #   WikiAutoSync (도구→Wiki 동기화)
+│   │   ├── resolver.py           #   ServiceResolver (자연어 해석)
+│   │   └── tools.py              #   에이전트 도구 (13)
 │   ├── server/                    # FastAPI 서버
 │   │   ├── app.py                #   API 엔드포인트
 │   │   ├── manager.py            #   세션 관리 (코어)
@@ -219,8 +238,9 @@ werubworker/
 │   │   ├── gemini_provider.py    #   Gemini
 │   │   └── ...
 │   ├── auth.py                    # 로그인/인증
-│   ├── catalog.py                 # 도구 카탈로그 (Capability 등록)
-│   ├── engine.py                  # 에이전트 턴 엔진
+│   ├── catalog.py                 # 도구 카탈로그 (23 Capability)
+│   ├── engine.py                  # 에이전트 턴 엔진 (+WikiAutoSync hook)
+│   ├── registry.py                # ServiceRegistry (서비스 참조 해석)
 │   └── agent.py                   # 엔진 조립 + 언어 지시
 │
 ├── surfaces/gui/                  # React 프론트엔드
@@ -249,26 +269,25 @@ werubworker/
 │   │   └── api.ts                #   REST/WebSocket API
 │   └── src-tauri/                #   Tauri 데스크톱 셸
 │
-├── tests/                         # 테스트 (1,161 passed)
-│   ├── test_auth.py              #   인증 (14)
-│   ├── test_wiki.py              #   위키 + 볼트 + 분석기 (24)
-│   ├── test_server_monitor.py    #   서버 모니터링 (12)
-│   ├── test_docker_tools.py      #   Docker (10)
-│   ├── test_k8s_tools.py         #   Kubernetes (12)
-│   ├── test_db_tools.py          #   데이터베이스 (9)
-│   ├── test_cloud_infra.py       #   클라우드 (7)
-│   ├── test_ci_cd.py             #   CI/CD (10)
-│   ├── test_code_review.py       #   코드 리뷰 (6)
-│   ├── test_ssh_connector.py     #   SSH (10)
-│   ├── test_ops_agent.py         #   Ops 에이전트 (4)
-│   ├── test_dev_agent.py         #   Dev 에이전트 (4)
-│   └── ... (기존 93 테스트 파일)
+├── tests/                         # 테스트 (1,226 passed)
+│   ├── test_timeseries.py        #   시계열 저장소 (11)
+│   ├── test_collector.py         #   메트릭 수집기 (7)
+│   ├── test_healthcheck_mgr.py   #   헬스체크 매니저 (12)
+│   ├── test_alerting.py          #   알림 엔진 (11)
+│   ├── test_incidents.py         #   인시던트 관리 (9)
+│   ├── test_remediation.py       #   자동 복구 (7)
+│   ├── test_audit_ops.py         #   운영 감사 (5)
+│   ├── test_wiki_resolver.py     #   서비스 리졸버 (6)
+│   └── ... (기존 93 + 신규 8 테스트 파일)
 │
-└── docs/                          # 문서 (11종)
-    ├── user-guide.md             #   사용자 가이드
-    ├── architecture-analysis.md  #   아키텍처 분석
-    ├── implementation-roadmap.md #   구현 로드맵
-    └── ...
+├── start.sh                       # 서비스 시작/중지/재시작 스크립트
+│
+└── docs/                          # 문서
+    ├── v2-architecture.md        #   v2.0 아키텍처
+    ├── v2-api-reference.md       #   v2.0 API 레퍼런스
+    ├── cloud-server-ops-expansion-design.md  #   확장 설계서
+    ├── dev-team/                 #   개발팀 조율 가이드
+    └── ... (기존 문서)
 ```
 
 ---
@@ -523,12 +542,25 @@ cd surfaces/gui && npm install && cd ../..
 ### 실행
 
 ```bash
+# 통합 시작 (백엔드 + 프론트엔드)
+./start.sh
+
+# 또는 개별 실행:
 # API 서버 (터미널 1)
 .venv/bin/python -m coworker.server.run --host 0.0.0.0 --port 8765
 
 # GUI 서버 (터미널 2)
 TOKEN=$(cat ~/.config/werubworker/sidecar-8765.token | tr -d '\n')
 cd surfaces/gui && VITE_COWORKER_API_TOKEN="$TOKEN" npx vite --host 0.0.0.0
+```
+
+### 서비스 관리
+
+```bash
+./start.sh              # 시작 (백엔드 + 프론트엔드)
+./start.sh --stop       # 중지
+./start.sh --restart    # 재시작
+./start.sh --status     # 상태 확인
 ```
 
 ### 접속
@@ -614,12 +646,15 @@ cd surfaces/gui && npx tsc --noEmit
 
 ## 📖 문서
 
-### 핵심 설계서
+### v2.0 문서
 
 | 문서 | 설명 |
 |------|------|
-| [**클라우드·서버 확장 설계서**](docs/cloud-server-ops-expansion-design.md) | 통합 모니터링, 알림, 인시던트, 서비스 위키 리포지토리 확장 설계 (2,700줄+) |
-| [**개발팀 조율 가이드**](docs/dev-team/TEAM-COORDINATION.md) | 병렬 개발 규칙, 작업 분배, 충돌 방지, 인터페이스 계약 |
+| [**v2.0 아키텍처**](docs/v2-architecture.md) | 전체 시스템 구조, 모니터링/위키/도구 아키텍처, 데이터 저장소 |
+| [**v2.0 API 레퍼런스**](docs/v2-api-reference.md) | 대시보드/인프라/Wiki API 엔드포인트 전체 명세 |
+| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 릴리즈 변경 이력 |
+| [**확장 설계서**](docs/cloud-server-ops-expansion-design.md) | 통합 모니터링, 알림, 인시던트, 서비스 위키 리포지토리 설계 |
+| [**개발팀 조율 가이드**](docs/dev-team/TEAM-COORDINATION.md) | 병렬 개발 규칙, 작업 분배, 충돌 방지 |
 
 ### 기존 문서
 
