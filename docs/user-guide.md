@@ -546,3 +546,53 @@ MIT License. Based on [OpenWorker](https://github.com/andrewyng/openworker).
 
 *WeruBWorker v0.1.7*
 *최종 업데이트: 2026-08-07*
+
+---
+
+## v2.0 신규 기능
+
+### 자동 모니터링
+서버를 시작하면 30초마다 자동으로:
+1. 로컬 서버 메트릭 수집 (CPU, 메모리, 디스크, 네트워크, 로드)
+2. 등록된 SSH 서버 메트릭 병렬 수집
+3. 헬스체크 실행 (HTTP/TCP/DNS/Ping/SSL/Docker/K8s/Process)
+4. 알림 규칙 평가 및 자동 발송
+
+### 대시보드 API
+```
+GET /v1/dashboard/overview      # 전체 현황
+GET /v1/dashboard/servers/{id}/metrics?range=1h  # 시계열
+GET /v1/dashboard/alerts        # 알림 피드
+GET /v1/dashboard/incidents     # 인시던트 목록
+GET /v1/dashboard/audit         # 감사 로그
+GET /v1/infrastructure/servers  # 서버 목록
+GET /v1/infrastructure/topology # 의존관계 맵
+```
+
+### SRE 에이전트 사용법
+세션에서 SRE 페르소나를 선택하면 21개 capability(100+ 도구)를 사용할 수 있습니다.
+- "서버 상태 확인해줘" → server_status + metrics_latest
+- "CPU 90% 이상 알림 설정해줘" → alert_add_rule
+- "헬스체크 추가해줘 https://api.example.com/health" → healthcheck_add
+- "인시던트 생성해줘" → incidents 도구
+
+### 서비스 시작/관리
+```bash
+./start.sh              # 시작 (백엔드 + 프론트엔드)
+./start.sh --stop       # 중지
+./start.sh --restart    # 재시작
+./start.sh --status     # 상태 확인
+```
+
+### Wiki 리포지토리
+서비스 위키는 설정의 중앙 저장소 역할:
+- 서버 등록 시 Wiki 페이지 자동 생성 (category: server)
+- DB 등록 시 스키마 문서화 + ERD (category: database)
+- 서비스 설정 파일 버전 관리 (category: config)
+- 도구 실행 결과가 Wiki에 자동 동기화 (WikiAutoSync)
+
+### 멀티 클라우드
+- AWS (EC2, S3, CloudWatch, 비용, RDS, ELB, Route53, IAM)
+- Cloudflare (DNS, 캐시, 분석)
+- GCP (Compute Engine, GKE) — pip install werubworker[gcp]
+- Azure (VM, AKS) — pip install werubworker[azure]
