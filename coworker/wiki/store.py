@@ -443,6 +443,7 @@ class WikiStore:
         linked_service: str | None = None,
         updated_by: str = "system",
         change_note: str = "",
+        structured_data: dict | None = None,
     ) -> dict:
         """Update page and save history."""
         with self._lock, self._connect() as conn:
@@ -462,11 +463,16 @@ class WikiStore:
             new_category = category if category is not None else current["category"]
             new_tags = json.dumps(tags) if tags is not None else current["tags"]
             new_linked = linked_service if linked_service is not None else current["linked_service"]
+            new_sd = (
+                json.dumps(structured_data)
+                if structured_data is not None
+                else current.get("structured_data", "{}")
+            )
 
             conn.execute(
                 "UPDATE wiki_pages SET content=?, credentials=?, name=?, category=?, "
-                "tags=?, linked_service=?, version=?, updated_at=?, updated_by=? "
-                "WHERE page_id=?",
+                "tags=?, linked_service=?, version=?, updated_at=?, updated_by=?, "
+                "structured_data=? WHERE page_id=?",
                 (
                     new_content,
                     new_creds,
@@ -477,6 +483,7 @@ class WikiStore:
                     new_version,
                     now,
                     updated_by,
+                    new_sd,
                     page_id,
                 ),
             )
