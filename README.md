@@ -4,11 +4,12 @@
 
 서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다.
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue)]()
-[![Tests](https://img.shields.io/badge/tests-1%2C232%20passed-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-2.2.2-blue)]()
+[![Tests](https://img.shields.io/badge/tests-1%2C243%20passed-brightgreen)]()
 [![Tools](https://img.shields.io/badge/tools-100%2B-orange)]()
 [![Capabilities](https://img.shields.io/badge/capabilities-23-purple)]()
 [![MCP](https://img.shields.io/badge/MCP-12%20tools-blueviolet)]()
+[![Performance](https://img.shields.io/badge/perf-100%20servers%20%3C1s-green)]()
 
 > 📌 [OpenWorker](https://github.com/andrewyng/openworker) (MIT License) 기반으로 독립 개발
 
@@ -642,21 +643,42 @@ cd surfaces/gui && npx tsc --noEmit
 | test_ssh_connector.py | 10 | SSH |
 | test_ops_agent.py | 4 | Ops 에이전트 |
 | test_dev_agent.py | 4 | Dev 에이전트 |
+| **test_timeseries.py** | **11** | **시계열 저장소** |
+| **test_alerting.py** | **11** | **알림 엔진** |
+| **test_healthcheck_mgr.py** | **12** | **헬스체크 매니저** |
+| **test_collector.py** | **7** | **메트릭 수집기** |
+| **test_incidents.py** | **9** | **인시던트 관리** |
+| **test_remediation.py** | **7** | **자동 복구** |
+| **test_audit_ops.py** | **5** | **운영 감사** |
+| **test_wiki_resolver.py** | **6** | **서비스 리졸버** |
+| **test_e2e_monitoring.py** | **6** | **E2E 통합 시나리오** |
+| **test_performance.py** | **11** | **성능 부하 (100서버, 동시쓰기)** |
 | 기존 테스트 | 1,039 | 코어 기능 |
 
 ---
 
 ## 📖 문서
 
-### v2.0 문서
+### v2.x 문서
 
 | 문서 | 설명 |
 |------|------|
 | [**v2.0 아키텍처**](docs/v2-architecture.md) | 전체 시스템 구조, 모니터링/위키/도구 아키텍처, 데이터 저장소 |
 | [**v2.0 API 레퍼런스**](docs/v2-api-reference.md) | 대시보드/인프라/Wiki API 엔드포인트 전체 명세 |
-| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 릴리즈 변경 이력 |
+| [**MCP 서버 설정**](docs/mcp-setup.md) | Claude Desktop/Cursor/Claude Code MCP 연동 가이드 |
+| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.2.2 전체 변경 이력 |
 | [**확장 설계서**](docs/cloud-server-ops-expansion-design.md) | 통합 모니터링, 알림, 인시던트, 서비스 위키 리포지토리 설계 |
 | [**개발팀 조율 가이드**](docs/dev-team/TEAM-COORDINATION.md) | 병렬 개발 규칙, 작업 분배, 충돌 방지 |
+
+### 릴리즈 이력
+
+| 버전 | 날짜 | 주요 내용 |
+|------|------|----------|
+| [v2.2.2](https://github.com/seanshin/werubworker/releases/tag/v2.2.2) | 2026-08-14 | 성능 부하 테스트 11개, 100서버 < 1초 검증 |
+| [v2.2.0](https://github.com/seanshin/werubworker/releases/tag/v2.2.0) | 2026-08-14 | GUI 모니터링 대시보드 페이지 (809줄) |
+| [v2.1.0](https://github.com/seanshin/werubworker/releases/tag/v2.1.0) | 2026-08-14 | MCP 모니터링 서버 (12 도구) |
+| [v2.0.0](https://github.com/seanshin/werubworker/releases/tag/v2.0.0) | 2026-08-13 | Phase 1~4 전체 구현 (51파일, +13,240줄) |
+| [v1.0.0](https://github.com/seanshin/werubworker/releases/tag/v1.0.0) | 이전 | 초기 버전 (Ops/Dev 에이전트, 54개 도구, GUI) |
 
 ### 기존 문서
 
