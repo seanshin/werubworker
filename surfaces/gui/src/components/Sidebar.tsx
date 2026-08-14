@@ -1085,7 +1085,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
           onClick={props.onOpenMonitoring}
         >
           <Icon name="shield" size={15} className="shrink-0" />
-          <span className="flex-1">모니터링</span>
+          <span className="flex-1">{t("common:label.monitoring")}</span>
         </button>
         <button
           className={
