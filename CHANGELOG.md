@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.1.1] - 2026-08-14
+
+### Added
+- Webhook 알림 발송: Slack/Discord/Teams/커스텀 URL 자동 POST
+- Webhook 관리 REST API: GET/POST/DELETE /v1/dashboard/webhooks
+- MCP 서버 도구 2개 추가: webhook_list, webhook_add (총 12개)
+- 스케줄러 tick에서 알림 발생 시 Webhook 자동 발송
+- Claude Code 프로젝트 MCP 설정 (.mcp.json)
+
+---
+
 ## [2.1.0] - 2026-08-14
 
 ### Added
