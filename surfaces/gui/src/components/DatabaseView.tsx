@@ -230,6 +230,13 @@ function AddDbModal({
 // ---------------------------------------------------------------------------
 // Scan Modal
 // ---------------------------------------------------------------------------
+interface NetworkInfo {
+  interface: string;
+  ip: string;
+  netmask: string;
+  subnet: string;
+}
+
 function ScanModal({
   onClose,
   onSelect,
@@ -237,53 +244,147 @@ function ScanModal({
   onClose: () => void;
   onSelect: (result: ScanResult) => void;
 }) {
-  const [scanning, setScanning] = useState(true);
+  const [scanning, setScanning] = useState(false);
   const [results, setResults] = useState<ScanResult[]>([]);
   const [scanned, setScanned] = useState(0);
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo[]>([]);
+  const [subnets, setSubnets] = useState<string[]>([]);
+  const [myIp, setMyIp] = useState("");
+  const [scanMode, setScanMode] = useState("");
+  const [customSubnet, setCustomSubnet] = useState("");
 
-  useEffect(() => {
-    fetch("/v1/databases/scan", { method: "POST" })
+  const doScan = (full: boolean, subnet: string = "") => {
+    setScanning(true);
+    setResults([]);
+    const payload: Record<string, unknown> = {};
+    if (full) payload.full = true;
+    if (subnet) payload.subnet = subnet;
+    fetch("/v1/databases/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
       .then((r) => r.json())
       .then((d) => {
         setResults(d.found || []);
         setScanned(d.scanned || 0);
+        setNetworkInfo(d.network || []);
+        setSubnets(d.subnets || []);
+        setMyIp(d.my_ip || "");
+        setScanMode(d.scan_mode || "quick");
       })
       .catch(() => {})
       .finally(() => setScanning(false));
-  }, []);
+  };
+
+  useEffect(() => { doScan(false); }, []);
+
+  // Group results by host
+  const grouped: Record<string, ScanResult[]> = {};
+  for (const r of results) {
+    const key = r.host || "(로컬 파일)";
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(r);
+  }
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="bg-panel rounded-xl2 border border-line p-6 w-[500px] max-h-[70vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-[15px] font-semibold text-ink mb-4">Database Scan</h3>
+      <div className="bg-panel rounded-xl2 border border-line p-6 w-[600px] max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-[15px] font-semibold text-ink mb-2">네트워크 데이터베이스 스캔</h3>
+
+        {/* 네트워크 정보 */}
+        {networkInfo.length > 0 && (
+          <div className="mb-4 p-3 rounded-lg bg-paper border border-line">
+            <div className="text-[11.5px] font-semibold text-muted mb-1.5">내 네트워크</div>
+            {networkInfo.map((n, i) => (
+              <div key={i} className="flex items-center gap-2 text-[12px] text-ink">
+                <span className="font-mono text-accent">{n.ip}</span>
+                <span className="text-faint">({n.interface})</span>
+                <span className="text-faint">— {n.subnet}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 스캔 옵션 */}
+        <div className="flex items-center gap-2 mb-4">
+          <input
+            className="flex-1 text-[12px] px-2.5 py-1.5 rounded-lg border border-line bg-paper text-ink font-mono"
+            placeholder="서브넷 (예: 192.168.1)"
+            value={customSubnet}
+            onChange={(e) => setCustomSubnet(e.target.value)}
+          />
+          <button
+            className="text-[12px] px-3 py-1.5 rounded-lg bg-accent text-white font-medium disabled:opacity-50"
+            disabled={scanning}
+            onClick={() => doScan(false, customSubnet)}
+          >
+            {scanning ? "스캔 중..." : "빠른 스캔"}
+          </button>
+          <button
+            className="text-[12px] px-3 py-1.5 rounded-lg border border-accent text-accent font-medium disabled:opacity-50"
+            disabled={scanning}
+            onClick={() => doScan(true, customSubnet)}
+          >
+            전체 스캔 (1-254)
+          </button>
+        </div>
+
+        {/* 스캔 결과 */}
         {scanning ? (
-          <div className="text-[13px] text-muted py-8 text-center">Scanning local and network ports...</div>
-        ) : results.length === 0 ? (
           <div className="text-[13px] text-muted py-8 text-center">
-            No database services found ({scanned} ports scanned)
+            {customSubnet || subnets.join(", ") || "로컬"} 대역 스캔 중...
+          </div>
+        ) : results.length === 0 ? (
+          <div className="text-[13px] text-muted py-6 text-center">
+            데이터베이스 서비스를 찾을 수 없습니다 ({scanned}개 포트 스캔됨)
           </div>
         ) : (
-          <div className="space-y-2 mb-4">
-            <p className="text-[12px] text-faint">{results.length} found / {scanned} scanned</p>
-            {results.map((r, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-paper border border-line cursor-pointer hover:border-accent"
-                onClick={() => { onSelect(r); onClose(); }}>
-                <span className={"w-2.5 h-2.5 rounded-full " + (r.status === "open" ? "bg-ok" : "bg-accent")} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium text-ink">{r.label}</div>
-                  <div className="text-[11.5px] text-faint font-mono">
-                    {r.type}{r.host ? ` — ${r.host}:${r.port}` : ""}{r.path ? ` — ${r.path}` : ""}
-                  </div>
+          <div className="space-y-3 mb-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[12px] text-faint">
+                {results.length}개 발견 / {scanned}개 스캔
+                {scanMode && <span className="ml-1 text-accent">({scanMode === "full" ? "전체" : scanMode === "quick" ? "빠른" : "커스텀"})</span>}
+              </p>
+              {subnets.length > 0 && (
+                <p className="text-[11px] text-faint font-mono">
+                  대역: {subnets.map(s => s + ".0/24").join(", ")}
+                </p>
+              )}
+            </div>
+
+            {/* 호스트별 그룹 */}
+            {Object.entries(grouped).map(([host, items]) => (
+              <div key={host} className="rounded-lg border border-line overflow-hidden">
+                <div className="px-3 py-2 bg-paper flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-ok" />
+                  <span className="text-[13px] font-mono font-medium text-ink">{host}</span>
+                  <span className="text-[11px] text-faint">{items.length}개 서비스</span>
+                  {host === myIp && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">내 IP</span>}
                 </div>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">
-                  Register →
-                </span>
+                {items.map((r, i) => (
+                  <div key={i}
+                    className="flex items-center gap-3 px-3 py-2 border-t border-line cursor-pointer hover:bg-paper/50"
+                    onClick={() => { onSelect(r); onClose(); }}
+                  >
+                    <span className={"w-2 h-2 rounded-full shrink-0 " + (r.status === "open" ? "bg-ok" : "bg-accent")} />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[12.5px] text-ink">{r.label}</span>
+                      <span className="text-[11px] text-faint ml-2 font-mono">
+                        :{r.port} ({r.type})
+                      </span>
+                    </div>
+                    <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium shrink-0">
+                      등록 →
+                    </span>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
         )}
         <div className="flex justify-end">
-          <button className="text-[13px] px-3 py-1.5 rounded-lg border border-line text-muted" onClick={onClose}>Close</button>
+          <button className="text-[13px] px-3 py-1.5 rounded-lg border border-line text-muted" onClick={onClose}>닫기</button>
         </div>
       </div>
     </div>

@@ -1407,37 +1407,88 @@ def create_app(manager: SessionManager) -> FastAPI:
         )
 
     @app.post("/v1/databases/scan")
-    async def databases_scan() -> dict[str, Any]:
-        """Scan local and network for running database services."""
+    async def databases_scan(body: dict | None = None) -> dict[str, Any]:
+        """Scan local and network for running database services.
+
+        body.subnet: optional subnet to scan (e.g. "192.168.1"), defaults to auto-detect.
+        body.range: optional host range (e.g. "1-254"), defaults to common hosts.
+        body.full: if true, scan full subnet 1-254 (slower, ~30s).
+        """
         import asyncio
         import socket
 
-        targets = [
-            ("127.0.0.1", 5432, "postgresql", "PostgreSQL"),
-            ("127.0.0.1", 3306, "mysql", "MySQL"),
-            ("127.0.0.1", 27017, "mongodb", "MongoDB"),
-            ("127.0.0.1", 6379, "redis", "Redis"),
-            ("127.0.0.1", 1433, "mssql", "SQL Server"),
-            ("127.0.0.1", 9200, "elasticsearch", "Elasticsearch"),
-            ("127.0.0.1", 5433, "postgresql", "PostgreSQL (alt)"),
-            ("127.0.0.1", 3307, "mysql", "MySQL (alt)"),
+        body = body or {}
+        full_scan = bool(body.get("full", False))
+        custom_subnet = str(body.get("subnet", "")).strip()
+        custom_range = str(body.get("range", "")).strip()
+
+        # DB port definitions
+        DB_PORTS = [
+            (5432, "postgresql", "PostgreSQL"),
+            (3306, "mysql", "MySQL"),
+            (27017, "mongodb", "MongoDB"),
+            (6379, "redis", "Redis"),
+            (1433, "mssql", "SQL Server"),
+            (9200, "elasticsearch", "Elasticsearch"),
+            (5433, "postgresql", "PostgreSQL (alt)"),
+            (3307, "mysql", "MySQL (alt)"),
+            (26257, "cockroachdb", "CockroachDB"),
+            (8123, "clickhouse", "ClickHouse"),
         ]
-        # Also scan local network gateway
+
+        # --- Detect local network interfaces ---
+        network_info = []
+        subnets: set[str] = set()
+        my_ip = ""
         try:
             import psutil
             for iface, addrs in psutil.net_if_addrs().items():
                 for a in addrs:
                     if a.family.name == "AF_INET" and not a.address.startswith("127."):
-                        # Scan same subnet .1 and .100
                         base = ".".join(a.address.split(".")[:3])
-                        for host_suffix in ["1", "100", "200"]:
-                            ip = f"{base}.{host_suffix}"
-                            targets.append((ip, 5432, "postgresql", f"PostgreSQL ({ip})"))
-                            targets.append((ip, 3306, "mysql", f"MySQL ({ip})"))
+                        subnets.add(base)
+                        my_ip = my_ip or a.address
+                        network_info.append({
+                            "interface": iface,
+                            "ip": a.address,
+                            "netmask": a.netmask,
+                            "subnet": f"{base}.0/24",
+                        })
         except ImportError:
             pass
 
-        # Also scan for SQLite files in common locations
+        if custom_subnet:
+            subnets = {custom_subnet.rstrip(".")}
+
+        # --- Build scan targets ---
+        targets: list[tuple[str, int, str, str]] = []
+
+        # 1. Localhost
+        for port, db_type, label in DB_PORTS:
+            targets.append(("127.0.0.1", port, db_type, label))
+
+        # 2. Network scan
+        if custom_range:
+            # Parse range like "1-254" or "10-50"
+            parts = custom_range.split("-")
+            start = int(parts[0]) if parts else 1
+            end = int(parts[1]) if len(parts) > 1 else start
+            host_range = range(start, min(end + 1, 255))
+        elif full_scan:
+            host_range = range(1, 255)
+        else:
+            # Quick scan: common hosts (gateway, servers, x0, x00)
+            host_range = [1, 2, 3, 5, 10, 20, 50, 100, 150, 200, 250, 254]
+
+        for base in subnets:
+            for suffix in host_range:
+                ip = f"{base}.{suffix}"
+                if ip == my_ip:
+                    continue  # skip self
+                for port, db_type, label in DB_PORTS[:4]:  # top 4 DB types for network
+                    targets.append((ip, port, db_type, f"{label} ({ip})"))
+
+        # --- Scan for SQLite files ---
         import glob
         sqlite_files = []
         for pattern in [
@@ -1445,22 +1496,30 @@ def create_app(manager: SessionManager) -> FastAPI:
             str(Path.home() / "*.sqlite"),
             str(Path.home() / "*.sqlite3"),
             "/tmp/*.db",
-            str(Path.home() / "**/*.db"),
         ]:
             sqlite_files.extend(glob.glob(pattern, recursive=False)[:5])
 
+        # --- Concurrent port scan ---
+        sem = asyncio.Semaphore(100)  # limit concurrent connections
+
         async def check_port(host, port, db_type, label):
-            try:
-                loop = asyncio.get_event_loop()
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1)
-                result = await loop.run_in_executor(None, lambda: sock.connect_ex((host, port)))
-                sock.close()
-                if result == 0:
-                    return {"host": host, "port": port, "type": db_type, "label": label, "status": "open"}
-            except Exception:
-                pass
-            return None
+            async with sem:
+                try:
+                    loop = asyncio.get_event_loop()
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(0.5 if host != "127.0.0.1" else 1)
+                    result = await loop.run_in_executor(
+                        None, lambda: sock.connect_ex((host, port))
+                    )
+                    sock.close()
+                    if result == 0:
+                        return {
+                            "host": host, "port": port, "type": db_type,
+                            "label": label, "status": "open",
+                        }
+                except Exception:
+                    pass
+                return None
 
         tasks = [check_port(h, p, t, l) for h, p, t, l in targets]
         results = await asyncio.gather(*tasks)
@@ -1468,9 +1527,20 @@ def create_app(manager: SessionManager) -> FastAPI:
 
         # Add SQLite files
         for f in sqlite_files[:10]:
-            found.append({"host": "", "port": 0, "type": "sqlite", "label": f"SQLite ({Path(f).name})", "path": f, "status": "file"})
+            found.append({
+                "host": "", "port": 0, "type": "sqlite",
+                "label": f"SQLite ({Path(f).name})", "path": f, "status": "file",
+            })
 
-        return {"ok": True, "found": found, "scanned": len(targets)}
+        return {
+            "ok": True,
+            "found": found,
+            "scanned": len(targets),
+            "network": network_info,
+            "subnets": sorted(subnets),
+            "my_ip": my_ip,
+            "scan_mode": "full" if full_scan else "custom" if custom_range else "quick",
+        }
 
     @app.post("/v1/databases/test")
     async def databases_test(body: dict) -> dict[str, Any]:
