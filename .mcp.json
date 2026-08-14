@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "werubworker-monitoring": {
+      "command": "/Users/seanshin/ai/agent/openworker/.venv/bin/python",
+      "args": ["-m", "coworker.mcp.monitoring_server"]
+    }
+  }
+}
