@@ -158,3 +158,27 @@ def register_dashboard_routes(app, manager) -> None:
         )
         services = resolver.list_services_with_wiki()
         return {"ok": True, "count": len(services), "services": services}
+
+    # -- Webhook management --
+
+    @app.get("/v1/dashboard/webhooks")
+    async def api_webhooks_list():
+        alert = manager._get_alert_engine()
+        return {"ok": True, "webhooks": alert.list_webhooks()}
+
+    @app.post("/v1/dashboard/webhooks")
+    async def api_webhooks_add(body: dict):
+        alert = manager._get_alert_engine()
+        url = (body or {}).get("url", "")
+        if not url:
+            return {"ok": False, "error": "url required"}
+        return alert.add_webhook(
+            url=url,
+            webhook_type=(body or {}).get("type", "slack"),
+            name=(body or {}).get("name", ""),
+        )
+
+    @app.delete("/v1/dashboard/webhooks/{webhook_id}")
+    async def api_webhooks_remove(webhook_id: int):
+        alert = manager._get_alert_engine()
+        return alert.remove_webhook(webhook_id)

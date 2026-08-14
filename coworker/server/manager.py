@@ -293,13 +293,17 @@ class SessionManager(
             latest = ts.query_latest()
             new_alerts = alert.evaluate(latest)
 
-            # 4. Broadcast new alerts to GUI
+            # 4. Broadcast new alerts to GUI + send webhooks
             if new_alerts:
                 try:
                     await self.broadcast_event({
                         "type": "monitoring_alert",
                         "alerts": new_alerts,
                     })
+                except Exception:
+                    pass
+                try:
+                    await alert.send_webhook(new_alerts)
                 except Exception:
                     pass
 

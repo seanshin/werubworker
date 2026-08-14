@@ -188,6 +188,24 @@ TOOLS = [
         description="Get infrastructure dashboard overview: servers, alerts, health checks, incidents.",
         inputSchema={"type": "object", "properties": {}},
     ),
+    Tool(
+        name="webhook_list",
+        description="List configured alert webhooks (Slack, Discord, Teams, custom).",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    Tool(
+        name="webhook_add",
+        description="Add an alert webhook URL for notifications.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Webhook URL"},
+                "type": {"type": "string", "description": "Type: slack, discord, teams, custom"},
+                "name": {"type": "string", "description": "Display name"},
+            },
+            "required": ["url"],
+        },
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -284,6 +302,20 @@ async def _handle_tool(name: str, arguments: dict) -> str:
                 "incident_count": len(inc.active_incidents()),
                 "timestamp": time.time(),
             })
+
+        elif name == "webhook_list":
+            alert = _get_alert()
+            webhooks = alert.list_webhooks()
+            return json.dumps({"ok": True, "count": len(webhooks), "webhooks": webhooks})
+
+        elif name == "webhook_add":
+            alert = _get_alert()
+            result = alert.add_webhook(
+                url=arguments["url"],
+                webhook_type=arguments.get("type", "slack"),
+                name=arguments.get("name", ""),
+            )
+            return json.dumps(result)
 
         else:
             return json.dumps({"ok": False, "error": f"unknown tool: {name}"})

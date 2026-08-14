@@ -393,3 +393,128 @@ class AlertEngine:
             f"{alert.get('description', '')}\n"
             f"시각: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(alert.get('fired_at', 0)))}"
         )
+
+    # -- Webhook 발송 --
+
+    async def send_webhook(self, alerts: list[dict]) -> list[dict]:
+        """알림을 Webhook URL로 발송 (Slack/Discord/Teams/커스텀)."""
+        import httpx
+
+        results = []
+        webhook_urls = self._get_webhook_urls()
+        if not webhook_urls or not alerts:
+            return results
+
+        for alert in alerts:
+            text = self._format_alert_message(alert)
+            for url in webhook_urls:
+                payload = self._build_webhook_payload(url, alert, text)
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        resp = await client.post(url, json=payload)
+                    results.append({
+                        "ok": resp.status_code < 400,
+                        "url": url[:40] + "...",
+                        "status": resp.status_code,
+                        "alert_id": alert.get("id", ""),
+                    })
+                except Exception as exc:
+                    results.append({"ok": False, "url": url[:40] + "...", "error": str(exc)})
+                    log.warning("webhook send failed: %s", exc)
+        return results
+
+    def _get_webhook_urls(self) -> list[str]:
+        """alert_webhooks 테이블에서 URL 목록 조회."""
+        try:
+            with self._connect() as conn:
+                # 테이블이 없으면 생성
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS alert_webhooks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        url TEXT NOT NULL,
+                        type TEXT NOT NULL DEFAULT 'slack',
+                        name TEXT NOT NULL DEFAULT '',
+                        enabled INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+                rows = conn.execute(
+                    "SELECT url FROM alert_webhooks WHERE enabled = 1"
+                ).fetchall()
+            return [r["url"] for r in rows]
+        except Exception:
+            return []
+
+    def add_webhook(self, url: str, webhook_type: str = "slack",
+                    name: str = "") -> dict:
+        """Webhook URL 등록."""
+        with self._lock, self._connect() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS alert_webhooks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT NOT NULL,
+                    type TEXT NOT NULL DEFAULT 'slack',
+                    name TEXT NOT NULL DEFAULT '',
+                    enabled INTEGER NOT NULL DEFAULT 1
+                )
+            """)
+            conn.execute(
+                "INSERT INTO alert_webhooks (url, type, name) VALUES (?, ?, ?)",
+                (url, webhook_type, name or webhook_type),
+            )
+        return {"ok": True, "url": url[:40] + "..."}
+
+    def remove_webhook(self, webhook_id: int) -> dict:
+        """Webhook 삭제."""
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM alert_webhooks WHERE id = ?", (webhook_id,))
+        return {"ok": True}
+
+    def list_webhooks(self) -> list[dict]:
+        """등록된 Webhook 목록."""
+        try:
+            with self._connect() as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS alert_webhooks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        url TEXT NOT NULL,
+                        type TEXT NOT NULL DEFAULT 'slack',
+                        name TEXT NOT NULL DEFAULT '',
+                        enabled INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+                rows = conn.execute("SELECT * FROM alert_webhooks").fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
+
+    def _build_webhook_payload(self, url: str, alert: dict, text: str) -> dict:
+        """URL 패턴에 따라 적절한 페이로드 구성."""
+        # Slack Incoming Webhook
+        if "hooks.slack.com" in url:
+            severity = alert.get("severity", "warning")
+            color = {"info": "#36a64f", "warning": "#ff9900", "critical": "#ff0000"}.get(
+                severity, "#ff9900"
+            )
+            return {
+                "attachments": [{
+                    "color": color,
+                    "title": alert.get("title", "Alert"),
+                    "text": alert.get("description", ""),
+                    "fields": [
+                        {"title": "서버", "value": alert.get("server_id", "?"), "short": True},
+                        {"title": "심각도", "value": severity.upper(), "short": True},
+                    ],
+                    "ts": int(alert.get("fired_at", time.time())),
+                }]
+            }
+        # Discord Webhook
+        if "discord.com/api/webhooks" in url:
+            return {
+                "content": text,
+                "username": "WeruBWorker Alert",
+            }
+        # Microsoft Teams
+        if "webhook.office.com" in url:
+            return {"text": text}
+        # Generic (Telegram bot, custom)
+        return {"text": text, "alert": alert}
