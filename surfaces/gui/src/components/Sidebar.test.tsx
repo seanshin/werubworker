@@ -75,6 +75,8 @@ const baseProps = {
   servicesActive: false,
   onOpenWiki: vi.fn(),
   wikiActive: false,
+  onOpenMonitoring: vi.fn(),
+  monitoringActive: false,
 };
 
 afterEach(() => {

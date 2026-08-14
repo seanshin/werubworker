@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.2.0] - 2026-08-14
+
+### Added
+- GUI 모니터링 전용 대시보드 페이지 (MonitoringView.tsx, 809줄)
+  - Overview: 서버 현황 카드, CPU/메모리/디스크 프로그레스바
+  - Alerts: 활성 알림, 규칙 목록, Webhook 설정
+  - Incidents: 인시던트 목록 + 타임라인 펼침
+  - Health Checks: 5개 체크 상태 + 즉시 실행
+  - Audit: 운영 감사 로그 테이블
+- 사이드바 모니터링 네비게이션 추가 (shield 아이콘)
+
+---
+
 ## [2.1.1] - 2026-08-14
 
 ### Added

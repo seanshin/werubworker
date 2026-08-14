@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NAV_COLLAPSED_KEY } from "../appHelpers";
 
-export type Surface = "session" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings" | "about" | "ops" | "dev" | "database" | "services" | "wiki";
+export type Surface = "session" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings" | "about" | "ops" | "dev" | "database" | "services" | "wiki" | "monitoring";
 
 interface UIContextValue {
   surface: Surface;

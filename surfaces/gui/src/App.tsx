@@ -60,6 +60,7 @@ const DevView = lazy(() => import("./components/DevView").then(m => ({ default: 
 const DatabaseView = lazy(() => import("./components/DatabaseView").then(m => ({ default: m.DatabaseView })));
 const ServiceConfigView = lazy(() => import("./components/ServiceConfigView").then(m => ({ default: m.ServiceConfigView })));
 const WikiView = lazy(() => import("./components/WikiView").then(m => ({ default: m.WikiView })));
+const MonitoringView = lazy(() => import("./components/MonitoringView").then(m => ({ default: m.MonitoringView })));
 import { ApprovalCard } from "./components/ApprovalCard";
 import { DirectoryRequestCard } from "./components/DirectoryRequestCard";
 import { PlanCard } from "./components/PlanCard";
@@ -151,6 +152,7 @@ function AppInner() {
   const openDatabase = useCallback(() => setSurface("database"), [setSurface]);
   const openServices = useCallback(() => setSurface("services"), [setSurface]);
   const openWiki = useCallback(() => setSurface("wiki"), [setSurface]);
+  const openMonitoring = useCallback(() => setSurface("monitoring"), [setSurface]);
   const onPeekLeave = useCallback(() => setNavPeek(false), [setNavPeek]);
   const onOpenPersonaFromSidebar = useCallback(
     (id: string) => openPersona(id, "session"),
@@ -1000,11 +1002,13 @@ function AppInner() {
         onOpenDatabase={openDatabase}
         onOpenServices={openServices}
         onOpenWiki={openWiki}
+        onOpenMonitoring={openMonitoring}
         opsActive={surface === "ops"}
         devActive={surface === "dev"}
         databaseActive={surface === "database"}
         servicesActive={surface === "services"}
         wikiActive={surface === "wiki"}
+        monitoringActive={surface === "monitoring"}
         scheduledActive={surface === "scheduled"}
         integrationsActive={surface === "integrations"}
         auditActive={surface === "audit"}
@@ -1057,6 +1061,8 @@ function AppInner() {
         <ServiceConfigView />
       ) : surface === "wiki" ? (
         <WikiView />
+      ) : surface === "monitoring" ? (
+        <MonitoringView />
       ) : surface === "persona" ? (
         <PersonaView
           personaId={personaViewId || agent}
