@@ -56,7 +56,64 @@
     "development": "Development",
     "database": "Database",
     "serviceConfig": "Service Config",
-    "serviceWiki": "Service Wiki"
+    "serviceWiki": "Service Wiki",
+    "monitoring": "Monitoring"
+  },
+  "monitoring": {
+    "title": "Monitoring Dashboard",
+    "tab": {
+      "overview": "Overview",
+      "alerts": "Alerts",
+      "incidents": "Incidents",
+      "healthchecks": "Health Checks",
+      "audit": "Audit Log"
+    },
+    "card": {
+      "servers": "Servers",
+      "activeAlerts": "Active Alerts",
+      "healthChecks": "Health Checks",
+      "incidents": "Incidents"
+    },
+    "server": {
+      "cpu": "CPU",
+      "memory": "Memory",
+      "disk": "Disk"
+    },
+    "alert": {
+      "active": "Active Alerts",
+      "history": "Alert History",
+      "rules": "Alert Rules",
+      "webhooks": "Webhooks",
+      "noActive": "No active alerts",
+      "severity": "Severity",
+      "server": "Server",
+      "time": "Time"
+    },
+    "incident": {
+      "title": "Incidents",
+      "severity": "Severity",
+      "status": "Status",
+      "timeline": "Timeline",
+      "noIncidents": "No incidents"
+    },
+    "healthcheck": {
+      "title": "Health Checks",
+      "runNow": "Run Now",
+      "running": "Running...",
+      "status": "Status",
+      "latency": "Latency",
+      "target": "Target"
+    },
+    "audit": {
+      "title": "Operational Audit Log",
+      "time": "Time",
+      "user": "User",
+      "action": "Action",
+      "target": "Target",
+      "result": "Result",
+      "noEntries": "No audit entries"
+    },
+    "lastUpdated": "Last updated"
   },
   "empty": {
     "noConversations": "No conversations yet",

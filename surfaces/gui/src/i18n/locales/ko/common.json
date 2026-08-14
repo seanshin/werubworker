@@ -56,7 +56,64 @@
     "development": "개발",
     "database": "데이터베이스",
     "serviceConfig": "서비스 설정",
-    "serviceWiki": "서비스 위키"
+    "serviceWiki": "서비스 위키",
+    "monitoring": "모니터링"
+  },
+  "monitoring": {
+    "title": "모니터링 대시보드",
+    "tab": {
+      "overview": "개요",
+      "alerts": "알림",
+      "incidents": "인시던트",
+      "healthchecks": "헬스체크",
+      "audit": "감사 로그"
+    },
+    "card": {
+      "servers": "서버",
+      "activeAlerts": "활성 알림",
+      "healthChecks": "헬스체크",
+      "incidents": "인시던트"
+    },
+    "server": {
+      "cpu": "CPU",
+      "memory": "메모리",
+      "disk": "디스크"
+    },
+    "alert": {
+      "active": "활성 알림",
+      "history": "알림 이력",
+      "rules": "알림 규칙",
+      "webhooks": "Webhook",
+      "noActive": "활성 알림 없음",
+      "severity": "심각도",
+      "server": "서버",
+      "time": "시각"
+    },
+    "incident": {
+      "title": "인시던트",
+      "severity": "심각도",
+      "status": "상태",
+      "timeline": "타임라인",
+      "noIncidents": "인시던트 없음"
+    },
+    "healthcheck": {
+      "title": "헬스체크",
+      "runNow": "지금 실행",
+      "running": "실행 중...",
+      "status": "상태",
+      "latency": "응답 시간",
+      "target": "대상"
+    },
+    "audit": {
+      "title": "운영 감사 로그",
+      "time": "시각",
+      "user": "사용자",
+      "action": "액션",
+      "target": "대상",
+      "result": "결과",
+      "noEntries": "감사 로그 없음"
+    },
+    "lastUpdated": "마지막 갱신"
   },
   "empty": {
     "noConversations": "대화가 없습니다",

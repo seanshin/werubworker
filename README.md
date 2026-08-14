@@ -1,13 +1,14 @@
-# WeruBWorker v2.0
+# WeruBWorker v2.2
 
 **AI 에이전트 기반 통합 클라우드·서버 관리 및 운영 모니터링 플랫폼**
 
 서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다.
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue)]()
-[![Tests](https://img.shields.io/badge/tests-1%2C226%20passed-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-2.2.0-blue)]()
+[![Tests](https://img.shields.io/badge/tests-1%2C232%20passed-brightgreen)]()
 [![Tools](https://img.shields.io/badge/tools-100%2B-orange)]()
 [![Capabilities](https://img.shields.io/badge/capabilities-23-purple)]()
+[![MCP](https://img.shields.io/badge/MCP-12%20tools-blueviolet)]()
 
 > 📌 [OpenWorker](https://github.com/andrewyng/openworker) (MIT License) 기반으로 독립 개발
 
@@ -580,6 +581,7 @@ cd surfaces/gui && VITE_COWORKER_API_TOKEN="$TOKEN" npx vite --host 0.0.0.0
 | 페이지 | 아이콘 | 설명 |
 |--------|--------|------|
 | **서버** | 🔧 | CPU/메모리/디스크 실시간 차트, SSH 서버 목록, Docker 컨테이너 |
+| **모니터링** | 🛡 | 대시보드 (서버 현황, 알림, 인시던트, 헬스체크, 감사 로그) |
 | **개발** | 💻 | GitHub 상태, CI/CD 파이프라인, PR 목록 |
 | **데이터베이스** | 🗄 | SQL 쿼리 실행기, 테이블 목록, 백업 |
 | **서비스 설정** | ⚙️ | SSH/DB/클라우드 자격증명 통합 관리 |
