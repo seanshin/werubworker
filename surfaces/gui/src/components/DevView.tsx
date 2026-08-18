@@ -326,7 +326,7 @@ export function DevView() {
   const [showSetup, setShowSetup] = useState(false);
   const [showNewIssue, setShowNewIssue] = useState(false);
   const [showNewRelease, setShowNewRelease] = useState(false);
-  const [activeTab, setActiveTab] = useState<"prs" | "actions" | "issues" | "releases" | "commits" | "webhooks">("prs");
+  const [activeTab, setActiveTab] = useState<"prs" | "actions" | "issues" | "releases" | "commits" | "webhooks" | "repos">("prs");
   const [prFilter, setPrFilter] = useState<"open" | "closed" | "all">("open");
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
   const [prDetail, setPrDetail] = useState<PRDetail | null>(null);
@@ -338,6 +338,7 @@ export function DevView() {
   const [releases, setReleases] = useState<Release[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
+  const [giteaRepos, setGiteaRepos] = useState<any[]>([]);
   const [merging, setMerging] = useState(false);
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [showMergeConfirm, setShowMergeConfirm] = useState(false);
@@ -421,6 +422,13 @@ export function DevView() {
       .catch(() => {});
   }, []);
 
+  const fetchGiteaRepos = useCallback(() => {
+    fetch("/v1/gitea/repos")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.ok) setGiteaRepos(d.repos || []); })
+      .catch(() => {});
+  }, []);
+
   const handleMerge = useCallback(async (number: number, method: string) => {
     setMerging(true);
     try {
@@ -464,6 +472,7 @@ export function DevView() {
   useEffect(() => { if (activeTab === "releases") fetchReleases(); }, [activeTab, fetchReleases]);
   useEffect(() => { if (activeTab === "commits") fetchCommits(); }, [activeTab, fetchCommits]);
   useEffect(() => { if (activeTab === "webhooks") fetchWebhookEvents(); }, [activeTab, fetchWebhookEvents]);
+  useEffect(() => { if (activeTab === "repos") fetchGiteaRepos(); }, [activeTab, fetchGiteaRepos]);
   useEffect(() => { if (config?.configured) fetchReviewCount(); }, [config, fetchReviewCount]);
 
   // Listen for github_event WebSocket events to auto-refresh
@@ -482,12 +491,13 @@ export function DevView() {
             if (activeTab === "releases") fetchReleases();
             if (activeTab === "commits") fetchCommits();
             if (activeTab === "webhooks") fetchWebhookEvents();
+            if (activeTab === "repos") fetchGiteaRepos();
           }
         } catch { /* ignore */ }
       };
     } catch { /* ignore */ }
     return () => { ws?.close(); };
-  }, [config, activeTab, fetchAll, fetchIssues, fetchReleases, fetchCommits, fetchWebhookEvents]);
+  }, [config, activeTab, fetchAll, fetchIssues, fetchReleases, fetchCommits, fetchWebhookEvents, fetchGiteaRepos]);
   useEffect(() => {
     if (selectedPR !== null) fetchPRDetail(selectedPR);
     else setPrDetail(null);
@@ -567,7 +577,7 @@ export function DevView() {
           {config?.configured && (
             <>
               <div className="flex gap-1 mb-4 flex-wrap">
-                {(["prs", "actions", "issues", "releases", "commits", "webhooks"] as const).map((tab) => (
+                {(["prs", "actions", "issues", "releases", "commits", "webhooks", "repos"] as const).map((tab) => (
                   <button
                     key={tab}
                     className={
@@ -590,7 +600,8 @@ export function DevView() {
                      tab === "issues" ? `Issues (${issues.length})` :
                      tab === "releases" ? t("session:dev.releases") :
                      tab === "commits" ? t("session:dev.commits") :
-                     `Webhooks (${webhookEvents.length})`}
+                     tab === "webhooks" ? `Webhooks (${webhookEvents.length})` :
+                     `Repos (${giteaRepos.length})`}
                   </button>
                 ))}
               </div>
@@ -959,6 +970,35 @@ export function DevView() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* Repos Tab */}
+              {activeTab === "repos" && (
+                <div className={CARD + " p-5 mb-4"}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[14px] font-semibold text-ink">Gitea Repositories</h3>
+                    <button className="text-[12.5px] text-accent font-medium" onClick={fetchGiteaRepos}>
+                      <Icon name="refresh" size={13} className="inline mr-1" />Refresh
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {giteaRepos.length === 0 ? (
+                      <div className="text-center text-muted text-xs py-8">리포지토리가 없습니다</div>
+                    ) : giteaRepos.map((r, i) => (
+                      <div key={i} className={CARD + " p-3 text-xs"}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-accent">{r.full_name}</span>
+                          {r.language && <span className="px-1.5 py-0.5 rounded bg-paper text-muted text-[10px]">{r.language}</span>}
+                          <span className="ml-auto text-muted">{"*"} {r.stars} | {r.forks} forks | {r.open_issues} issues</span>
+                        </div>
+                        {r.description && <div className="mt-1 text-muted">{r.description}</div>}
+                        <div className="mt-1 text-muted text-[10px]">
+                          {r.updated_at ? new Date(r.updated_at).toLocaleDateString("ko-KR") : ""}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

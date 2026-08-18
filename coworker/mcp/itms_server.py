@@ -55,6 +55,7 @@ _postmortem = None
 _workflow = None
 _batch = None
 _secrets_store = None
+_gitea = None
 
 
 def _get_secrets():
@@ -120,8 +121,21 @@ def _get_batch():
     return _batch
 
 
+def _get_gitea():
+    global _gitea
+    if _gitea is None:
+        from ..connectors.gitea.client import GiteaClient
+        secrets = _get_secrets()
+        token = ""
+        gitea_conf = secrets.get("gitea") if secrets else None
+        if isinstance(gitea_conf, dict):
+            token = gitea_conf.get("token", "")
+        _gitea = GiteaClient(base_url="http://localhost:3000", token=token)
+    return _gitea
+
+
 # ---------------------------------------------------------------------------
-# Tool definitions — 15 ITMS tools
+# Tool definitions — 25 ITMS tools
 # ---------------------------------------------------------------------------
 
 TOOLS = [
@@ -286,6 +300,139 @@ TOOLS = [
             },
         },
     ),
+    Tool(
+        name="gitea_repo_detail",
+        description="Gitea 리포 상세 정보 (언어, 기여자, 토픽).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string", "description": "소유자"},
+                "repo": {"type": "string", "description": "리포 이름"},
+            },
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_branches",
+        description="Gitea 리포 브랜치 목록/생성/삭제.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "action": {"type": "string", "description": "list, create, delete (기본 list)"},
+                "name": {"type": "string", "description": "브랜치명 (create/delete 시)"},
+                "from": {"type": "string", "description": "기반 브랜치 (create 시, 기본 main)"},
+            },
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_pulls",
+        description="Gitea PR 목록 조회.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "state": {"type": "string", "description": "open, closed, all (기본 open)"},
+            },
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_create_pr",
+        description="Gitea PR 생성.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "title": {"type": "string"}, "head": {"type": "string"},
+                "base": {"type": "string", "description": "기본 main"},
+                "body": {"type": "string"},
+            },
+            "required": ["owner", "repo", "title", "head"],
+        },
+    ),
+    Tool(
+        name="gitea_issues",
+        description="Gitea 이슈 목록/생성.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "action": {"type": "string", "description": "list 또는 create (기본 list)"},
+                "title": {"type": "string", "description": "이슈 제목 (create 시)"},
+                "body": {"type": "string", "description": "이슈 내용 (create 시)"},
+                "state": {"type": "string", "description": "open, closed (list 시)"},
+            },
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_releases",
+        description="Gitea 릴리즈 목록/생성.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "action": {"type": "string", "description": "list 또는 create (기본 list)"},
+                "tag_name": {"type": "string", "description": "태그명 (create 시)"},
+                "name": {"type": "string", "description": "릴리즈명 (create 시)"},
+                "body": {"type": "string", "description": "릴리즈 노트 (create 시)"},
+            },
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_file_read",
+        description="Gitea 리포 파일 내용 읽기.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "filepath": {"type": "string", "description": "파일 경로"},
+                "ref": {"type": "string", "description": "브랜치/태그 (기본 main)"},
+            },
+            "required": ["owner", "repo", "filepath"],
+        },
+    ),
+    Tool(
+        name="gitea_file_write",
+        description="Gitea 리포 파일 생성/수정 + 자동 커밋.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "filepath": {"type": "string"}, "content": {"type": "string"},
+                "message": {"type": "string", "description": "커밋 메시지"},
+                "sha": {"type": "string", "description": "기존 파일 SHA (수정 시, 비어있으면 신규 생성)"},
+            },
+            "required": ["owner", "repo", "filepath", "content"],
+        },
+    ),
+    Tool(
+        name="gitea_commits",
+        description="Gitea 커밋 이력 조회.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "limit": {"type": "integer", "description": "최대 건수 (기본 20)"},
+            },
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_file_tree",
+        description="Gitea 리포 파일 트리 (전체 파일 목록).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "ref": {"type": "string", "description": "브랜치 (기본 main)"},
+            },
+            "required": ["owner", "repo"],
+        },
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -425,20 +572,94 @@ async def _handle_tool(name: str, arguments: dict) -> str:
 
         # ── Gitea ──
         elif name == "gitea_repos":
-            import httpx
-
-            try:
-                resp = httpx.get("http://localhost:3000/api/v1/repos/search?limit=50",
-                                 headers={"Authorization": "token " + (_get_secrets().get("gitea", {}).get("token", ""))},
-                                 timeout=10)
-                data = resp.json()
-                repos = data.get("data", []) if isinstance(data, dict) else data
+            gc = _get_gitea()
+            repos = await gc.repos.list()
+            if isinstance(repos, list):
                 return json.dumps({"ok": True, "count": len(repos),
-                                   "repos": [{"name": r.get("full_name", ""), "description": r.get("description", ""),
-                                              "html_url": r.get("html_url", ""), "stars": r.get("stars_count", 0),
-                                              "updated": r.get("updated_at", "")} for r in repos[:20]]})
-            except Exception as e:
-                return json.dumps({"ok": False, "error": str(e)})
+                    "repos": [{"full_name": r.get("full_name",""), "description": r.get("description",""),
+                               "html_url": r.get("html_url",""), "language": r.get("language",""),
+                               "stars": r.get("stars_count",0), "updated": r.get("updated_at","")} for r in repos[:30]]})
+            return json.dumps({"ok": False, "error": str(repos)})
+
+        elif name == "gitea_repo_detail":
+            gc = _get_gitea()
+            detail = await gc.repos.get(arguments["owner"], arguments["repo"])
+            langs = await gc.repos.languages(arguments["owner"], arguments["repo"])
+            return json.dumps({"ok": True, "repo": detail, "languages": langs})
+
+        elif name == "gitea_branches":
+            gc = _get_gitea()
+            action = arguments.get("action", "list")
+            o, r = arguments["owner"], arguments["repo"]
+            if action == "create":
+                result = await gc.branches.create(o, r, arguments.get("name",""), arguments.get("from","main"))
+                return json.dumps(result)
+            elif action == "delete":
+                result = await gc.branches.delete(o, r, arguments.get("name",""))
+                return json.dumps(result)
+            branches = await gc.branches.list(o, r)
+            return json.dumps({"ok": True, "branches": [{"name": b.get("name","")} for b in (branches if isinstance(branches, list) else [])]})
+
+        elif name == "gitea_pulls":
+            gc = _get_gitea()
+            pulls = await gc.pulls.list(arguments["owner"], arguments["repo"], state=arguments.get("state","open"))
+            return json.dumps({"ok": True, "pulls": [{"number": p.get("number"), "title": p.get("title",""), "state": p.get("state",""), "user": p.get("user",{}).get("login","")} for p in (pulls if isinstance(pulls, list) else [])]})
+
+        elif name == "gitea_create_pr":
+            gc = _get_gitea()
+            result = await gc.pulls.create(arguments["owner"], arguments["repo"], title=arguments["title"], head=arguments["head"], base=arguments.get("base","main"), body=arguments.get("body",""))
+            return json.dumps(result)
+
+        elif name == "gitea_issues":
+            gc = _get_gitea()
+            action = arguments.get("action", "list")
+            o, r = arguments["owner"], arguments["repo"]
+            if action == "create":
+                result = await gc.issues.create(o, r, title=arguments.get("title",""), body=arguments.get("body",""))
+                return json.dumps(result)
+            issues = await gc.issues.list(o, r, state=arguments.get("state","open"))
+            return json.dumps({"ok": True, "issues": [{"number": i.get("number"), "title": i.get("title",""), "state": i.get("state","")} for i in (issues if isinstance(issues, list) else [])]})
+
+        elif name == "gitea_releases":
+            gc = _get_gitea()
+            action = arguments.get("action", "list")
+            o, r = arguments["owner"], arguments["repo"]
+            if action == "create":
+                result = await gc.releases.create(o, r, tag_name=arguments.get("tag_name",""), name=arguments.get("name",""), body=arguments.get("body",""))
+                return json.dumps(result)
+            releases = await gc.releases.list(o, r)
+            return json.dumps({"ok": True, "releases": [{"tag_name": x.get("tag_name",""), "name": x.get("name","")} for x in (releases if isinstance(releases, list) else [])]})
+
+        elif name == "gitea_file_read":
+            gc = _get_gitea()
+            import base64 as _b64
+            data = await gc.contents.get(arguments["owner"], arguments["repo"], arguments["filepath"], ref=arguments.get("ref",""))
+            if isinstance(data, dict) and data.get("content"):
+                try:
+                    decoded = _b64.b64decode(data["content"]).decode("utf-8", errors="replace")
+                    return json.dumps({"ok": True, "path": data.get("path",""), "size": data.get("size",0), "sha": data.get("sha",""), "content": decoded[:5000]})
+                except Exception:
+                    pass
+            return json.dumps({"ok": True, "data": data})
+
+        elif name == "gitea_file_write":
+            gc = _get_gitea()
+            sha = arguments.get("sha", "")
+            if sha:
+                result = await gc.contents.update(arguments["owner"], arguments["repo"], arguments["filepath"], arguments["content"], sha=sha, message=arguments.get("message",""))
+            else:
+                result = await gc.contents.create(arguments["owner"], arguments["repo"], arguments["filepath"], arguments["content"], message=arguments.get("message",""))
+            return json.dumps(result)
+
+        elif name == "gitea_commits":
+            gc = _get_gitea()
+            commits = await gc.commits.list(arguments["owner"], arguments["repo"], limit=int(arguments.get("limit", 20)))
+            return json.dumps({"ok": True, "commits": [{"sha": c.get("sha","")[:8], "message": c.get("commit",{}).get("message","").split("\n")[0], "author": c.get("commit",{}).get("author",{}).get("name","")} for c in (commits if isinstance(commits, list) else [])]})
+
+        elif name == "gitea_file_tree":
+            gc = _get_gitea()
+            tree = await gc.contents.tree(arguments["owner"], arguments["repo"], ref=arguments.get("ref","main"))
+            return json.dumps({"ok": True, "count": len(tree), "tree": [{"path": t.get("path",""), "type": t.get("type",""), "size": t.get("size",0)} for t in tree[:300]]})
 
         elif name == "gitea_webhook_events":
             from ..connectors.gitea_webhook import GiteaWebhookHandler

@@ -324,6 +324,18 @@ class DashboardMixin:
             self._slack_bot_cache = SlackBot(secrets=getattr(self, "secrets", None), dashboard=self)
         return self._slack_bot_cache
 
+    def _get_gitea_client(self):
+        """Lazy-init GiteaClient for REST API access."""
+        if not hasattr(self, "_gitea_client_cache"):
+            from ..connectors.gitea.client import GiteaClient
+            secrets = getattr(self, "secrets", None)
+            token = ""
+            if secrets:
+                gitea_conf = secrets.get("gitea") or {}
+                token = gitea_conf.get("token", "")
+            self._gitea_client_cache = GiteaClient(base_url="http://localhost:3000", token=token)
+        return self._gitea_client_cache
+
     def _get_gitea_webhook(self):
         """Lazy-init GiteaWebhookHandler."""
         if not hasattr(self, "_gitea_webhook_cache"):
@@ -822,3 +834,117 @@ def register_dashboard_routes(app, manager) -> None:
             "wiki_page_id": result.wiki_page_id,
             "health_checks": result.health_checks_created,
         }
+
+    # ── Gitea 리포 관리 ──
+
+    @app.get("/v1/gitea/repos")
+    async def gitea_repos():
+        gc = manager._get_gitea_client()
+        repos = await gc.repos.list()
+        if isinstance(repos, dict) and repos.get("error"):
+            return {"ok": False, "error": repos["error"]}
+        return {"ok": True, "repos": [{"id": r.get("id"), "full_name": r.get("full_name", ""), "description": r.get("description", ""), "html_url": r.get("html_url", ""), "stars": r.get("stars_count", 0), "forks": r.get("forks_count", 0), "open_issues": r.get("open_issues_count", 0), "language": r.get("language", ""), "updated_at": r.get("updated_at", "")} for r in (repos if isinstance(repos, list) else [])]}
+
+    @app.post("/v1/gitea/repos")
+    async def gitea_create_repo(request: Request):
+        body = await request.json()
+        gc = manager._get_gitea_client()
+        return await gc.repos.create(name=body.get("name", ""), description=body.get("description", ""), private=body.get("private", False))
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}")
+    async def gitea_repo_detail(owner: str, repo: str):
+        gc = manager._get_gitea_client()
+        return await gc.repos.get(owner, repo)
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/languages")
+    async def gitea_repo_languages(owner: str, repo: str):
+        gc = manager._get_gitea_client()
+        return {"ok": True, "languages": await gc.repos.languages(owner, repo)}
+
+    # ── Gitea 브랜치 ──
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/branches")
+    async def gitea_branches(owner: str, repo: str):
+        gc = manager._get_gitea_client()
+        branches = await gc.branches.list(owner, repo)
+        return {"ok": True, "branches": [{"name": b.get("name", ""), "commit_sha": b.get("commit", {}).get("id", ""), "commit_message": b.get("commit", {}).get("message", "")[:100]} for b in (branches if isinstance(branches, list) else [])]}
+
+    @app.post("/v1/gitea/repos/{owner}/{repo}/branches")
+    async def gitea_create_branch(owner: str, repo: str, request: Request):
+        body = await request.json()
+        gc = manager._get_gitea_client()
+        return await gc.branches.create(owner, repo, name=body.get("name", ""), old_branch=body.get("from", "main"))
+
+    @app.delete("/v1/gitea/repos/{owner}/{repo}/branches/{branch}")
+    async def gitea_delete_branch(owner: str, repo: str, branch: str):
+        gc = manager._get_gitea_client()
+        return await gc.branches.delete(owner, repo, branch)
+
+    # ── Gitea PR ──
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/pulls")
+    async def gitea_pulls(owner: str, repo: str, state: str = "open"):
+        gc = manager._get_gitea_client()
+        pulls = await gc.pulls.list(owner, repo, state=state)
+        return {"ok": True, "pulls": [{"number": p.get("number"), "title": p.get("title", ""), "state": p.get("state", ""), "user": p.get("user", {}).get("login", ""), "created_at": p.get("created_at", ""), "head": p.get("head", {}).get("label", ""), "base": p.get("base", {}).get("label", "")} for p in (pulls if isinstance(pulls, list) else [])]}
+
+    @app.post("/v1/gitea/repos/{owner}/{repo}/pulls")
+    async def gitea_create_pull(owner: str, repo: str, request: Request):
+        body = await request.json()
+        gc = manager._get_gitea_client()
+        return await gc.pulls.create(owner, repo, title=body.get("title", ""), head=body.get("head", ""), base=body.get("base", "main"), body=body.get("body", ""))
+
+    @app.post("/v1/gitea/repos/{owner}/{repo}/pulls/{number}/merge")
+    async def gitea_merge_pull(owner: str, repo: str, number: int, request: Request):
+        body = await request.json() if request.headers.get("content-length", "0") != "0" else {}
+        gc = manager._get_gitea_client()
+        return await gc.pulls.merge(owner, repo, number, merge_type=body.get("merge_type", "squash"))
+
+    # ── Gitea 이슈 ──
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/issues")
+    async def gitea_issues(owner: str, repo: str, state: str = "open"):
+        gc = manager._get_gitea_client()
+        issues = await gc.issues.list(owner, repo, state=state)
+        return {"ok": True, "issues": [{"number": i.get("number"), "title": i.get("title", ""), "state": i.get("state", ""), "user": i.get("user", {}).get("login", ""), "labels": [l.get("name", "") for l in i.get("labels", [])], "created_at": i.get("created_at", "")} for i in (issues if isinstance(issues, list) else [])]}
+
+    @app.post("/v1/gitea/repos/{owner}/{repo}/issues")
+    async def gitea_create_issue(owner: str, repo: str, request: Request):
+        body = await request.json()
+        gc = manager._get_gitea_client()
+        return await gc.issues.create(owner, repo, title=body.get("title", ""), body=body.get("body", ""))
+
+    # ── Gitea 릴리즈 ──
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/releases")
+    async def gitea_releases(owner: str, repo: str):
+        gc = manager._get_gitea_client()
+        releases = await gc.releases.list(owner, repo)
+        return {"ok": True, "releases": [{"id": r.get("id"), "tag_name": r.get("tag_name", ""), "name": r.get("name", ""), "body": r.get("body", "")[:200], "draft": r.get("draft", False), "prerelease": r.get("prerelease", False), "created_at": r.get("created_at", "")} for r in (releases if isinstance(releases, list) else [])]}
+
+    @app.post("/v1/gitea/repos/{owner}/{repo}/releases")
+    async def gitea_create_release(owner: str, repo: str, request: Request):
+        body = await request.json()
+        gc = manager._get_gitea_client()
+        return await gc.releases.create(owner, repo, tag_name=body.get("tag_name", ""), name=body.get("name", ""), body=body.get("body", ""))
+
+    # ── Gitea 파일 ──
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/contents/{filepath:path}")
+    async def gitea_file_content(owner: str, repo: str, filepath: str, ref: str = ""):
+        gc = manager._get_gitea_client()
+        return await gc.contents.get(owner, repo, filepath, ref=ref)
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/tree")
+    async def gitea_file_tree(owner: str, repo: str, ref: str = "main"):
+        gc = manager._get_gitea_client()
+        tree = await gc.contents.tree(owner, repo, ref=ref)
+        return {"ok": True, "tree": [{"path": t.get("path", ""), "type": t.get("type", ""), "size": t.get("size", 0)} for t in tree[:500]]}
+
+    # ── Gitea 커밋 ──
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/commits")
+    async def gitea_commits(owner: str, repo: str, sha: str = "", limit: int = 30):
+        gc = manager._get_gitea_client()
+        commits = await gc.commits.list(owner, repo, sha=sha, limit=limit)
+        return {"ok": True, "commits": [{"sha": c.get("sha", "")[:8], "message": c.get("commit", {}).get("message", "").split("\n")[0], "author": c.get("commit", {}).get("author", {}).get("name", ""), "date": c.get("commit", {}).get("author", {}).get("date", "")} for c in (commits if isinstance(commits, list) else [])]}
