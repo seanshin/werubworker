@@ -1,15 +1,16 @@
-# WeruBWorker v2.2
+# WeruBWorker v2.3
 
 **AI 에이전트 기반 통합 클라우드·서버 관리 및 운영 모니터링 플랫폼**
 
-서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다.
+서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다. Gitea + MCP를 통합하여 에이전트와 소스 리포지토리가 하나의 플랫폼으로 동작합니다.
 
-[![Version](https://img.shields.io/badge/version-2.2.2-blue)]()
+[![Version](https://img.shields.io/badge/version-2.3.0-blue)]()
 [![Tests](https://img.shields.io/badge/tests-1%2C243%20passed-brightgreen)]()
-[![Tools](https://img.shields.io/badge/tools-100%2B-orange)]()
-[![Capabilities](https://img.shields.io/badge/capabilities-23-purple)]()
-[![MCP](https://img.shields.io/badge/MCP-12%20tools-blueviolet)]()
-[![Performance](https://img.shields.io/badge/perf-100%20servers%20%3C1s-green)]()
+[![Tools](https://img.shields.io/badge/tools-300%2B-orange)]()
+[![Capabilities](https://img.shields.io/badge/capabilities-28-purple)]()
+[![MCP](https://img.shields.io/badge/MCP-27%20tools-blueviolet)]()
+[![API](https://img.shields.io/badge/REST%20API-210%2B-green)]()
+[![GUI](https://img.shields.io/badge/GUI-16%20views-yellowgreen)]()
 
 > 📌 [OpenWorker](https://github.com/andrewyng/openworker) (MIT License) 기반으로 독립 개발
 
@@ -66,11 +67,12 @@
 
 | 영역 | 설명 | 상태 |
 |------|------|------|
-| **통합 모니터링** | 멀티 서버 메트릭 수집, 시계열 DB, 헬스체크, 로그 집계 | ✅ 구현 완료 |
-| **실시간 대시보드** | REST API 12개 엔드포인트, 인프라 토폴로지 맵, Wiki API | ✅ 구현 완료 |
-| **알림 & 인시던트** | 규칙 기반 알림, 에스컬레이션, 인시던트 타임라인, 자동 복구 | ✅ 구현 완료 |
-| **인프라 자동화** | Terraform/Ansible IaC, 서비스 설정 생성, 서버 온보딩 워크플로우 | ✅ 구현 완료 |
-| **보안 & 컴플라이언스** | 포트/SSL 스캔, 취약점 검사, 접근 감사, 인증서 관리 | ✅ 구현 완료 |
+| **통합 모니터링** | 실시간 메트릭 WebSocket, 시계열 DB, 헬스체크, AI 이상 탐지 | ✅ 구현 완료 |
+| **실시간 대시보드** | 210+ REST API, 대시보드 게이지, 토폴로지 맵, 로그 뷰어 | ✅ 구현 완료 |
+| **알림 & 인시던트** | 에스컬레이션 정책, 자동 복구→알림 연쇄, AI 사후분석, 감사 대시보드 | ✅ 구현 완료 |
+| **인프라 자동화** | 조건부 워크플로우, 멀티서버 병렬/롤링 SSH, 서버 온보딩 5단계 | ✅ 구현 완료 |
+| **보안 & 컴플라이언스** | 보안 등급(A~D), Trivy 컨테이너 스캔, 의존성 감사, 백업/복원 | ✅ 구현 완료 |
+| **외부 연동** | Slack Bot 8종 명령어, Gitea Webhook, 로컬 Gitea 통합 | ✅ 구현 완료 |
 | **멀티 클라우드** | AWS + Cloudflare + Wasabi + GCP + Azure (선택적 SDK) | ✅ 구현 완료 |
 
 ---
@@ -87,12 +89,15 @@
 | 📚 **서비스 위키** | 자격증명 문서화, AI 자동 추출, AES-256 암호화 볼트, 만료 알림 |
 | 🔐 **보안** | 마스터 비밀번호 로그인, 암호화 저장, 감사 로그, 권한 계층 |
 | 🌐 **한국어 지원** | 전체 UI 한국어/영어 전환 (1,100+ 번역 키), 에이전트 한국어 응답 |
-| 📊 **실시간 모니터링** | CPU/메모리/디스크 차트, 10초 자동 폴링, 스파크라인 그래프 |
-| 🔗 **25+ 서비스 연동** | Slack, GitHub, Gmail, Jira, HubSpot, Notion, Linear 등 |
-| 📋 **서비스 위키 리포지토리** | 서버/DB/서비스 설정의 중앙 저장소, 자동 문서화, 서비스 연동 허브 |
-| 🔔 **알림 & 인시던트** | 임계값 기반 알림, 에스컬레이션, 자동 복구, AI 사후분석 (확장 중) |
-| 🏗 **서버 온보딩** | SSH 연결 테스트 → 정보 수집 → Wiki 자동 생성 워크플로우 |
-| ⚙️ **설정 자동 생성** | Nginx, systemd, Docker Compose 설정 생성 및 버전 관리 (확장 중) |
+| 📊 **실시간 모니터링** | WebSocket 실시간 메트릭, 대시보드 게이지, AI 이상 탐지 (Z-score + LLM) |
+| 🔗 **32+ 서비스 연동** | Slack Bot, GitHub, Gitea Webhook, Gmail, Jira, HubSpot, Notion 등 |
+| 📋 **서비스 위키 리포지토리** | 서버/DB/서비스 설정의 중앙 저장소, 자동 문서화, 사후분석 Wiki 저장 |
+| 🔔 **알림 & 인시던트** | 에스컬레이션 정책, 자동 복구→알림 연쇄, AI 사후분석 자동 생성 |
+| 🏗 **서버 온보딩** | SSH 연결→정보수집→프로필→Wiki→헬스체크 5단계 자동화 |
+| ⚡ **자동화 워크플로우** | 조건부 if/then/else 분기, 멀티서버 병렬/롤링 SSH 일괄 명령 |
+| 🛡 **보안 대시보드** | 종합 보안 등급(A~D), Trivy 컨테이너 스캔, 의존성 감사, 방화벽 검증 |
+| 💾 **백업/복원** | 8개 DB 안전 백업(VACUUM INTO), S3 지원, 원클릭 복원 |
+| 🔀 **Gitea 통합** | 로컬 Gitea + WeruBWorker 통합 운영, Webhook 자동 연동, GitHub 백업 |
 
 ---
 
@@ -112,7 +117,7 @@
 │  │  │Nav      │ │Tools     │ │Attach    │ │ Artifacts  │  │    │
 │  │  └─────────┘ └──────────┘ └──────────┘ └────────────┘  │    │
 │  │  ┌──────────────────────────────────────────────────┐   │    │
-│  │  │ 관리 페이지: Ops | Dev | DB | ServiceConfig | Wiki│   │    │
+│  │  │ 관리: Ops|Dev|DB|Wiki|모니터링|로그|토폴로지|보안|백업│   │    │
 │  │  └──────────────────────────────────────────────────┘   │    │
 │  └────────────────────────┬────────────────────────────────┘    │
 │                           │ WebSocket + REST API                │
@@ -126,7 +131,7 @@
 │  │  └────┬─────┘  └─────┬─────┘  └─────────────────────┘  │    │
 │  │       │              │                                   │    │
 │  │  ┌────▼──────────────▼──────────────────────────────┐   │    │
-│  │  │           도구 카탈로그 (100+, 21 Capability)        │   │    │
+│  │  │           도구 카탈로그 (300+, 28 Capability)        │   │    │
 │  │  ├──────┬──────┬──────┬──────┬──────┬──────┬────────┤   │    │
 │  │  │서버  │SSH   │Docker│ K8s  │  DB  │클라우드│CI/CD  │   │    │
 │  │  │모니터│원격  │컨테이너│클러스터│쿼리  │AWS/GCP│빌드   │   │    │
@@ -184,15 +189,24 @@
 ```
 werubworker/
 ├── coworker/                      # Python 백엔드
-│   ├── monitoring/                # 모니터링 서브시스템 (v2.0)
+│   ├── monitoring/                # 모니터링 서브시스템 (v2.3)
 │   │   ├── timeseries.py         #   시계열 저장소 (4단계 다운샘플링)
-│   │   ├── collector.py          #   멀티 서버 메트릭 수집기
+│   │   ├── collector.py          #   멀티 서버 메트릭 수집기 + 실시간 WebSocket
 │   │   ├── healthcheck.py        #   8종 헬스체크 매니저
-│   │   ├── alerting.py           #   규칙 기반 알림 엔진
+│   │   ├── alerting.py           #   알림 엔진 + 에스컬레이션 정책
 │   │   ├── incidents.py          #   인시던트 관리 + 타임라인
-│   │   ├── remediation.py        #   자동 복구 엔진 (7 기본 액션)
+│   │   ├── remediation.py        #   자동 복구 → 알림 연쇄
+│   │   ├── anomaly.py            #   AI 이상 탐지 (Z-score + LLM)
+│   │   ├── postmortem.py         #   인시던트 사후분석 자동 생성
+│   │   ├── backup.py             #   백업/복원 시스템 (8개 DB)
 │   │   ├── log_aggregator.py     #   다중 서버 로그 집계
-│   │   └── audit_ops.py          #   운영 감사 로그
+│   │   └── audit_ops.py          #   감사 로그 + 통계 + CSV
+│   ├── automation/
+│   │   ├── workflow.py           #   조건부 워크플로우 엔진
+│   │   └── scheduler.py          #   스케줄 실행
+│   ├── mcp/
+│   │   ├── monitoring_server.py  #   MCP 모니터링 (12 tools)
+│   │   └── itms_server.py        #   MCP ITMS (15 tools)
 │   ├── agents/                    # 에이전트 정의 (11개 페르소나)
 │   │   ├── code.py / cowork.py / chat.py / ops.py / dev.py
 │   │   └── sre.py                #   SRE (21 capability, 100+ 도구)
@@ -581,14 +595,18 @@ cd surfaces/gui && VITE_COWORKER_API_TOKEN="$TOKEN" npx vite --host 0.0.0.0
 
 | 페이지 | 아이콘 | 설명 |
 |--------|--------|------|
-| **서버** | 🔧 | CPU/메모리/디스크 실시간 차트, SSH 서버 목록, Docker 컨테이너 |
-| **모니터링** | 🛡 | 대시보드 (서버 현황, 알림, 인시던트, 헬스체크, 감사 로그) |
-| **개발** | 💻 | GitHub 상태, CI/CD 파이프라인, PR 목록 |
-| **데이터베이스** | 🗄 | SQL 쿼리 실행기, 테이블 목록, 백업 |
-| **서비스 설정** | ⚙️ | SSH/DB/클라우드 자격증명 통합 관리 |
+| **서버** | 🔧 | 실시간 차트, SSH 서버, Docker, 일괄 명령, 서버 온보딩 |
+| **모니터링** | 🛡 | 대시보드 게이지, 알림/에스컬레이션, 인시던트/사후분석, 이상 탐지, 감사 |
+| **개발** | 💻 | GitHub/Gitea PR, CI/CD, 이슈, 릴리스, 커밋 그래프, Webhooks |
+| **데이터베이스** | 🗄 | SQL 쿼리 (정렬/CSV), ERD, 마이그레이션, 스캔 |
+| **로그** | 📄 | 로그 뷰어 (서버/심각도 필터, 자동 갱신, 검색) |
+| **토폴로지** | 🗺 | 네트워크 토폴로지 맵 (서버-서비스 SVG 시각화) |
+| **보안** | 🛡 | 보안 등급(A~D), 컨테이너/의존성 스캔, 방화벽 |
+| **백업** | 💾 | 8개 DB 백업/복원, 대상 선택, 이력 관리 |
+| **서비스 설정** | ⚙️ | SSH/DB/클라우드/MCP 자격증명 통합 관리 |
 | **서비스 위키** | 📚 | 서비스 문서화, AI 자격증명 추출, 만료 알림 |
+| **자동화** | ⏰ | 스케줄 작업, 워크플로우, 실행 이력 |
 | **정보** | ℹ️ | 버전, 릴리스 노트, 기술 스택, 라이선스 |
-| **자동화** | ⏰ | 스케줄 작업, 템플릿, 실행 이력 |
 
 ---
 
@@ -663,6 +681,7 @@ cd surfaces/gui && npx tsc --noEmit
 
 | 문서 | 설명 |
 |------|------|
+| [**v2.3 기획서 (최종)**](docs/WeruBWorker_v2.3_기획서.md) | Phase 1~6 전체 구현 내역, 통합 아키텍처, MCP 27개 도구, 50+ API |
 | [**v2.0 아키텍처**](docs/v2-architecture.md) | 전체 시스템 구조, 모니터링/위키/도구 아키텍처, 데이터 저장소 |
 | [**v2.0 API 레퍼런스**](docs/v2-api-reference.md) | 대시보드/인프라/Wiki API 엔드포인트 전체 명세 |
 | [**MCP 서버 설정**](docs/mcp-setup.md) | Claude Desktop/Cursor/Claude Code MCP 연동 가이드 |
@@ -674,6 +693,7 @@ cd surfaces/gui && npx tsc --noEmit
 
 | 버전 | 날짜 | 주요 내용 |
 |------|------|----------|
+| **v2.3.0** | **2026-08-18** | **Phase 1~6: 실시간 메트릭, AI 이상탐지/사후분석, GUI 4개 신규, 워크플로우, 보안/백업, Slack Bot, Gitea+ITMS MCP 통합** |
 | [v2.2.2](https://github.com/seanshin/werubworker/releases/tag/v2.2.2) | 2026-08-14 | 성능 부하 테스트 11개, 100서버 < 1초 검증 |
 | [v2.2.0](https://github.com/seanshin/werubworker/releases/tag/v2.2.0) | 2026-08-14 | GUI 모니터링 대시보드 페이지 (809줄) |
 | [v2.1.0](https://github.com/seanshin/werubworker/releases/tag/v2.1.0) | 2026-08-14 | MCP 모니터링 서버 (12 도구) |
