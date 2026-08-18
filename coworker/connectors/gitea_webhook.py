@@ -123,6 +123,20 @@ class GiteaWebhookHandler:
         else:
             summary = f"[{event.repo}] {event.event_type} 이벤트 수신"
 
+        # 자동 리뷰 트리거 실행
+        for action in actions_taken:
+            if action.get("type") == "auto_review" and self._dashboard:
+                try:
+                    gc = self._dashboard._get_gitea_client()
+                    from .gitea.reviewer import CodeReviewer
+                    reviewer = CodeReviewer(gc, provider=getattr(self._dashboard, "provider", None))
+                    repo_parts = action["repo"].split("/")
+                    if len(repo_parts) == 2:
+                        review_result = await reviewer.review_and_post(repo_parts[0], repo_parts[1], action["pr_number"])
+                        action["review_result"] = review_result
+                except Exception as e:
+                    log.warning("auto review failed: %s", e)
+
         # DB에 기록
         self._db.execute(
             "INSERT INTO webhook_events (event_type, action, repo, sender, timestamp, summary, processed) VALUES (?, ?, ?, ?, ?, ?, 1)",
@@ -156,8 +170,7 @@ class GiteaWebhookHandler:
 
         if action == "opened":
             actions.append({"type": "notify", "message": f"📋 새 PR: {event.repo}#{pr_number} — {pr_title}"})
-            # 자동 코드 리뷰 트리거 가능
-            actions.append({"type": "review_trigger", "repo": event.repo, "pr_number": pr_number})
+            actions.append({"type": "auto_review", "repo": event.repo, "pr_number": pr_number})
 
         elif action == "closed" and pr.get("merged"):
             actions.append({"type": "notify", "message": f"✅ PR 머지됨: {event.repo}#{pr_number} — {pr_title}"})

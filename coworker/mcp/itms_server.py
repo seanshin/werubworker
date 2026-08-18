@@ -135,7 +135,7 @@ def _get_gitea():
 
 
 # ---------------------------------------------------------------------------
-# Tool definitions — 25 ITMS tools
+# Tool definitions — 27 ITMS tools
 # ---------------------------------------------------------------------------
 
 TOOLS = [
@@ -433,6 +433,30 @@ TOOLS = [
             "required": ["owner", "repo"],
         },
     ),
+    Tool(
+        name="gitea_pr_review",
+        description="Gitea PR AI 코드 리뷰 실행 (diff 분석, 보안/품질 검사, 자동 라벨링).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "pr_number": {"type": "integer", "description": "PR 번호"},
+            },
+            "required": ["owner", "repo", "pr_number"],
+        },
+    ),
+    Tool(
+        name="gitea_merge_check",
+        description="Gitea PR 머지 전 체크리스트 검증 (충돌, 리뷰 승인, 머지 가능 여부).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "pr_number": {"type": "integer"},
+            },
+            "required": ["owner", "repo", "pr_number"],
+        },
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -660,6 +684,20 @@ async def _handle_tool(name: str, arguments: dict) -> str:
             gc = _get_gitea()
             tree = await gc.contents.tree(arguments["owner"], arguments["repo"], ref=arguments.get("ref","main"))
             return json.dumps({"ok": True, "count": len(tree), "tree": [{"path": t.get("path",""), "type": t.get("type",""), "size": t.get("size",0)} for t in tree[:300]]})
+
+        elif name == "gitea_pr_review":
+            gc = _get_gitea()
+            from ..connectors.gitea.reviewer import CodeReviewer
+            reviewer = CodeReviewer(gc)
+            result = await reviewer.review_and_post(arguments["owner"], arguments["repo"], arguments["pr_number"])
+            return json.dumps(result)
+
+        elif name == "gitea_merge_check":
+            gc = _get_gitea()
+            from ..connectors.gitea.reviewer import CodeReviewer
+            reviewer = CodeReviewer(gc)
+            result = await reviewer.auto_merge_check(arguments["owner"], arguments["repo"], arguments["pr_number"])
+            return json.dumps(result)
 
         elif name == "gitea_webhook_events":
             from ..connectors.gitea_webhook import GiteaWebhookHandler

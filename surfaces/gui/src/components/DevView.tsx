@@ -344,6 +344,8 @@ export function DevView() {
   const [showMergeConfirm, setShowMergeConfirm] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewResult, setReviewResult] = useState<string | null>(null);
+  const [reviewingPr, setReviewingPr] = useState<number | null>(null);
+  const [giteaReviewResult, setGiteaReviewResult] = useState<Record<number, any>>({});
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -458,6 +460,17 @@ export function DevView() {
     } catch { setReviewResult("Network error"); }
     setReviewLoading(false);
   }, []);
+
+  const handleGiteaReviewPr = useCallback(async (number: number) => {
+    if (!config?.owner || !config?.repo) return;
+    setReviewingPr(number);
+    try {
+      const res = await fetch(`/v1/gitea/repos/${config.owner}/${config.repo}/pulls/${number}/review`, { method: "POST" });
+      const d = await res.json();
+      if (d?.ok) setGiteaReviewResult((prev) => ({ ...prev, [number]: d }));
+    } catch { /* ignore */ }
+    setReviewingPr(null);
+  }, [config]);
 
   const fetchReviewCount = useCallback(async () => {
     try {
@@ -642,10 +655,28 @@ export function DevView() {
                                 {pr.draft && <span className="ml-1 text-faint">(draft)</span>}
                               </div>
                             </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleGiteaReviewPr(pr.number); }}
+                              disabled={reviewingPr === pr.number}
+                              className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50"
+                            >
+                              {reviewingPr === pr.number ? "리뷰 중..." : "AI 리뷰"}
+                            </button>
                             <span className={"text-[11px] px-2 py-0.5 rounded-full font-medium " + statusColor(pr.state)}>
                               {pr.state}
                             </span>
                           </div>
+                          {giteaReviewResult[pr.number] && (
+                            <div className="mt-2 mx-3 p-2 rounded bg-paper text-xs">
+                              <span className={giteaReviewResult[pr.number].verdict === "APPROVED" ? "text-green-400" : giteaReviewResult[pr.number].verdict === "REQUEST_CHANGES" ? "text-red-400" : "text-yellow-400"}>
+                                {giteaReviewResult[pr.number].verdict}
+                              </span>
+                              <span className="ml-2 text-muted">점수: {giteaReviewResult[pr.number].score}/100</span>
+                              {giteaReviewResult[pr.number].labels?.length > 0 && (
+                                <span className="ml-2 text-muted">라벨: {giteaReviewResult[pr.number].labels.join(", ")}</span>
+                              )}
+                            </div>
+                          )}
                           {selectedPR === pr.number && (
                             <div className="mt-1 ml-3 p-4 rounded-lg bg-paper border border-line">
                               {prDetailLoading ? (

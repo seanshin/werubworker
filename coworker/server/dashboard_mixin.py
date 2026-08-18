@@ -943,6 +943,35 @@ def register_dashboard_routes(app, manager) -> None:
 
     # ── Gitea 커밋 ──
 
+    # ── Gitea AI 코드 리뷰 ──
+
+    @app.post("/v1/gitea/repos/{owner}/{repo}/pulls/{number}/review")
+    async def gitea_review_pr(owner: str, repo: str, number: int):
+        """AI 코드 리뷰 실행."""
+        gc = manager._get_gitea_client()
+        from ..connectors.gitea.reviewer import CodeReviewer
+        reviewer = CodeReviewer(gc, provider=getattr(manager, "provider", None))
+        return await reviewer.review_and_post(owner, repo, number)
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/pulls/{number}/merge-check")
+    async def gitea_merge_check(owner: str, repo: str, number: int):
+        """머지 전 체크리스트 검증."""
+        gc = manager._get_gitea_client()
+        from ..connectors.gitea.reviewer import CodeReviewer
+        reviewer = CodeReviewer(gc)
+        return await reviewer.auto_merge_check(owner, repo, number)
+
+    @app.post("/v1/gitea/repos/{owner}/{repo}/pulls/{number}/auto-merge")
+    async def gitea_auto_merge(owner: str, repo: str, number: int, request: Request):
+        """조건 충족 시 자동 머지."""
+        body = await request.json() if request.headers.get("content-length", "0") != "0" else {}
+        gc = manager._get_gitea_client()
+        from ..connectors.gitea.reviewer import CodeReviewer
+        reviewer = CodeReviewer(gc)
+        return await reviewer.auto_merge(owner, repo, number, merge_type=body.get("merge_type", "squash"))
+
+    # ── Gitea 커밋 ──
+
     @app.get("/v1/gitea/repos/{owner}/{repo}/commits")
     async def gitea_commits(owner: str, repo: str, sha: str = "", limit: int = 30):
         gc = manager._get_gitea_client()
