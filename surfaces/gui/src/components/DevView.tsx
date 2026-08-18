@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PanelHead } from "./IntegrationsView";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 
 const CARD = "rounded-xl2 border border-line bg-panel";
 const BTN_ACCENT =
@@ -326,7 +326,7 @@ export function DevView() {
   const [showSetup, setShowSetup] = useState(false);
   const [showNewIssue, setShowNewIssue] = useState(false);
   const [showNewRelease, setShowNewRelease] = useState(false);
-  const [activeTab, setActiveTab] = useState<"prs" | "actions" | "issues" | "releases" | "commits">("prs");
+  const [activeTab, setActiveTab] = useState<"prs" | "actions" | "issues" | "releases" | "commits" | "webhooks">("prs");
   const [prFilter, setPrFilter] = useState<"open" | "closed" | "all">("open");
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
   const [prDetail, setPrDetail] = useState<PRDetail | null>(null);
@@ -337,6 +337,7 @@ export function DevView() {
   const [reviewCount, setReviewCount] = useState(0);
   const [releases, setReleases] = useState<Release[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
+  const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
   const [merging, setMerging] = useState(false);
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [showMergeConfirm, setShowMergeConfirm] = useState(false);
@@ -413,6 +414,13 @@ export function DevView() {
     } catch { /* ignore */ }
   }, []);
 
+  const fetchWebhookEvents = useCallback(() => {
+    fetch("/v1/webhooks/gitea/events?limit=30")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.ok) setWebhookEvents(d.events || []); })
+      .catch(() => {});
+  }, []);
+
   const handleMerge = useCallback(async (number: number, method: string) => {
     setMerging(true);
     try {
@@ -455,6 +463,7 @@ export function DevView() {
   useEffect(() => { if (activeTab === "issues") fetchIssues(); }, [activeTab, fetchIssues]);
   useEffect(() => { if (activeTab === "releases") fetchReleases(); }, [activeTab, fetchReleases]);
   useEffect(() => { if (activeTab === "commits") fetchCommits(); }, [activeTab, fetchCommits]);
+  useEffect(() => { if (activeTab === "webhooks") fetchWebhookEvents(); }, [activeTab, fetchWebhookEvents]);
   useEffect(() => { if (config?.configured) fetchReviewCount(); }, [config, fetchReviewCount]);
 
   // Listen for github_event WebSocket events to auto-refresh
@@ -472,12 +481,13 @@ export function DevView() {
             if (activeTab === "issues") fetchIssues();
             if (activeTab === "releases") fetchReleases();
             if (activeTab === "commits") fetchCommits();
+            if (activeTab === "webhooks") fetchWebhookEvents();
           }
         } catch { /* ignore */ }
       };
     } catch { /* ignore */ }
     return () => { ws?.close(); };
-  }, [config, activeTab, fetchAll, fetchIssues, fetchReleases, fetchCommits]);
+  }, [config, activeTab, fetchAll, fetchIssues, fetchReleases, fetchCommits, fetchWebhookEvents]);
   useEffect(() => {
     if (selectedPR !== null) fetchPRDetail(selectedPR);
     else setPrDetail(null);
@@ -557,7 +567,7 @@ export function DevView() {
           {config?.configured && (
             <>
               <div className="flex gap-1 mb-4 flex-wrap">
-                {(["prs", "actions", "issues", "releases", "commits"] as const).map((tab) => (
+                {(["prs", "actions", "issues", "releases", "commits", "webhooks"] as const).map((tab) => (
                   <button
                     key={tab}
                     className={
@@ -579,7 +589,8 @@ export function DevView() {
                      tab === "actions" ? `Actions (${runs.length})` :
                      tab === "issues" ? `Issues (${issues.length})` :
                      tab === "releases" ? t("session:dev.releases") :
-                     t("session:dev.commits")}
+                     tab === "commits" ? t("session:dev.commits") :
+                     `Webhooks (${webhookEvents.length})`}
                   </button>
                 ))}
               </div>
@@ -895,20 +906,60 @@ export function DevView() {
                   {commits.length === 0 ? (
                     <p className="text-[13px] text-muted">{t("session:dev.noCommits")}</p>
                   ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-0">
                       {commits.map((c, i) => (
-                        <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-paper border border-line">
-                          <span className="text-[12px] font-mono text-accent shrink-0">{c.sha}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[13px] text-ink truncate">{c.message}</div>
-                            <div className="text-[11px] text-faint">
-                              {c.author} &middot; {formatDate(c.date)}
+                        <div key={i} className="flex items-start gap-3">
+                          <div className="flex flex-col items-center">
+                            <div className="w-2.5 h-2.5 rounded-full bg-accent border-2 border-accent/30" />
+                            {i < commits.length - 1 && <div className="w-0.5 flex-1 bg-line min-h-[24px]" />}
+                          </div>
+                          <div className="flex-1 pb-3">
+                            <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-paper border border-line">
+                              <span className="text-[12px] font-mono text-accent shrink-0">{c.sha}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[13px] text-ink truncate">{c.message}</div>
+                                <div className="text-[11px] text-faint">
+                                  {c.author} &middot; {formatDate(c.date)}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Webhooks Tab */}
+              {activeTab === "webhooks" && (
+                <div className={CARD + " p-5 mb-4"}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[14px] font-semibold text-ink">Gitea Webhook Events</h3>
+                    <button className="text-[12.5px] text-accent font-medium" onClick={fetchWebhookEvents}>
+                      <Icon name="refresh" size={13} className="inline mr-1" />Refresh
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {webhookEvents.length === 0 ? (
+                      <div className="text-center text-muted text-xs py-8">Webhook 이벤트가 없습니다</div>
+                    ) : webhookEvents.map((e, i) => {
+                      const iconMap: Record<string, IconName> = { push: "code", pull_request: "branch", issues: "info", release: "diamond", create: "plus", delete: "trash" };
+                      const iconName: IconName = iconMap[e.event_type as string] || "pin";
+                      return (
+                        <div key={i} className={CARD + " p-3 text-xs"}>
+                          <div className="flex items-center gap-2">
+                            <Icon name={iconName} size={14} className="text-accent shrink-0" />
+                            <span className="font-medium">{e.event_type}</span>
+                            {e.action && <span className="text-muted">({e.action})</span>}
+                            <span className="text-muted ml-auto">{e.sender}</span>
+                            <span className="text-muted">{new Date(e.timestamp * 1000).toLocaleString("ko-KR", { hour12: false })}</span>
+                          </div>
+                          <div className="mt-1 text-muted">{e.summary}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </>

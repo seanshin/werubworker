@@ -194,6 +194,7 @@ class SessionManager(
         # App-wide event sockets (/ws/events): session-independent pushes — today the
         # automation-run-started toast (UX-026); badges could ride it later.
         self._event_clients: set[Any] = set()
+        self._metrics_clients: set[Any] = set()
         # Automation: scheduled tasks store + the tick scheduler (started in the lifespan).
         # The scheduler also resumes self-wake'd sessions each tick (extra_tick).
         self.task_store = TaskStore(base / "automation.db")
@@ -1519,6 +1520,22 @@ class SessionManager(
 
     def unregister_event_client(self, send_cb: Any) -> None:
         self._event_clients.discard(send_cb)
+
+    def register_metrics_client(self, send_cb: Any) -> None:
+        self._metrics_clients.add(send_cb)
+
+    def unregister_metrics_client(self, send_cb: Any) -> None:
+        self._metrics_clients.discard(send_cb)
+
+    async def broadcast_metrics(self, points: list[dict]) -> None:
+        """Fan metrics out to every /ws/metrics socket. Best-effort."""
+        import time as _time
+        message = {"type": "metrics_update", "ts": _time.time(), "points": points}
+        for cb in list(self._metrics_clients):
+            try:
+                await cb(message)
+            except Exception:
+                self.unregister_metrics_client(cb)
 
     async def broadcast_event(self, message: dict) -> None:
         """Fan an app-wide event out to every /ws/events socket. Best-effort: a dead

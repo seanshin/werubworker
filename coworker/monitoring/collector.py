@@ -51,6 +51,7 @@ class MetricCollector:
         ts_store: Any,
         secrets: Any | None = None,
         config: CollectorConfig | None = None,
+        on_collect: Any | None = None,
     ) -> None:
         """MetricCollector를 초기화한다.
 
@@ -62,10 +63,13 @@ class MetricCollector:
             SecretStore 인스턴스 — SSH 서버 프로필 조회용. None이면 원격 수집 비활성.
         config:
             수집 설정. None이면 기본값 사용.
+        on_collect:
+            수집 완료 후 호출되는 콜백. ``async def on_collect(points)`` 형태.
         """
         self._ts = ts_store
         self._secrets = secrets
         self._config = config or CollectorConfig()
+        self._on_collect = on_collect
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
@@ -118,6 +122,12 @@ class MetricCollector:
 
         if points:
             self._ts.record_batch(points)
+
+        if points and self._on_collect:
+            try:
+                await self._on_collect(points)
+            except Exception:
+                log.warning("on_collect callback error", exc_info=True)
 
         return {"ok": True, "collected": len(points), "errors": errors, "total": len(servers)}
 

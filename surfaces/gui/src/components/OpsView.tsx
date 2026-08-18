@@ -372,6 +372,20 @@ export function OpsView() {
   const [metricsRange, setMetricsRange] = useState<"1h" | "6h" | "24h" | "7d">("1h");
   const [metricsHistory, setMetricsHistory] = useState<MetricPoint[]>([]);
 
+  // Server onboarding
+  const [onboarding, setOnboarding] = useState(false);
+  const [onboardForm, setOnboardForm] = useState({ server_id: "", host: "", port: 22, username: "deploy", key_path: "", label: "", tags: "" });
+  const [onboardResult, setOnboardResult] = useState<any>(null);
+  const [showOnboard, setShowOnboard] = useState(false);
+
+  // Batch SSH (multi-server command)
+  const [batchCmd, setBatchCmd] = useState("");
+  const [batchMode, setBatchMode] = useState<"parallel" | "rolling">("parallel");
+  const [batchTag, setBatchTag] = useState("");
+  const [batchResults, setBatchResults] = useState<any>(null);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [serverTags, setServerTags] = useState<string[]>([]);
+
   const fetchServers = useCallback(() => {
     setLoading(true);
     fetch("/v1/ssh/servers")
@@ -384,6 +398,24 @@ export function OpsView() {
       .catch((e) => { setServers([]); setFetchError(e.message); })
       .finally(() => setLoading(false));
   }, []);
+
+  const handleOnboard = async () => {
+    setOnboarding(true);
+    try {
+      const res = await fetch("/v1/dashboard/servers/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...onboardForm,
+          tags: onboardForm.tags ? onboardForm.tags.split(",").map((t) => t.trim()) : [],
+        }),
+      });
+      const d = await res.json();
+      setOnboardResult(d);
+      if (d.ok) fetchServers();
+    } catch { /* ignore */ }
+    setOnboarding(false);
+  };
 
   const fetchStatus = useCallback(() => {
     fetch("/v1/ops/local-status")
@@ -544,6 +576,29 @@ export function OpsView() {
   }, []);
 
   useEffect(() => { fetchServers(); fetchAlertConfig(); }, [fetchServers, fetchAlertConfig]);
+
+  // Fetch server tags for batch commands
+  useEffect(() => {
+    fetch("/v1/dashboard/servers/tags")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.ok) setServerTags(d.tags || []); })
+      .catch(() => {});
+  }, []);
+
+  const handleBatchExecute = async () => {
+    if (!batchCmd.trim()) return;
+    setBatchRunning(true);
+    try {
+      const res = await fetch("/v1/dashboard/batch/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: batchCmd, mode: batchMode, tag: batchTag || undefined }),
+      });
+      const d = await res.json();
+      if (d?.ok) setBatchResults(d);
+    } catch {}
+    setBatchRunning(false);
+  };
 
   useEffect(() => {
     fetchStatus();
@@ -1374,6 +1429,12 @@ export function OpsView() {
               <h3 className="text-[14px] font-semibold text-ink">{t("session:ops.sshServers")}</h3>
               <div className="flex gap-2">
                 <button
+                  onClick={() => setShowOnboard(!showOnboard)}
+                  className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20"
+                >
+                  서버 온보딩
+                </button>
+                <button
                   className="text-[12.5px] text-accent font-medium"
                   onClick={() => setSshModal({ open: true, server: null })}
                 >
@@ -1428,8 +1489,91 @@ export function OpsView() {
                 ))}
               </div>
             )}
+
+            {/* Server Onboarding Form */}
+            {showOnboard && (
+              <div className={CARD + " p-4 mt-3"}>
+                <h3 className="font-semibold text-sm mb-3">서버 온보딩</h3>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <input placeholder="서버 ID *" value={onboardForm.server_id} onChange={(e) => setOnboardForm((p) => ({ ...p, server_id: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder="호스트(IP) *" value={onboardForm.host} onChange={(e) => setOnboardForm((p) => ({ ...p, host: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder="포트" type="number" value={onboardForm.port} onChange={(e) => setOnboardForm((p) => ({ ...p, port: Number(e.target.value) }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder="사용자명" value={onboardForm.username} onChange={(e) => setOnboardForm((p) => ({ ...p, username: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder="키 경로" value={onboardForm.key_path} onChange={(e) => setOnboardForm((p) => ({ ...p, key_path: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder="라벨" value={onboardForm.label} onChange={(e) => setOnboardForm((p) => ({ ...p, label: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder="태그 (쉼표 구분)" value={onboardForm.tags} onChange={(e) => setOnboardForm((p) => ({ ...p, tags: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel col-span-2" />
+                </div>
+                <button onClick={handleOnboard} disabled={onboarding || !onboardForm.server_id || !onboardForm.host}
+                  className="mt-3 text-xs px-3 py-1.5 rounded bg-accent text-white hover:bg-accent/90 disabled:opacity-50">
+                  {onboarding ? "온보딩 중..." : "온보딩 시작"}
+                </button>
+                {onboardResult && (
+                  <div className="mt-3 p-3 rounded-lg bg-paper text-xs">
+                    <div className={onboardResult.ok ? "text-green-400" : "text-yellow-400"}>
+                      {onboardResult.ok ? "온보딩 완료" : "일부 실패"}
+                    </div>
+                    <div className="mt-1 text-muted">
+                      완료: {onboardResult.steps_completed?.join(", ") || "없음"}
+                    </div>
+                    {onboardResult.steps_failed?.length > 0 && (
+                      <div className="mt-1 text-red-400">
+                        실패: {onboardResult.steps_failed.join(", ")}
+                      </div>
+                    )}
+                    {onboardResult.system_info?.os && (
+                      <div className="mt-1">OS: {onboardResult.system_info.os}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
+      </div>
+
+      {/* Batch Command */}
+      <div className={CARD + " p-4 mt-4"}>
+        <h3 className="font-semibold text-sm mb-3">일괄 명령 실행</h3>
+        <div className="flex gap-2 mb-2">
+          <select value={batchMode} onChange={(e) => setBatchMode(e.target.value as any)}
+            className="text-xs px-2 py-1 rounded border border-line bg-panel">
+            <option value="parallel">병렬 실행</option>
+            <option value="rolling">롤링 실행</option>
+          </select>
+          {serverTags.length > 0 && (
+            <select value={batchTag} onChange={(e) => setBatchTag(e.target.value)}
+              className="text-xs px-2 py-1 rounded border border-line bg-panel">
+              <option value="">전체 서버</option>
+              {serverTags.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input value={batchCmd} onChange={(e) => setBatchCmd(e.target.value)}
+            placeholder="실행할 명령어..." className="flex-1 text-xs px-2 py-1.5 rounded border border-line bg-panel font-mono"
+            onKeyDown={(e) => e.key === "Enter" && handleBatchExecute()} />
+          <button onClick={handleBatchExecute} disabled={batchRunning || !batchCmd.trim()}
+            className="text-xs px-3 py-1.5 rounded bg-accent text-white hover:bg-accent/90 disabled:opacity-50">
+            {batchRunning ? "실행 중..." : "실행"}
+          </button>
+        </div>
+        {batchResults && (
+          <div className="mt-3 space-y-1">
+            <div className="text-xs text-muted">
+              전체 {batchResults.total} | 성공 <span className="text-green-400">{batchResults.succeeded}</span> | 실패 <span className="text-red-400">{batchResults.failed}</span> | {batchResults.duration_ms}ms
+            </div>
+            {batchResults.results?.map((r: any, i: number) => (
+              <div key={i} className={`text-xs p-2 rounded ${r.ok ? "bg-green-500/5" : "bg-red-500/5"}`}>
+                <span className="font-medium">[{r.server_id}]</span>
+                {r.ok ? (
+                  <pre className="text-muted mt-1 whitespace-pre-wrap">{r.stdout?.slice(0, 300)}</pre>
+                ) : (
+                  <span className="text-red-400 ml-2">{r.error || r.stderr}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Modals */}

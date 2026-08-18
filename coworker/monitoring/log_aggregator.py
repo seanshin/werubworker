@@ -448,6 +448,44 @@ class LogAggregator:
 
         return [dict(r) for r in rows]
 
+    def query(
+        self,
+        server_id: str | None = None,
+        severity: str | None = None,
+        pattern: str | None = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[LogEntry]:
+        """로그 엔트리 검색 (필터 + 페이징)."""
+        sql = "SELECT source_id, server_id, timestamp, line, severity, matched_pattern FROM log_entries WHERE 1=1"
+        params: list[Any] = []
+        if server_id:
+            sql += " AND server_id = ?"
+            params.append(server_id)
+        if severity:
+            sql += " AND severity = ?"
+            params.append(severity)
+        if pattern:
+            sql += " AND line LIKE ?"
+            params.append(f"%{pattern}%")
+        sql += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [
+            LogEntry(
+                source_id=r[0], server_id=r[1], timestamp=r[2],
+                line=r[3], severity=r[4], matched_pattern=r[5] or "",
+            )
+            for r in rows
+        ]
+
+    def list_servers(self) -> list[str]:
+        """로그가 기록된 서버 목록."""
+        with self._connect() as conn:
+            rows = conn.execute("SELECT DISTINCT server_id FROM log_entries").fetchall()
+        return [r[0] for r in rows]
+
     def prune(self, retention_days: int = 7) -> dict:
         """보관 기간 초과 로그 엔트리 삭제."""
         cutoff = time.time() - retention_days * 86400

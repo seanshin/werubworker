@@ -61,6 +61,10 @@ const DatabaseView = lazy(() => import("./components/DatabaseView").then(m => ({
 const ServiceConfigView = lazy(() => import("./components/ServiceConfigView").then(m => ({ default: m.ServiceConfigView })));
 const WikiView = lazy(() => import("./components/WikiView").then(m => ({ default: m.WikiView })));
 const MonitoringView = lazy(() => import("./components/MonitoringView").then(m => ({ default: m.MonitoringView })));
+const LogView = lazy(() => import("./components/LogView").then(m => ({ default: m.LogView })));
+const TopologyView = lazy(() => import("./components/TopologyView").then(m => ({ default: m.TopologyView })));
+const SecurityView = lazy(() => import("./components/SecurityView").then(m => ({ default: m.SecurityView })));
+const BackupView = lazy(() => import("./components/BackupView").then(m => ({ default: m.BackupView })));
 import { ApprovalCard } from "./components/ApprovalCard";
 import { DirectoryRequestCard } from "./components/DirectoryRequestCard";
 import { PlanCard } from "./components/PlanCard";
@@ -153,6 +157,10 @@ function AppInner() {
   const openServices = useCallback(() => setSurface("services"), [setSurface]);
   const openWiki = useCallback(() => setSurface("wiki"), [setSurface]);
   const openMonitoring = useCallback(() => setSurface("monitoring"), [setSurface]);
+  const openLogs = useCallback(() => setSurface("logs"), [setSurface]);
+  const openTopology = useCallback(() => setSurface("topology"), [setSurface]);
+  const openSecurity = useCallback(() => setSurface("security"), [setSurface]);
+  const openBackup = useCallback(() => setSurface("backup"), [setSurface]);
   const onPeekLeave = useCallback(() => setNavPeek(false), [setNavPeek]);
   const onOpenPersonaFromSidebar = useCallback(
     (id: string) => openPersona(id, "session"),
@@ -1003,12 +1011,20 @@ function AppInner() {
         onOpenServices={openServices}
         onOpenWiki={openWiki}
         onOpenMonitoring={openMonitoring}
+        onOpenLogs={openLogs}
+        onOpenTopology={openTopology}
+        onOpenSecurity={openSecurity}
+        onOpenBackup={openBackup}
         opsActive={surface === "ops"}
         devActive={surface === "dev"}
         databaseActive={surface === "database"}
         servicesActive={surface === "services"}
         wikiActive={surface === "wiki"}
         monitoringActive={surface === "monitoring"}
+        logsActive={surface === "logs"}
+        topologyActive={surface === "topology"}
+        securityActive={surface === "security"}
+        backupActive={surface === "backup"}
         scheduledActive={surface === "scheduled"}
         integrationsActive={surface === "integrations"}
         auditActive={surface === "audit"}
@@ -1063,6 +1079,14 @@ function AppInner() {
         <WikiView />
       ) : surface === "monitoring" ? (
         <MonitoringView />
+      ) : surface === "logs" ? (
+        <LogView />
+      ) : surface === "topology" ? (
+        <TopologyView />
+      ) : surface === "security" ? (
+        <SecurityView />
+      ) : surface === "backup" ? (
+        <BackupView />
       ) : surface === "persona" ? (
         <PersonaView
           personaId={personaViewId || agent}

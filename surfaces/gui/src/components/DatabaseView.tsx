@@ -1,8 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PanelHead } from "./IntegrationsView";
 import { Icon } from "./Icon";
 import { SchemaTree } from "./SchemaTree";
+
+function downloadCsv(columns: string[], rows: any[][]) {
+  const header = columns.join(",");
+  const body = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([header + "\n" + body], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "query_result.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const CARD = "rounded-xl2 border border-line bg-panel";
 const BTN_ACCENT =
@@ -420,7 +432,24 @@ export function DatabaseView() {
   const [migrationsLoading, setMigrationsLoading] = useState(false);
   const [erdMermaid, setErdMermaid] = useState<string | null>(null);
   const [erdLoading, setErdLoading] = useState(false);
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortAsc, setSortAsc] = useState(true);
+  const [queryDuration, setQueryDuration] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const sortedRows = useMemo(() => {
+    if (!sortCol || !queryResult?.rows) return queryResult?.rows || [];
+    const idx = queryResult.columns.indexOf(sortCol);
+    if (idx < 0) return queryResult.rows;
+    return [...queryResult.rows].sort((a, b) => {
+      const va = a[idx], vb = b[idx];
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      const na = Number(va), nb = Number(vb);
+      if (!isNaN(na) && !isNaN(nb)) return sortAsc ? na - nb : nb - na;
+      return sortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+  }, [queryResult, sortCol, sortAsc]);
 
   const fetchDatabases = useCallback(() => {
     setLoading(true);
@@ -534,6 +563,10 @@ export function DatabaseView() {
     setQueryResult(null);
     setErrorMsg(null);
     setPage(currentPage);
+    setSortCol(null);
+    setSortAsc(true);
+    setQueryDuration(null);
+    const queryStart = performance.now();
 
     // Cancel any in-flight request
     if (abortRef.current) abortRef.current.abort();
@@ -585,6 +618,7 @@ export function DatabaseView() {
       .finally(() => {
         clearTimeout(timeoutId);
         setExecuting(false);
+        setQueryDuration(Math.round(performance.now() - queryStart));
         abortRef.current = null;
       });
   };
@@ -833,11 +867,22 @@ export function DatabaseView() {
                 ) : (
                   <>
                     <div className="flex items-center justify-between mb-2">
-                      <div className="text-[11.5px] text-faint">
-                        {t("session:database.page")} {page + 1}
-                        {queryResult.totalFetched != null && (
-                          <span> &middot; {queryResult.totalFetched} {t("session:database.totalRows")}</span>
-                        )}
+                      <div className="text-[11.5px] text-faint flex items-center gap-2">
+                        <span>
+                          {t("session:database.page")} {page + 1}
+                          {queryResult.totalFetched != null && (
+                            <span> &middot; {queryResult.totalFetched} {t("session:database.totalRows")}</span>
+                          )}
+                          {queryDuration != null && (
+                            <span> &middot; {queryDuration}ms</span>
+                          )}
+                        </span>
+                        <button
+                          onClick={() => downloadCsv(queryResult.columns, queryResult.rows)}
+                          className="text-xs px-2 py-0.5 rounded bg-paper hover:bg-accent/10 border border-line"
+                        >
+                          CSV 다운로드
+                        </button>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -864,15 +909,22 @@ export function DatabaseView() {
                               {queryResult.columns.map((col, i) => (
                                 <th
                                   key={i}
-                                  className="px-3 py-1.5 text-left font-semibold text-ink whitespace-nowrap"
+                                  className="px-3 py-1.5 text-left font-semibold text-ink whitespace-nowrap cursor-pointer hover:bg-paper/80 select-none"
+                                  onClick={() => {
+                                    if (sortCol === col) setSortAsc(!sortAsc);
+                                    else { setSortCol(col); setSortAsc(true); }
+                                  }}
                                 >
                                   {col}
+                                  {sortCol === col && (
+                                    <span className="ml-1 text-accent">{sortAsc ? "\u25B2" : "\u25BC"}</span>
+                                  )}
                                 </th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
-                            {queryResult.rows.map((row, ri) => (
+                            {sortedRows.map((row, ri) => (
                               <tr
                                 key={ri}
                                 className="border-b border-line last:border-b-0 hover:bg-paper/50"

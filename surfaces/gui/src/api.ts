@@ -1648,6 +1648,98 @@ export function connectEvents(
   };
 }
 
+/** Real-time metric stream (/ws/metrics): pushes collected server metrics.
+ * Quietly reconnects while the app is open. */
+export function connectMetrics(
+  onMetrics: (points: { server_id: string; cpu: number; memory: number; disk: number; load_1m: number; net_rx: number; net_tx: number }[]) => void
+): () => void {
+  let ws: WebSocket | null = null;
+  let timer: number | null = null;
+  let closed = false;
+  const open = () => {
+    if (closed) return;
+    ws = openWebSocket(`${wsBase()}/ws/metrics`);
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "metrics_update" && msg.points) {
+          onMetrics(msg.points);
+        }
+      } catch {
+        /* malformed frame — ignore */
+      }
+    };
+    ws.onclose = () => {
+      if (!closed) timer = window.setTimeout(open, 5000);
+    };
+  };
+  open();
+  return () => {
+    closed = true;
+    if (timer !== null) window.clearTimeout(timer);
+    ws?.close();
+  };
+}
+
+/** Fetch detected anomalies */
+export async function fetchAnomalies(serverId?: string, window?: number): Promise<any> {
+  const params = new URLSearchParams();
+  if (serverId) params.set("server_id", serverId);
+  if (window) params.set("window", String(window));
+  const res = await fetch(`${httpBase()}/v1/dashboard/anomalies?${params}`);
+  return res.json();
+}
+
+/** Trigger LLM anomaly analysis */
+export async function analyzeAnomalies(serverId?: string, window?: number): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/dashboard/anomalies/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ server_id: serverId, window: window || 60 }),
+  });
+  return res.json();
+}
+
+/** Generate postmortem for an incident */
+export async function generatePostmortem(incidentId: string, useLlm = false): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/dashboard/incidents/${incidentId}/postmortem`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ use_llm: useLlm }),
+  });
+  return res.json();
+}
+
+/** Fetch escalation policies */
+export async function fetchEscalationPolicies(): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/dashboard/escalation-policies`);
+  return res.json();
+}
+
+/** Workflow CRUD */
+export async function fetchWorkflows(): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/dashboard/workflows`);
+  return res.json();
+}
+export async function createWorkflow(payload: { name: string; description: string; steps: any[]; entry_step?: string }): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/dashboard/workflows`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+export async function executeWorkflow(workflowId: string): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/dashboard/workflows/${workflowId}/execute`, { method: "POST" });
+  return res.json();
+}
+export async function fetchWorkflowExecutions(workflowId: string): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/dashboard/workflows/${workflowId}/executions`);
+  return res.json();
+}
+export async function deleteWorkflow(workflowId: string): Promise<any> {
+  const res = await fetch(`${httpBase()}/v1/dashboard/workflows/${workflowId}`, { method: "DELETE" });
+  return res.json();
+}
+
 /** Advance the automation's seen mark — clears its unseen-runs badge (UX-023). */
 export async function markAutomationSeen(id: string): Promise<{ ok: boolean }> {
   const res = await fetch(`${httpBase()}/v1/automations/${id}/seen`, { method: "POST" });

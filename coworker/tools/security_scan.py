@@ -486,4 +486,311 @@ def security_scan_tools(context: Any = None) -> list:
         )
     )
 
+    # -- container_scan --
+    def container_scan(image: str = "", server: str = "") -> dict:
+        """컨테이너 이미지 취약점 스캔 (Trivy CLI 연동)."""
+        import json as _json
+
+        cmd = f"trivy image --format json --severity HIGH,CRITICAL {image} 2>/dev/null"
+
+        if server:
+            if not secrets:
+                return {"ok": False, "error": "No secrets configured for SSH."}
+            result = _ssh_run(secrets, server, cmd, timeout=120)
+            if not result.get("ok"):
+                return result
+            stdout = result.get("stdout", "")
+        else:
+            try:
+                proc = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True, timeout=120,
+                )
+                stdout = proc.stdout
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                return {"ok": False, "error": "trivy not installed or timeout"}
+
+        vulnerabilities: list[dict] = []
+        try:
+            data = _json.loads(stdout)
+            results_list = data.get("Results", []) if isinstance(data, dict) else data
+            for r in results_list:
+                for v in r.get("Vulnerabilities", []):
+                    vulnerabilities.append({
+                        "id": v.get("VulnerabilityID", ""),
+                        "severity": v.get("Severity", ""),
+                        "package": v.get("PkgName", ""),
+                        "installed": v.get("InstalledVersion", ""),
+                        "fixed": v.get("FixedVersion", ""),
+                        "title": v.get("Title", ""),
+                    })
+        except Exception:
+            if not stdout.strip():
+                return {
+                    "ok": True,
+                    "image": image,
+                    "vulnerabilities": [],
+                    "message": "trivy를 찾을 수 없거나 결과 없음",
+                }
+
+        return {
+            "ok": True,
+            "image": image,
+            "total": len(vulnerabilities),
+            "critical": len([v for v in vulnerabilities if v["severity"] == "CRITICAL"]),
+            "high": len([v for v in vulnerabilities if v["severity"] == "HIGH"]),
+            "vulnerabilities": vulnerabilities[:50],
+        }
+
+    tools.append(
+        _attach(
+            container_scan,
+            _schema(
+                "container_scan",
+                "Scan a container image for HIGH/CRITICAL vulnerabilities using Trivy.",
+                {
+                    "image": {
+                        "type": "string",
+                        "description": "Docker image name (e.g. 'nginx:latest').",
+                    },
+                    "server": {
+                        "type": "string",
+                        "description": "Server ID for remote scan (empty = localhost).",
+                    },
+                },
+                ["image"],
+            ),
+            caps=["security"],
+        )
+    )
+
+    # -- dependency_audit --
+    def dependency_audit(project_path: str = ".", audit_type: str = "auto") -> dict:
+        """의존성 취약점 검사 (npm audit / pip-audit)."""
+        import json as _json
+
+        audit_results: list[dict] = []
+
+        # 자동 감지
+        types_to_check: list[str] = []
+        if audit_type == "auto":
+            if os.path.exists(os.path.join(project_path, "package-lock.json")) or os.path.exists(
+                os.path.join(project_path, "package.json")
+            ):
+                types_to_check.append("npm")
+            if os.path.exists(os.path.join(project_path, "requirements.txt")) or os.path.exists(
+                os.path.join(project_path, "pyproject.toml")
+            ):
+                types_to_check.append("pip")
+        else:
+            types_to_check = [audit_type]
+
+        for t in types_to_check:
+            if t == "npm":
+                try:
+                    proc = subprocess.run(
+                        ["npm", "audit", "--json"],
+                        capture_output=True, text=True, timeout=60, cwd=project_path,
+                    )
+                    data = _json.loads(proc.stdout) if proc.stdout else {}
+                    vulns = data.get("vulnerabilities", {})
+                    audit_results.append({
+                        "type": "npm",
+                        "total": len(vulns),
+                        "critical": sum(1 for v in vulns.values() if v.get("severity") == "critical"),
+                        "high": sum(1 for v in vulns.values() if v.get("severity") == "high"),
+                        "packages": [
+                            {"name": k, "severity": v.get("severity", ""), "via": str(v.get("via", ""))[:100]}
+                            for k, v in list(vulns.items())[:30]
+                        ],
+                    })
+                except Exception as e:
+                    audit_results.append({"type": "npm", "error": str(e)})
+
+            elif t == "pip":
+                try:
+                    proc = subprocess.run(
+                        ["pip-audit", "--format", "json", "-r", os.path.join(project_path, "requirements.txt")],
+                        capture_output=True, text=True, timeout=60,
+                    )
+                    data = _json.loads(proc.stdout) if proc.stdout else []
+                    audit_results.append({
+                        "type": "pip",
+                        "total": len(data),
+                        "packages": [
+                            {"name": v.get("name", ""), "version": v.get("version", ""), "fix": v.get("fix_versions", []), "id": v.get("id", "")}
+                            for v in data[:30]
+                        ],
+                    })
+                except Exception as e:
+                    audit_results.append({"type": "pip", "error": str(e)})
+
+        return {"ok": True, "audits": audit_results}
+
+    tools.append(
+        _attach(
+            dependency_audit,
+            _schema(
+                "dependency_audit",
+                "Audit project dependencies for known vulnerabilities (npm audit / pip-audit).",
+                {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Project directory path (default: '.').",
+                    },
+                    "audit_type": {
+                        "type": "string",
+                        "description": "Audit type: 'npm', 'pip', or 'auto' (auto-detect). Default: 'auto'.",
+                    },
+                },
+                [],
+            ),
+            caps=["security"],
+        )
+    )
+
+    # -- firewall_check --
+    def firewall_check(server: str = "") -> dict:
+        """방화벽 규칙 검증 (iptables/ufw/nftables)."""
+        commands = {
+            "ufw": "sudo ufw status verbose 2>/dev/null",
+            "iptables": "sudo iptables -L -n --line-numbers 2>/dev/null",
+            "nftables": "sudo nft list ruleset 2>/dev/null | head -50",
+        }
+
+        rules: list[dict] = []
+
+        for fw_type, cmd in commands.items():
+            if server:
+                if not secrets:
+                    continue
+                result = _ssh_run(secrets, server, cmd, timeout=15)
+                stdout = result.get("stdout", "") if result.get("ok") else ""
+            else:
+                try:
+                    proc = subprocess.run(
+                        cmd, shell=True, capture_output=True, text=True, timeout=15,
+                    )
+                    stdout = proc.stdout
+                except Exception:
+                    continue
+
+            if stdout.strip():
+                rules.append({"type": fw_type, "output": stdout.strip()[:2000]})
+
+        return {
+            "ok": True,
+            "server": server or "localhost",
+            "rules": rules,
+        }
+
+    tools.append(
+        _attach(
+            firewall_check,
+            _schema(
+                "firewall_check",
+                "Check firewall rules (iptables/ufw/nftables) on local or remote server.",
+                {
+                    "server": {
+                        "type": "string",
+                        "description": "Server ID for remote check (empty = localhost).",
+                    },
+                },
+                [],
+            ),
+            caps=["security"],
+        )
+    )
+
+    # -- security_score --
+    def security_score(server: str = "") -> dict:
+        """종합 보안 점수 산출 — 항목별 점수를 계산하여 종합 등급을 반환."""
+        scores: dict[str, dict] = {}
+        total = 0
+
+        # 1. SSL 인증서 (25점)
+        ssl_result = ssl_check(domain="localhost", port=443)
+        if ssl_result.get("ok"):
+            status = ssl_result.get("status", "")
+            if status == "valid":
+                scores["ssl"] = {"score": 25, "max": 25, "status": "양호"}
+            elif status == "warning":
+                scores["ssl"] = {"score": 15, "max": 25, "status": "주의"}
+            else:
+                scores["ssl"] = {"score": 0, "max": 25, "status": "위험"}
+        else:
+            scores["ssl"] = {"score": 15, "max": 25, "status": "확인 불가"}
+        total += scores["ssl"]["score"]
+
+        # 2. 포트 노출 (25점)
+        port_result = port_scan(host="127.0.0.1", ports="22,80,443,3306,5432,6379,27017")
+        if port_result.get("ok"):
+            open_risky = sum(
+                1
+                for p in port_result.get("results", [])
+                if p.get("status") == "open" and p.get("port") in [3306, 5432, 6379, 27017]
+            )
+            if open_risky == 0:
+                scores["ports"] = {"score": 25, "max": 25, "status": "양호"}
+            elif open_risky <= 1:
+                scores["ports"] = {"score": 15, "max": 25, "status": "주의"}
+            else:
+                scores["ports"] = {"score": 5, "max": 25, "status": "위험"}
+        else:
+            scores["ports"] = {"score": 15, "max": 25, "status": "확인 불가"}
+        total += scores["ports"]["score"]
+
+        # 3. 방화벽 (25점)
+        fw = firewall_check(server=server)
+        if fw.get("rules"):
+            scores["firewall"] = {"score": 25, "max": 25, "status": "활성"}
+        else:
+            scores["firewall"] = {"score": 5, "max": 25, "status": "미확인"}
+        total += scores["firewall"]["score"]
+
+        # 4. 인증 로그 (25점)
+        if server:
+            auth = auth_log_analysis(server=server, hours=24)
+        else:
+            auth = auth_log_analysis(hours=24)
+        if auth.get("ok"):
+            suspicious = auth.get("unique_ips", 0)
+            if suspicious == 0:
+                scores["auth"] = {"score": 25, "max": 25, "status": "양호"}
+            elif suspicious <= 3:
+                scores["auth"] = {"score": 15, "max": 25, "status": "주의"}
+            else:
+                scores["auth"] = {"score": 5, "max": 25, "status": "위험"}
+        else:
+            scores["auth"] = {"score": 15, "max": 25, "status": "확인 불가"}
+        total += scores["auth"]["score"]
+
+        overall = round(total / 100 * 100)
+        grade = "A" if overall >= 90 else "B" if overall >= 70 else "C" if overall >= 50 else "D"
+
+        return {
+            "ok": True,
+            "server": server or "localhost",
+            "overall_score": overall,
+            "grade": grade,
+            "categories": scores,
+        }
+
+    tools.append(
+        _attach(
+            security_score,
+            _schema(
+                "security_score",
+                "Calculate an overall security score (SSL, ports, firewall, auth logs).",
+                {
+                    "server": {
+                        "type": "string",
+                        "description": "Server ID for remote assessment (empty = localhost).",
+                    },
+                },
+                [],
+            ),
+            caps=["security"],
+        )
+    )
+
     return tools

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { connectMetrics, fetchAnomalies, analyzeAnomalies, generatePostmortem, fetchEscalationPolicies } from "../api";
 import { MiniChart } from "./MiniChart";
 import { ProgressBar } from "./ProgressBar";
 import { Icon } from "./Icon";
@@ -77,6 +78,27 @@ interface MetricPoint {
   cpu: number;
   memory: number;
   disk: number;
+  load_1m?: number;
+  net_rx?: number;
+  net_tx?: number;
+}
+
+interface AnomalyInfo {
+  metric: string;
+  value: number;
+  expected: number;
+  z_score: number;
+  severity: string;
+  description: string;
+  timestamp: number;
+}
+
+interface EscalationPolicy {
+  id: string;
+  name: string;
+  levels: { delay_minutes: number; channels: string[]; assignee: string }[];
+  repeat_last: boolean;
+  enabled: boolean;
 }
 
 interface OverviewData {
@@ -171,10 +193,10 @@ function TabButton({
 
 /* ── Main Component ────────────────────────────────────── */
 
-type TabId = "overview" | "alerts" | "incidents" | "healthchecks" | "audit";
+type TabId = "dashboard" | "overview" | "alerts" | "incidents" | "healthchecks" | "audit";
 
 export function MonitoringView() {
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   // Overview
@@ -196,6 +218,24 @@ export function MonitoringView() {
 
   // Audit
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const [auditStats, setAuditStats] = useState<{ daily: { date: string; total: number; risky: number }[] } | null>(null);
+  const [auditUsers, setAuditUsers] = useState<{ user: string; total: number; risky: number }[]>([]);
+  const [flaggedActions, setFlaggedActions] = useState<AuditEntry[]>([]);
+
+  // Real-time metrics
+  const metricsCleanup = useRef<(() => void) | null>(null);
+
+  // Anomalies
+  const [anomalies, setAnomalies] = useState<Record<string, AnomalyInfo[]>>({});
+  const [anomalyAnalysis, setAnomalyAnalysis] = useState<string>("");
+  const [analyzingAnomalies, setAnalyzingAnomalies] = useState(false);
+
+  // Escalation policies
+  const [escalationPolicies, setEscalationPolicies] = useState<EscalationPolicy[]>([]);
+
+  // Postmortem
+  const [postmortemLoading, setPostmortemLoading] = useState<string | null>(null);
+  const [postmortemResult, setPostmortemResult] = useState<Record<string, string>>({});
 
   /* ── Fetch functions ─────────────────────────────────── */
 
@@ -252,6 +292,27 @@ export function MonitoringView() {
       .catch(() => {});
   }, []);
 
+  const fetchAuditStats = useCallback(() => {
+    fetch("/v1/dashboard/audit/stats?days=7")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.ok) setAuditStats(d); })
+      .catch(() => {});
+  }, []);
+
+  const fetchAuditUsers = useCallback(() => {
+    fetch("/v1/dashboard/audit/users?days=7")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.ok) setAuditUsers(d.users || []); })
+      .catch(() => {});
+  }, []);
+
+  const fetchFlagged = useCallback(() => {
+    fetch("/v1/dashboard/audit/flagged?limit=20")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.ok) setFlaggedActions(d.flagged || []); })
+      .catch(() => {});
+  }, []);
+
   const fetchWebhooks = useCallback(() => {
     fetch("/v1/dashboard/webhooks")
       .then((r) => (r.ok ? r.json() : null))
@@ -268,9 +329,9 @@ export function MonitoringView() {
       fetchWebhooks();
     }
     if (activeTab === "incidents") fetchIncidents();
-    if (activeTab === "audit") fetchAudit();
+    if (activeTab === "audit") { fetchAudit(); fetchAuditStats(); fetchAuditUsers(); fetchFlagged(); }
     setLastRefresh(new Date());
-  }, [activeTab, fetchOverview, fetchAlerts, fetchWebhooks, fetchIncidents, fetchAudit]);
+  }, [activeTab, fetchOverview, fetchAlerts, fetchWebhooks, fetchIncidents, fetchAudit, fetchAuditStats, fetchAuditUsers, fetchFlagged]);
 
   // Initial + tab change
   useEffect(() => {
@@ -283,6 +344,81 @@ export function MonitoringView() {
     return () => clearInterval(id);
   }, [fetchAll]);
 
+  // Real-time metrics via WebSocket
+  useEffect(() => {
+    metricsCleanup.current = connectMetrics((points) => {
+      setServerMetrics((prev) => {
+        const next = { ...prev };
+        for (const p of points) {
+          const sid = p.server_id;
+          const entry: MetricPoint = {
+            ts: Date.now() / 1000,
+            cpu: p.cpu,
+            memory: p.memory,
+            disk: p.disk,
+            load_1m: p.load_1m,
+            net_rx: p.net_rx,
+            net_tx: p.net_tx,
+          };
+          const existing = next[sid] || [];
+          // Keep last 120 points
+          next[sid] = [...existing.slice(-119), entry];
+        }
+        return next;
+      });
+    });
+    return () => {
+      metricsCleanup.current?.();
+    };
+  }, []);
+
+  // Fetch anomalies periodically
+  useEffect(() => {
+    const loadAnomalies = () => {
+      fetchAnomalies().then((d) => {
+        if (d?.ok && d.servers) {
+          const map: Record<string, AnomalyInfo[]> = {};
+          for (const s of d.servers) {
+            map[s.server_id] = s.anomalies;
+          }
+          setAnomalies(map);
+        }
+      }).catch(() => {});
+    };
+    loadAnomalies();
+    const id = setInterval(loadAnomalies, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Fetch escalation policies
+  useEffect(() => {
+    if (activeTab === "alerts") {
+      fetchEscalationPolicies().then((d) => {
+        if (d?.ok) setEscalationPolicies(d.policies || []);
+      }).catch(() => {});
+    }
+  }, [activeTab]);
+
+  const handleAnalyzeAnomalies = async () => {
+    setAnalyzingAnomalies(true);
+    try {
+      const d = await analyzeAnomalies();
+      if (d?.ok) setAnomalyAnalysis(d.analysis || "");
+    } catch { /* ignore */ }
+    setAnalyzingAnomalies(false);
+  };
+
+  const handlePostmortem = async (incidentId: string, useLlm = false) => {
+    setPostmortemLoading(incidentId);
+    try {
+      const d = await generatePostmortem(incidentId, useLlm);
+      if (d?.ok && d.markdown) {
+        setPostmortemResult((prev) => ({ ...prev, [incidentId]: d.markdown }));
+      }
+    } catch { /* ignore */ }
+    setPostmortemLoading(null);
+  };
+
   // Fetch server metrics when overview loads
   useEffect(() => {
     if (overview?.servers) {
@@ -293,6 +429,7 @@ export function MonitoringView() {
   }, [overview, fetchServerMetrics]);
 
   const tabs: { id: TabId; label: string }[] = [
+    { id: "dashboard", label: "대시보드" },
     { id: "overview", label: "개요" },
     { id: "alerts", label: "알림" },
     { id: "incidents", label: "인시던트" },
@@ -326,10 +463,51 @@ export function MonitoringView() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
+        {activeTab === "dashboard" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              {overview?.servers?.map((s) => (
+                <div key={s.server_id} className={CARD + " p-4"}>
+                  <h4 className="text-xs font-medium text-muted mb-3">{s.name || s.server_id}</h4>
+                  <div className="flex gap-4 justify-center">
+                    <GaugeWidget label="CPU" value={s.cpu_percent ?? 0} color="var(--accent)" />
+                    <GaugeWidget label="MEM" value={s.memory_percent ?? 0} color="var(--warn)" />
+                    <GaugeWidget label="DISK" value={s.disk_percent ?? 0} color="var(--danger)" />
+                  </div>
+                  {serverMetrics[s.server_id]?.length > 1 && (
+                    <div className="mt-3">
+                      <MiniChart data={serverMetrics[s.server_id].map((p) => p.cpu)} height={40} color="var(--accent)" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {overview?.active_alerts?.length ? (
+              <div className={CARD + " p-4 mt-4"}>
+                <h3 className="text-sm font-semibold mb-2">활성 알림 ({overview.active_alerts.length})</h3>
+                <div className="space-y-1">
+                  {overview.active_alerts.slice(0, 5).map((a, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <SeverityBadge severity={a.severity} />
+                      <span className="text-muted">{a.server_name || a.server_id}</span>
+                      <span>{a.message}</span>
+                      {a.fired_at && <span className="text-muted ml-auto">{relativeTime(a.fired_at)}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
         {activeTab === "overview" && (
           <OverviewPanel
             overview={overview}
             serverMetrics={serverMetrics}
+            anomalies={anomalies}
+            anomalyAnalysis={anomalyAnalysis}
+            analyzingAnomalies={analyzingAnomalies}
+            onAnalyzeAnomalies={handleAnalyzeAnomalies}
           />
         )}
         {activeTab === "alerts" && (
@@ -337,6 +515,7 @@ export function MonitoringView() {
             active={activeAlerts}
             history={alertHistory}
             webhooks={webhooks}
+            escalationPolicies={escalationPolicies}
           />
         )}
         {activeTab === "incidents" && (
@@ -346,6 +525,9 @@ export function MonitoringView() {
             onToggle={(id) =>
               setExpandedIncident(expandedIncident === id ? null : id)
             }
+            postmortemLoading={postmortemLoading}
+            postmortemResult={postmortemResult}
+            onPostmortem={handlePostmortem}
           />
         )}
         {activeTab === "healthchecks" && (
@@ -364,8 +546,42 @@ export function MonitoringView() {
             }}
           />
         )}
-        {activeTab === "audit" && <AuditPanel entries={auditEntries} />}
+        {activeTab === "audit" && (
+          <AuditPanel
+            entries={auditEntries}
+            auditStats={auditStats}
+            auditUsers={auditUsers}
+            flaggedActions={flaggedActions}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+/* ── Gauge Widget ─────────────────────────────────────── */
+
+function GaugeWidget({ label, value, color }: { label: string; value: number; color: string }) {
+  const r = 30;
+  const circumference = 2 * Math.PI * r;
+  const progress = Math.min(100, Math.max(0, value));
+  const offset = circumference - (progress / 100) * circumference;
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <svg width="72" height="72" viewBox="0 0 72 72">
+        <circle cx="36" cy="36" r={r} fill="none" stroke="var(--line)" strokeWidth="6" />
+        <circle
+          cx="36" cy="36" r={r} fill="none" stroke={color} strokeWidth="6"
+          strokeDasharray={circumference} strokeDashoffset={offset}
+          strokeLinecap="round" transform="rotate(-90 36 36)"
+          style={{ transition: "stroke-dashoffset 0.5s ease" }}
+        />
+        <text x="36" y="38" textAnchor="middle" dominantBaseline="middle"
+          fill="var(--ink)" fontSize="14" fontWeight="600">
+          {Math.round(value)}%
+        </text>
+      </svg>
+      <span className="text-[10px] text-muted">{label}</span>
     </div>
   );
 }
@@ -375,9 +591,17 @@ export function MonitoringView() {
 function OverviewPanel({
   overview,
   serverMetrics,
+  anomalies,
+  anomalyAnalysis,
+  analyzingAnomalies,
+  onAnalyzeAnomalies,
 }: {
   overview: OverviewData | null;
   serverMetrics: Record<string, MetricPoint[]>;
+  anomalies: Record<string, AnomalyInfo[]>;
+  anomalyAnalysis: string;
+  analyzingAnomalies: boolean;
+  onAnalyzeAnomalies: () => void;
 }) {
   if (!overview) {
     return <p className="text-muted text-sm">데이터를 불러오는 중...</p>;
@@ -433,7 +657,14 @@ function OverviewPanel({
                       {srv.name || srv.host}
                     </span>
                   </div>
-                  <span className="text-[11px] text-faint">{srv.host}</span>
+                  <div className="flex items-center gap-2">
+                    {anomalies[srv.server_id]?.length ? (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 font-medium">
+                        이상 {anomalies[srv.server_id].length}건
+                      </span>
+                    ) : null}
+                    <span className="text-[11px] text-faint">{srv.host}</span>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <ProgressBar
@@ -512,6 +743,38 @@ function OverviewPanel({
           </div>
         </div>
       </div>
+
+      {/* Anomaly Detection */}
+      {Object.keys(anomalies).length > 0 && (
+        <div className={CARD + " p-4 mt-4"}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-sm">이상 탐지</h3>
+            <button
+              onClick={onAnalyzeAnomalies}
+              disabled={analyzingAnomalies}
+              className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50"
+            >
+              {analyzingAnomalies ? "분석 중..." : "AI 분석"}
+            </button>
+          </div>
+          <div className="space-y-2">
+            {Object.entries(anomalies).map(([sid, items]) =>
+              items.map((a, i) => (
+                <div key={`${sid}-${i}`} className="flex items-center gap-2 text-xs">
+                  <SeverityBadge severity={a.severity} />
+                  <span className="text-muted">[{sid}]</span>
+                  <span>{a.description}</span>
+                </div>
+              ))
+            )}
+          </div>
+          {anomalyAnalysis && (
+            <div className="mt-3 p-3 rounded-lg bg-paper text-xs whitespace-pre-wrap">
+              {anomalyAnalysis}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -522,10 +785,12 @@ function AlertsPanel({
   active,
   history,
   webhooks,
+  escalationPolicies,
 }: {
   active: Alert[];
   history: Alert[];
   webhooks: Webhook[];
+  escalationPolicies: EscalationPolicy[];
 }) {
   return (
     <div className="space-y-6">
@@ -618,6 +883,34 @@ function AlertsPanel({
           )}
         </div>
       </div>
+
+      {/* Escalation Policies */}
+      {escalationPolicies.length > 0 && (
+        <div className={CARD + " p-4 mt-4"}>
+          <h3 className="font-semibold text-sm mb-3">에스컬레이션 정책</h3>
+          <div className="space-y-2">
+            {escalationPolicies.map((p) => (
+              <div key={p.id} className="p-2 rounded-lg bg-paper text-xs">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium">{p.name}</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${p.enabled ? "bg-green-500/15 text-green-400" : "bg-gray-500/15 text-gray-400"}`}>
+                    {p.enabled ? "활성" : "비활성"}
+                  </span>
+                </div>
+                <div className="text-muted">
+                  {p.levels.map((l, i) => (
+                    <span key={i}>
+                      L{i + 1}: {l.delay_minutes}분 → {l.channels.join(", ") || "없음"}
+                      {l.assignee && ` (${l.assignee})`}
+                      {i < p.levels.length - 1 && " → "}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -628,10 +921,16 @@ function IncidentsPanel({
   incidents,
   expandedId,
   onToggle,
+  postmortemLoading,
+  postmortemResult,
+  onPostmortem,
 }: {
   incidents: Incident[];
   expandedId: string | null;
   onToggle: (id: string) => void;
+  postmortemLoading: string | null;
+  postmortemResult: Record<string, string>;
+  onPostmortem: (id: string, useLlm?: boolean) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -674,6 +973,28 @@ function IncidentsPanel({
                   <p className="text-sm text-muted">타임라인이 비어 있습니다.</p>
                 )}
               </div>
+              {/* Postmortem */}
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => onPostmortem(inc.id)}
+                  disabled={postmortemLoading === inc.id}
+                  className="text-xs px-2 py-1 rounded bg-paper hover:bg-accent/10"
+                >
+                  {postmortemLoading === inc.id ? "생성 중..." : "사후분석 생성"}
+                </button>
+                <button
+                  onClick={() => onPostmortem(inc.id, true)}
+                  disabled={postmortemLoading === inc.id}
+                  className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20"
+                >
+                  AI 사후분석
+                </button>
+              </div>
+              {postmortemResult[inc.id] && (
+                <div className="mt-3 p-3 rounded-lg bg-paper text-xs whitespace-pre-wrap max-h-80 overflow-auto">
+                  {postmortemResult[inc.id]}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -751,9 +1072,84 @@ function HealthChecksPanel({
 
 /* ── Audit Panel ───────────────────────────────────────── */
 
-function AuditPanel({ entries }: { entries: AuditEntry[] }) {
+function AuditPanel({
+  entries,
+  auditStats,
+  auditUsers,
+  flaggedActions,
+}: {
+  entries: AuditEntry[];
+  auditStats: { daily: { date: string; total: number; risky: number }[] } | null;
+  auditUsers: { user: string; total: number; risky: number }[];
+  flaggedActions: AuditEntry[];
+}) {
   return (
     <div>
+      {/* Audit Stats */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        {/* Daily chart */}
+        <div className={CARD + " p-4"}>
+          <h3 className="text-sm font-semibold mb-2">일별 활동</h3>
+          <div className="flex items-end gap-1 h-24">
+            {auditStats?.daily?.map((d, i) => {
+              const maxVal = Math.max(...(auditStats.daily.map((x) => x.total)), 1);
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                  <div className="w-full flex flex-col justify-end" style={{ height: "80px" }}>
+                    {d.risky > 0 && (
+                      <div className="w-full rounded-t" style={{ height: `${(d.risky / maxVal) * 80}px`, background: "var(--danger)", opacity: 0.7 }} />
+                    )}
+                    <div className="w-full rounded-t" style={{ height: `${((d.total - d.risky) / maxVal) * 80}px`, background: "var(--accent)", opacity: 0.5 }} />
+                  </div>
+                  <span className="text-[9px] text-muted">{d.date.slice(5)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* User stats */}
+        <div className={CARD + " p-4"}>
+          <h3 className="text-sm font-semibold mb-2">사용자별 활동</h3>
+          <div className="space-y-1 max-h-24 overflow-auto">
+            {auditUsers.map((u, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                <span className="w-20 truncate font-medium">{u.user || "system"}</span>
+                <div className="flex-1 h-1.5 rounded-full bg-line overflow-hidden">
+                  <div className="h-full rounded-full bg-accent/50" style={{ width: `${Math.min(100, (u.total / Math.max(...auditUsers.map((x) => x.total), 1)) * 100)}%` }} />
+                </div>
+                <span className="text-muted w-8 text-right">{u.total}</span>
+                {u.risky > 0 && <span className="text-red-400 text-[10px]">{u.risky}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Flagged Actions */}
+      {flaggedActions.length > 0 && (
+        <div className={CARD + " p-4 mb-4"}>
+          <h3 className="text-sm font-semibold mb-2 text-red-400">위험 행동 ({flaggedActions.length}건)</h3>
+          <div className="space-y-1 max-h-40 overflow-auto">
+            {flaggedActions.map((e, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                <span className="text-muted">{relativeTime(e.ts)}</span>
+                <span className="font-medium">{e.user || "system"}</span>
+                <span className="text-red-400">{e.action}</span>
+                <span className="text-muted truncate">{e.target}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* CSV Export */}
+      <div className="flex justify-end mb-2">
+        <a href="/v1/dashboard/audit/export?days=30" download className="text-xs px-2 py-1 rounded bg-paper hover:bg-accent/10">
+          CSV 내보내기 (30일)
+        </a>
+      </div>
+
       <h2 className="text-sm font-semibold text-ink mb-3">
         감사 로그 ({entries.length})
       </h2>

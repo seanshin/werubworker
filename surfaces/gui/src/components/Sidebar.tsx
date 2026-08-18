@@ -149,12 +149,20 @@ interface Props {
   onOpenServices: () => void;
   onOpenWiki: () => void;
   onOpenMonitoring: () => void;
+  onOpenLogs: () => void;
+  onOpenTopology: () => void;
+  onOpenSecurity: () => void;
+  onOpenBackup: () => void;
   opsActive: boolean;
   devActive: boolean;
   databaseActive: boolean;
   servicesActive: boolean;
   wikiActive: boolean;
   monitoringActive: boolean;
+  logsActive: boolean;
+  topologyActive: boolean;
+  securityActive: boolean;
+  backupActive: boolean;
   scheduledActive: boolean;
   integrationsActive: boolean;
   auditActive: boolean;
@@ -1090,6 +1098,28 @@ export const Sidebar = memo(function Sidebar(props: Props) {
         <button
           className={
             "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
+            (props.logsActive ? "text-ink bg-paper" : "text-muted")
+          }
+          data-testid="nav-logs"
+          onClick={props.onOpenLogs}
+        >
+          <Icon name="file" size={15} className="shrink-0" />
+          <span className="flex-1">로그</span>
+        </button>
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
+            (props.topologyActive ? "text-ink bg-paper" : "text-muted")
+          }
+          data-testid="nav-topology"
+          onClick={props.onOpenTopology}
+        >
+          <Icon name="plug" size={15} className="shrink-0" />
+          <span className="flex-1">토폴로지</span>
+        </button>
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
             (props.devActive ? "text-ink bg-paper" : "text-muted")
           }
           data-testid="nav-dev"
@@ -1130,6 +1160,28 @@ export const Sidebar = memo(function Sidebar(props: Props) {
         >
           <Icon name="book" size={15} className="shrink-0" />
           <span className="flex-1">{t("common:label.serviceWiki")}</span>
+        </button>
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
+            (props.securityActive ? "text-ink bg-paper" : "text-muted")
+          }
+          data-testid="nav-security"
+          onClick={props.onOpenSecurity}
+        >
+          <Icon name="shield" size={15} className="shrink-0" />
+          <span className="flex-1">보안</span>
+        </button>
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper hover:text-ink " +
+            (props.backupActive ? "text-ink bg-paper" : "text-muted")
+          }
+          data-testid="nav-backup"
+          onClick={props.onOpenBackup}
+        >
+          <Icon name="archive" size={15} className="shrink-0" />
+          <span className="flex-1">백업</span>
         </button>
       </div>
 
@@ -1370,6 +1422,10 @@ export const Sidebar = memo(function Sidebar(props: Props) {
   if (prev.collapsed !== next.collapsed) return false;
   if (prev.opsActive !== next.opsActive) return false;
   if (prev.monitoringActive !== next.monitoringActive) return false;
+  if (prev.logsActive !== next.logsActive) return false;
+  if (prev.topologyActive !== next.topologyActive) return false;
+  if (prev.securityActive !== next.securityActive) return false;
+  if (prev.backupActive !== next.backupActive) return false;
   if (prev.devActive !== next.devActive) return false;
   if (prev.databaseActive !== next.databaseActive) return false;
   if (prev.servicesActive !== next.servicesActive) return false;

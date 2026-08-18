@@ -21,6 +21,24 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
+class EscalationLevel:
+    """에스컬레이션 단계."""
+    delay_minutes: int
+    channels: list[str] = field(default_factory=list)
+    assignee: str = ""
+
+
+@dataclass
+class EscalationPolicy:
+    """에스컬레이션 정책."""
+    id: str = ""
+    name: str = ""
+    levels: list[EscalationLevel] = field(default_factory=list)
+    repeat_last: bool = True
+    enabled: bool = True
+
+
+@dataclass
 class AlertRule:
     id: str  # "rule-{hex}"
     name: str
@@ -33,6 +51,9 @@ class AlertRule:
     cooldown_seconds: int = 300  # 재알림 대기
     server_id: str = ""  # 빈 문자열 = 모든 서버
     auto_remediation: str = ""  # 복구 액션 ID (미래 확장)
+    remediation_action_id: str = ""  # RemediationAction과 연결
+    auto_remediate: bool = False     # 자동 복구 활성화 여부
+    escalation_policy_id: str = ""
     enabled: bool = True
 
     def to_dict(self) -> dict:
@@ -48,6 +69,8 @@ class AlertRule:
             "cooldown_seconds": self.cooldown_seconds,
             "server_id": self.server_id,
             "auto_remediation": self.auto_remediation,
+            "remediation_action_id": self.remediation_action_id,
+            "auto_remediate": self.auto_remediate,
             "enabled": self.enabled,
         }
 
@@ -65,6 +88,8 @@ class AlertRule:
             cooldown_seconds=int(d.get("cooldown_seconds", 300)),
             server_id=d.get("server_id", ""),
             auto_remediation=d.get("auto_remediation", ""),
+            remediation_action_id=d.get("remediation_action_id", ""),
+            auto_remediate=bool(d.get("auto_remediate", False)),
             enabled=d.get("enabled", True),
         )
 
@@ -122,6 +147,8 @@ class AlertEngine:
         self._send_fn = send_fn
         # 인메모리: 조건 지속 시간 추적 {(rule_id, server_id): first_seen_ts}
         self._condition_tracker: dict[tuple[str, str], float] = {}
+        self._remediation_engine = None
+        self._hc_manager = None
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
@@ -169,7 +196,40 @@ class AlertEngine:
                 );
                 CREATE INDEX IF NOT EXISTS idx_alerts_state ON alerts(state);
                 CREATE INDEX IF NOT EXISTS idx_alerts_rule ON alerts(rule_id, server_id);
+                CREATE TABLE IF NOT EXISTS escalation_policies (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    levels TEXT NOT NULL DEFAULT '[]',
+                    repeat_last INTEGER NOT NULL DEFAULT 1,
+                    enabled INTEGER NOT NULL DEFAULT 1
+                );
             """)
+            # 기존 테이블에 에스컬레이션 컬럼 추가 (이미 존재하면 무시)
+            try:
+                conn.execute("ALTER TABLE alerts ADD COLUMN escalation_level INTEGER DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE alerts ADD COLUMN escalation_policy_id TEXT DEFAULT ''")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE alert_rules ADD COLUMN remediation_action_id TEXT DEFAULT ''")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE alert_rules ADD COLUMN auto_remediate INTEGER DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE alert_rules ADD COLUMN escalation_policy_id TEXT DEFAULT ''")
+            except Exception:
+                pass
+
+    def set_remediation_engine(self, engine, hc_manager=None):
+        """RemediationEngine과 HealthCheckManager를 연결."""
+        self._remediation_engine = engine
+        self._hc_manager = hc_manager
 
     # -- Rule CRUD --
 
@@ -180,8 +240,9 @@ class AlertEngine:
             conn.execute(
                 "INSERT OR REPLACE INTO alert_rules "
                 "(id, name, metric, operator, threshold, duration_seconds, severity, "
-                "channels, cooldown_seconds, server_id, auto_remediation, enabled) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "channels, cooldown_seconds, server_id, auto_remediation, "
+                "remediation_action_id, auto_remediate, enabled) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     rule.id,
                     rule.name,
@@ -194,6 +255,8 @@ class AlertEngine:
                     rule.cooldown_seconds,
                     rule.server_id,
                     rule.auto_remediation,
+                    rule.remediation_action_id,
+                    1 if rule.auto_remediate else 0,
                     1 if rule.enabled else 0,
                 ),
             )
@@ -220,6 +283,7 @@ class AlertEngine:
             except (json.JSONDecodeError, TypeError):
                 d["channels"] = []
             d["enabled"] = bool(d.get("enabled", 1))
+            d["auto_remediate"] = bool(d.get("auto_remediate", 0))
             result.append(d)
         return result
 
@@ -301,7 +365,7 @@ class AlertEngine:
                 "state, fired_at, last_notified_at) VALUES (?, ?, ?, ?, ?, ?, 'firing', ?, ?)",
                 (alert_id, rule.id, server_id, rule.severity, title, desc, now, now),
             )
-        return {
+        alert_dict = {
             "id": alert_id,
             "rule_id": rule.id,
             "server_id": server_id,
@@ -311,6 +375,27 @@ class AlertEngine:
             "state": "firing",
             "fired_at": now,
         }
+
+        # 자동 복구 트리거
+        if rule.auto_remediate and rule.remediation_action_id and self._remediation_engine:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(
+                        self._remediation_engine.execute_and_verify(
+                            action_id=rule.remediation_action_id,
+                            alert_id=alert_id,
+                            server_id=server_id,
+                            alert_engine=self,
+                            hc_manager=self._hc_manager,
+                        )
+                    )
+                    log.info("triggered auto-remediation %s for alert %s", rule.remediation_action_id, alert_id)
+            except Exception:
+                log.warning("auto-remediation trigger failed", exc_info=True)
+
+        return alert_dict
 
     def _auto_resolve(self, rule_id: str, server_id: str, now: float) -> None:
         """조건 미충족 시 기존 알림 자동 해제."""
@@ -486,6 +571,105 @@ class AlertEngine:
             return [dict(r) for r in rows]
         except Exception:
             return []
+
+    # -- Escalation policy CRUD --
+
+    def add_escalation_policy(self, name, levels, repeat_last=True):
+        """에스컬레이션 정책 추가."""
+        import secrets as _secrets
+        policy_id = f"esc-{_secrets.token_hex(4)}"
+        levels_json = json.dumps([{"delay_minutes": l.delay_minutes, "channels": l.channels, "assignee": l.assignee} for l in levels])
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "INSERT INTO escalation_policies (id, name, levels, repeat_last) VALUES (?, ?, ?, ?)",
+                (policy_id, name, levels_json, int(repeat_last)),
+            )
+        return policy_id
+
+    def remove_escalation_policy(self, policy_id):
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM escalation_policies WHERE id = ?", (policy_id,))
+
+    def list_escalation_policies(self):
+        with self._connect() as conn:
+            rows = conn.execute("SELECT id, name, levels, repeat_last, enabled FROM escalation_policies").fetchall()
+        result = []
+        for r in rows:
+            levels = json.loads(r["levels"]) if r["levels"] else []
+            result.append({"id": r["id"], "name": r["name"], "levels": levels, "repeat_last": bool(r["repeat_last"]), "enabled": bool(r["enabled"])})
+        return result
+
+    def check_escalations(self, send_fn=None):
+        """활성 알림의 에스컬레이션을 확인하고 필요 시 상위 단계로 알림 전송."""
+        now = time.time()
+        with self._connect() as conn:
+            active = conn.execute(
+                "SELECT id, rule_id, server_id, fired_at, escalation_level, escalation_policy_id "
+                "FROM alerts WHERE state = 'firing'"
+            ).fetchall()
+
+            for alert_row in active:
+                alert_id = alert_row["id"]
+                rule_id = alert_row["rule_id"]
+                server_id = alert_row["server_id"]
+                fired_at = alert_row["fired_at"]
+                current_level = alert_row["escalation_level"] or 0
+                policy_id = alert_row["escalation_policy_id"] or ""
+
+                if not policy_id:
+                    # rule에서 policy_id 조회
+                    rule_row = conn.execute(
+                        "SELECT escalation_policy_id FROM alert_rules WHERE id = ?", (rule_id,)
+                    ).fetchone()
+                    if not rule_row or not rule_row["escalation_policy_id"]:
+                        continue
+                    policy_id = rule_row["escalation_policy_id"]
+
+                policy_row = conn.execute(
+                    "SELECT levels, repeat_last, enabled FROM escalation_policies WHERE id = ?",
+                    (policy_id,)
+                ).fetchone()
+                if not policy_row or not policy_row["enabled"]:
+                    continue
+
+                levels = json.loads(policy_row["levels"]) if policy_row["levels"] else []
+                repeat_last = bool(policy_row["repeat_last"])
+                if not levels:
+                    continue
+
+                elapsed_minutes = (now - fired_at) / 60
+
+                # 다음 에스컬레이션 레벨 결정
+                target_level = current_level
+                cumulative = 0
+                for i, lvl in enumerate(levels):
+                    cumulative += lvl.get("delay_minutes", 0)
+                    if elapsed_minutes >= cumulative and i > current_level:
+                        target_level = i
+
+                if repeat_last and target_level >= len(levels) - 1:
+                    last_delay = levels[-1].get("delay_minutes", 30)
+                    extra_minutes = elapsed_minutes - cumulative
+                    if extra_minutes > 0 and extra_minutes % last_delay < 1:
+                        target_level = len(levels) - 1
+
+                if target_level > current_level or (repeat_last and target_level == len(levels) - 1):
+                    lvl_data = levels[min(target_level, len(levels) - 1)]
+                    if send_fn and lvl_data.get("channels"):
+                        for ch in lvl_data["channels"]:
+                            try:
+                                msg = f"\U0001f53a 에스컬레이션 L{target_level + 1}: [{server_id}] alert {alert_id}"
+                                if lvl_data.get("assignee"):
+                                    msg += f" \u2192 {lvl_data['assignee']}"
+                                send_fn(ch, msg, [])
+                            except Exception:
+                                log.warning("escalation send failed", exc_info=True)
+
+                    conn.execute(
+                        "UPDATE alerts SET escalation_level = ? WHERE id = ?",
+                        (target_level, alert_id),
+                    )
+                    log.info("escalated alert %s to level %d", alert_id, target_level)
 
     def _build_webhook_payload(self, url: str, alert: dict, text: str) -> dict:
         """URL 패턴에 따라 적절한 페이로드 구성."""

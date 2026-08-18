@@ -2854,6 +2854,25 @@ def create_app(manager: SessionManager) -> FastAPI:
         finally:
             manager.unregister_event_client(ws.send_json)
 
+    @app.websocket("/ws/metrics")
+    async def ws_metrics(ws: WebSocket) -> None:
+        """Real-time metric stream: pushes collected metrics to subscribers."""
+        if not _websocket_authenticated(ws):
+            await ws.close(code=1008)
+            return
+        if not _origin_allowed(ws.headers.get("origin")):
+            await ws.close(code=1008)
+            return
+        await ws.accept(subprotocol="werubworker" if api_token else None)
+        manager.register_metrics_client(ws.send_json)
+        try:
+            while True:
+                await ws.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            manager.unregister_metrics_client(ws.send_json)
+
     # ------------------------------------------------------------------
     # Wiki & Credentials endpoints
     # ------------------------------------------------------------------

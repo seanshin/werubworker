@@ -69,10 +69,11 @@ const handlers: Record<string, Handler> = {
     } else if (typeof d.input === "string" && d.input) {
       const shown = (typeof d.display === "string" && d.display) || (d.input as string);
       ctx.setItems((p) => {
-        const last = p[p.length - 1];
-        return last && last.kind === "user" && last.text === shown
-          ? p
-          : [...p, { kind: "user", text: shown, ts: Date.now() / 1000 }];
+        // Search backward (up to 5 recent items) for a matching local echo to dedupe
+        for (let i = p.length - 1; i >= Math.max(0, p.length - 5); i--) {
+          if (p[i].kind === "user" && p[i].text === shown) return p;
+        }
+        return [...p, { kind: "user", text: shown, ts: Date.now() / 1000 }];
       });
     }
   },

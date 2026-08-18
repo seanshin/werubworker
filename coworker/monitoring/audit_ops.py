@@ -203,6 +203,81 @@ class OpsAuditStore:
             ])
         return buf.getvalue()
 
+    def stats_by_period(self, days: int = 7) -> dict:
+        """기간별 감사 통계."""
+        cutoff = time.time() - days * 86400
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT date(ts, 'unixepoch', 'localtime') as day, COUNT(*) as cnt, "
+                "SUM(CASE WHEN result IN ('denied', 'failed') THEN 1 ELSE 0 END) as risky "
+                "FROM ops_audit WHERE ts >= ? GROUP BY day ORDER BY day",
+                (cutoff,),
+            ).fetchall()
+        return {
+            "ok": True,
+            "period_days": days,
+            "daily": [{"date": r["day"], "total": r["cnt"], "risky": r["risky"]} for r in rows],
+        }
+
+    def stats_by_user(self, days: int = 7) -> dict:
+        """사용자별 활동 통계."""
+        cutoff = time.time() - days * 86400
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT user, COUNT(*) as cnt, "
+                "SUM(CASE WHEN result IN ('denied', 'failed') THEN 1 ELSE 0 END) as risky "
+                "FROM ops_audit WHERE ts >= ? GROUP BY user ORDER BY cnt DESC",
+                (cutoff,),
+            ).fetchall()
+        return {
+            "ok": True,
+            "users": [{"user": r["user"], "total": r["cnt"], "risky": r["risky"]} for r in rows],
+        }
+
+    def flagged_actions(self, limit: int = 50) -> list[dict]:
+        """위험 행동으로 플래깅된 항목."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT ts, user, action, target, result, command FROM ops_audit "
+                "WHERE result IN ('denied', 'failed') "
+                "OR action LIKE '%delete%' OR action LIKE '%drop%' "
+                "OR action LIKE '%kill%' OR action LIKE '%force%' "
+                "ORDER BY ts DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "ts": r["ts"],
+                "user": r["user"],
+                "action": r["action"],
+                "target": r["target"],
+                "result": r["result"],
+                "detail": r["command"] or "",
+            }
+            for r in rows
+        ]
+
+    def export_csv_by_days(self, days: int = 30) -> str:
+        """CSV 형식으로 감사 로그 내보내기 (일수 기준)."""
+        cutoff = time.time() - days * 86400
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT ts, user, action, target, result, command FROM ops_audit "
+                "WHERE ts >= ? ORDER BY ts DESC",
+                (cutoff,),
+            ).fetchall()
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["시간", "사용자", "작업", "대상", "결과", "상세"])
+        for r in rows:
+            ts_str = (
+                time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r["ts"]))
+                if r["ts"]
+                else ""
+            )
+            writer.writerow([ts_str, r["user"], r["action"], r["target"], r["result"], r["command"] or ""])
+        return buf.getvalue()
+
     def prune(self, retention_days: int = 365) -> dict:
         """보관 기간 초과 로그 삭제."""
         cutoff = time.time() - (retention_days * 86400)

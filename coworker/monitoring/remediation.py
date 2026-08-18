@@ -324,6 +324,79 @@ class RemediationEngine:
         self._save_execution(exe)
         return {"ok": True, "execution": exe.to_dict()}
 
+    async def execute_and_verify(
+        self,
+        action_id: str,
+        alert_id: str,
+        server_id: str,
+        alert_engine: Any = None,
+        hc_manager: Any = None,
+    ) -> dict:
+        """복구 실행 -> 헬스체크 재실행 -> 결과에 따라 Alert resolve/에스컬레이션.
+
+        Returns:
+            {"ok": bool, "execution_id": str, "verified": bool, "resolved": bool}
+        """
+        import asyncio
+
+        # 1. 복구 실행
+        result = self.execute(action_id, alert_id=alert_id, server_id=server_id)
+        if not result.get("ok"):
+            return {**result, "execution_id": "", "verified": False, "resolved": False}
+
+        execution = result.get("execution", {})
+        exec_id = execution.get("id", "")
+        exec_status = execution.get("status", "")
+
+        # skipped / approval_required 등은 검증 불필요
+        if exec_status not in ("completed", "running"):
+            return {"ok": True, "execution_id": exec_id, "verified": False, "resolved": False}
+
+        # 2. 복구 후 대기 (서비스 재시작 시간)
+        await asyncio.sleep(5)
+
+        # 3. 헬스체크 재실행으로 검증
+        verified = False
+        if hc_manager:
+            try:
+                check_results = await hc_manager.run_checks()
+                # server_id 관련 체크 결과 확인
+                server_checks = [
+                    r for r in check_results
+                    if r.get("server_id") == server_id or server_id in str(r.get("target", ""))
+                ]
+                if server_checks:
+                    verified = all(r.get("status") == "ok" for r in server_checks)
+                else:
+                    # 관련 체크가 없으면 성공으로 간주
+                    verified = True
+            except Exception:
+                log.warning("health check verification failed", exc_info=True)
+
+        # 4. 결과에 따라 Alert 처리
+        resolved = False
+        if verified and alert_engine and alert_id:
+            try:
+                alert_engine.resolve(alert_id)
+                resolved = True
+                log.info("auto-resolved alert %s after successful remediation %s", alert_id, exec_id)
+            except Exception:
+                log.warning("failed to auto-resolve alert %s", alert_id, exc_info=True)
+        elif not verified and alert_engine:
+            # 복구 실패 -> 에스컬레이션 트리거
+            log.warning("remediation %s did not resolve the issue, escalation may follow", exec_id)
+            # 에스컬레이션은 기존 check_escalations()가 다음 틱에서 처리
+
+        # 5. 실행 기록 업데이트
+        final_status = "completed" if verified else "failed"
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE remediation_executions SET status = ?, finished_at = ? WHERE id = ?",
+                (final_status, time.time(), exec_id),
+            )
+
+        return {"ok": True, "execution_id": exec_id, "verified": verified, "resolved": resolved}
+
     def _execute_step(self, step: RemediationStep, server_id: str) -> dict:
         """단일 스텝 실행. type별 분기."""
         try:

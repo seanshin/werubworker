@@ -77,6 +77,14 @@ const baseProps = {
   wikiActive: false,
   onOpenMonitoring: vi.fn(),
   monitoringActive: false,
+  onOpenLogs: vi.fn(),
+  logsActive: false,
+  onOpenTopology: vi.fn(),
+  topologyActive: false,
+  onOpenSecurity: vi.fn(),
+  securityActive: false,
+  onOpenBackup: vi.fn(),
+  backupActive: false,
 };
 
 afterEach(() => {
