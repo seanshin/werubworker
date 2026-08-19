@@ -135,7 +135,7 @@ def _get_gitea():
 
 
 # ---------------------------------------------------------------------------
-# Tool definitions — 32 ITMS tools
+# Tool definitions — 37 ITMS tools
 # ---------------------------------------------------------------------------
 
 TOOLS = [
@@ -518,6 +518,47 @@ TOOLS = [
             "required": ["owner", "repo"],
         },
     ),
+    Tool(
+        name="gitea_repo_stats",
+        description="Gitea 리포 종합 통계 (브랜치, 태그, PR, 이슈, 릴리즈, 언어, 커밋).",
+        inputSchema={
+            "type": "object",
+            "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}},
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_contributors",
+        description="리포 기여자 통계 (커밋 수, PR 수).",
+        inputSchema={
+            "type": "object",
+            "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}},
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_secret_scan",
+        description="리포 시크릿 스캔 (API 키, 비밀번호, 개인키 감지).",
+        inputSchema={
+            "type": "object",
+            "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}},
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_license_check",
+        description="리포 라이선스 확인 및 준수 검사.",
+        inputSchema={
+            "type": "object",
+            "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}},
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_orgs",
+        description="Gitea 조직 목록 및 현황 (리포/팀/멤버 수).",
+        inputSchema={"type": "object", "properties": {}},
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -803,6 +844,36 @@ async def _handle_tool(name: str, arguments: dict) -> str:
             from ..connectors.gitea.agent_ops import AgentGitOps
             ops = AgentGitOps(_get_gitea())
             result = await ops.scheduled_cleanup(arguments["owner"], arguments["repo"])
+            return json.dumps(result)
+
+        elif name == "gitea_repo_stats":
+            from ..connectors.gitea.teams import TeamsManager
+            tm = TeamsManager(_get_gitea())
+            result = await tm.repo_stats_dashboard(arguments["owner"], arguments["repo"])
+            return json.dumps(result)
+
+        elif name == "gitea_contributors":
+            from ..connectors.gitea.teams import TeamsManager
+            tm = TeamsManager(_get_gitea())
+            result = await tm.contribution_stats(arguments["owner"], arguments["repo"])
+            return json.dumps(result)
+
+        elif name == "gitea_secret_scan":
+            from ..connectors.gitea.teams import SecurityScanner
+            sc = SecurityScanner(_get_gitea())
+            result = await sc.secret_scan(arguments["owner"], arguments["repo"])
+            return json.dumps(result)
+
+        elif name == "gitea_license_check":
+            from ..connectors.gitea.teams import SecurityScanner
+            sc = SecurityScanner(_get_gitea())
+            result = await sc.license_check(arguments["owner"], arguments["repo"])
+            return json.dumps(result)
+
+        elif name == "gitea_orgs":
+            from ..connectors.gitea.teams import TeamsManager
+            tm = TeamsManager(_get_gitea())
+            result = await tm.org_overview()
             return json.dumps(result)
 
         else:

@@ -360,6 +360,18 @@ class DashboardMixin:
             self._gitea_client_cache = GiteaClient(base_url="http://localhost:3000", token=token)
         return self._gitea_client_cache
 
+    def _get_teams_manager(self):
+        if not hasattr(self, "_teams_cache"):
+            from ..connectors.gitea.teams import TeamsManager
+            self._teams_cache = TeamsManager(self._get_gitea_client())
+        return self._teams_cache
+
+    def _get_security_scanner(self):
+        if not hasattr(self, "_sec_scanner_cache"):
+            from ..connectors.gitea.teams import SecurityScanner
+            self._sec_scanner_cache = SecurityScanner(self._get_gitea_client())
+        return self._sec_scanner_cache
+
     def _get_gitea_webhook(self):
         """Lazy-init GiteaWebhookHandler."""
         if not hasattr(self, "_gitea_webhook_cache"):
@@ -1050,6 +1062,38 @@ def register_dashboard_routes(app, manager) -> None:
         body = await request.json()
         sync = manager._get_gitea_wiki_sync()
         return await sync.auto_generate_repo_docs(owner=body.get("owner", ""), repo=body.get("repo", ""))
+
+    # ── 멀티 리포 통계 + 보안 스캔 ──
+
+    @app.get("/v1/gitea/orgs")
+    async def gitea_orgs():
+        tm = manager._get_teams_manager()
+        return await tm.org_overview()
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/stats")
+    async def gitea_repo_stats(owner: str, repo: str):
+        tm = manager._get_teams_manager()
+        return await tm.repo_stats_dashboard(owner, repo)
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/contributors")
+    async def gitea_contributors(owner: str, repo: str):
+        tm = manager._get_teams_manager()
+        return await tm.contribution_stats(owner, repo)
+
+    @app.post("/v1/gitea/repos/{owner}/{repo}/codeowners")
+    async def gitea_codeowners(owner: str, repo: str):
+        tm = manager._get_teams_manager()
+        return await tm.generate_codeowners(owner, repo)
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/secret-scan")
+    async def gitea_secret_scan(owner: str, repo: str):
+        sc = manager._get_security_scanner()
+        return await sc.secret_scan(owner, repo)
+
+    @app.get("/v1/gitea/repos/{owner}/{repo}/license")
+    async def gitea_license_check(owner: str, repo: str):
+        sc = manager._get_security_scanner()
+        return await sc.license_check(owner, repo)
 
     @app.get("/v1/gitea/pipelines")
     def list_pipelines():

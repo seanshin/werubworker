@@ -350,6 +350,12 @@ export function DevView() {
   const [reviewingPr, setReviewingPr] = useState<number | null>(null);
   const [giteaReviewResult, setGiteaReviewResult] = useState<Record<number, any>>({});
 
+  // Repo stats + security
+  const [repoStats, setRepoStats] = useState<any>(null);
+  const [contributors, setContributors] = useState<any[]>([]);
+  const [secretScan, setSecretScan] = useState<any>(null);
+  const [scanningSecrets, setScanningSecrets] = useState(false);
+
   // Code browser
   const [fileTree, setFileTree] = useState<{path: string; type: string; size: number}[]>([]);
   const [selectedFile, setSelectedFile] = useState<{path: string; content: string; sha: string} | null>(null);
@@ -1094,6 +1100,25 @@ export function DevView() {
                           >
                             코드 탐색
                           </button>
+                          <button onClick={async () => {
+                              const parts = r.full_name.split("/");
+                              const [statsRes, contribRes] = await Promise.all([
+                                  fetch(`/v1/gitea/repos/${parts[0]}/${parts[1]}/stats`).then(x => x.json()),
+                                  fetch(`/v1/gitea/repos/${parts[0]}/${parts[1]}/contributors`).then(x => x.json()),
+                              ]);
+                              if (statsRes?.ok) setRepoStats(statsRes);
+                              if (contribRes?.ok) setContributors(contribRes.contributors || []);
+                          }} className="text-xs px-2 py-0.5 rounded bg-paper hover:bg-accent/10">통계</button>
+                          <button onClick={async () => {
+                              setScanningSecrets(true);
+                              const parts = r.full_name.split("/");
+                              const res = await fetch(`/v1/gitea/repos/${parts[0]}/${parts[1]}/secret-scan`).then(x => x.json());
+                              setSecretScan(res);
+                              setScanningSecrets(false);
+                          }} disabled={scanningSecrets}
+                          className="text-xs px-2 py-0.5 rounded bg-paper hover:bg-accent/10">
+                              {scanningSecrets ? "스캔..." : "시크릿 스캔"}
+                          </button>
                           <span className="ml-auto text-muted">{"*"} {r.stars} | {r.forks} forks | {r.open_issues} issues</span>
                         </div>
                         {r.description && <div className="mt-1 text-muted">{r.description}</div>}
@@ -1103,6 +1128,75 @@ export function DevView() {
                       </div>
                     ))}
                   </div>
+                  {/* Repo Stats Panel */}
+                  {repoStats && (
+                    <div className={CARD + " p-4 mt-4"}>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold">리포 통계: {repoStats.repo?.full_name}</h3>
+                            <button onClick={() => setRepoStats(null)} className="text-xs text-muted hover:text-ink">닫기</button>
+                        </div>
+                        <div className="grid grid-cols-4 gap-3 text-xs mb-3">
+                            <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-accent">{repoStats.branches}</div><div className="text-muted">브랜치</div></div>
+                            <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-accent">{repoStats.tags}</div><div className="text-muted">태그</div></div>
+                            <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-yellow-400">{repoStats.open_pulls}</div><div className="text-muted">Open PR</div></div>
+                            <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-red-400">{repoStats.open_issues}</div><div className="text-muted">Open Issues</div></div>
+                        </div>
+                        {/* Languages */}
+                        {repoStats.languages && Object.keys(repoStats.languages).length > 0 && (
+                            <div className="mb-3">
+                                <div className="text-xs text-muted mb-1">언어</div>
+                                <div className="flex gap-1">
+                                    {Object.entries(repoStats.languages).map(([lang, _bytes]) => (
+                                        <span key={lang} className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent">{lang}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {/* Contributors */}
+                        {contributors.length > 0 && (
+                            <div>
+                                <div className="text-xs text-muted mb-1">기여자</div>
+                                <div className="space-y-1">
+                                    {contributors.slice(0, 5).map((c: any, i: number) => (
+                                        <div key={i} className="flex items-center gap-2 text-xs">
+                                            <span className="font-medium w-20">{c.user}</span>
+                                            <div className="flex-1 h-1.5 rounded-full bg-line overflow-hidden">
+                                                <div className="h-full rounded-full bg-accent/50" style={{ width: `${Math.min(100, (c.commits / Math.max(...contributors.map((x: any) => x.commits), 1)) * 100)}%` }} />
+                                            </div>
+                                            <span className="text-muted">{c.commits} commits</span>
+                                            {c.prs > 0 && <span className="text-muted">{c.prs} PRs</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                  )}
+
+                  {/* Secret Scan Result */}
+                  {secretScan && (
+                    <div className={CARD + " p-4 mt-4"}>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-semibold">시크릿 스캔 결과</h3>
+                            <button onClick={() => setSecretScan(null)} className="text-xs text-muted hover:text-ink">닫기</button>
+                        </div>
+                        <div className="text-xs mb-2">
+                            전체 {secretScan.total || 0}건 | <span className="text-red-400">Critical {secretScan.critical || 0}</span>
+                        </div>
+                        {secretScan.findings?.length > 0 ? (
+                            <div className="space-y-1">
+                                {secretScan.findings.map((f: any, i: number) => (
+                                    <div key={i} className={`text-xs p-1.5 rounded ${f.severity === "critical" ? "bg-red-500/10 text-red-400" : "bg-yellow-500/10 text-yellow-400"}`}>
+                                        [{f.severity}] {f.type} — {f.location} {f.message || ""}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-xs text-green-400">시크릿이 발견되지 않았습니다</div>
+                        )}
+                    </div>
+                  )}
+
                   {/* Code Browser */}
                   {fileTree.length > 0 && (
                     <div className={CARD + " p-4 mt-4"}>
