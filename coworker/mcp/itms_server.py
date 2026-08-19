@@ -135,7 +135,7 @@ def _get_gitea():
 
 
 # ---------------------------------------------------------------------------
-# Tool definitions — 29 ITMS tools
+# Tool definitions — 32 ITMS tools
 # ---------------------------------------------------------------------------
 
 TOOLS = [
@@ -480,6 +480,44 @@ TOOLS = [
             },
         },
     ),
+    # ── Agent Git Ops ──
+    Tool(
+        name="gitea_hotfix",
+        description="에이전트가 자동으로 핫픽스 브랜치 생성 -> 파일 수정 -> PR 생성.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "filepath": {"type": "string", "description": "수정할 파일 경로"},
+                "content": {"type": "string", "description": "새 파일 내용"},
+                "message": {"type": "string", "description": "커밋 메시지"},
+            },
+            "required": ["owner", "repo", "filepath", "content", "message"],
+        },
+    ),
+    Tool(
+        name="gitea_wiki_sync",
+        description="WeruBWorker Wiki <-> Gitea 리포 docs/ 양방향 동기화.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+                "direction": {"type": "string", "description": "to_gitea 또는 from_gitea (기본 to_gitea)"},
+            },
+            "required": ["owner", "repo"],
+        },
+    ),
+    Tool(
+        name="gitea_cleanup",
+        description="에이전트 자동 정리: 머지된 브랜치 삭제, 오래된 PR 닫기.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"}, "repo": {"type": "string"},
+            },
+            "required": ["owner", "repo"],
+        },
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -743,6 +781,29 @@ async def _handle_tool(name: str, arguments: dict) -> str:
                 repo=arguments.get("repo", ""),
             )
             return json.dumps({"ok": True, "count": len(events), "events": events})
+
+        elif name == "gitea_hotfix":
+            from ..connectors.gitea.agent_ops import AgentGitOps
+            ops = AgentGitOps(_get_gitea())
+            result = await ops.create_hotfix(arguments["owner"], arguments["repo"],
+                arguments["filepath"], arguments["content"], arguments["message"])
+            return json.dumps(result)
+
+        elif name == "gitea_wiki_sync":
+            from ..connectors.gitea.sync import GiteaWikiSync
+            sync = GiteaWikiSync(_get_gitea())
+            direction = arguments.get("direction", "to_gitea")
+            if direction == "from_gitea":
+                result = await sync.sync_gitea_to_wiki(arguments["owner"], arguments["repo"])
+            else:
+                result = await sync.sync_wiki_to_gitea(arguments["owner"], arguments["repo"])
+            return json.dumps(result)
+
+        elif name == "gitea_cleanup":
+            from ..connectors.gitea.agent_ops import AgentGitOps
+            ops = AgentGitOps(_get_gitea())
+            result = await ops.scheduled_cleanup(arguments["owner"], arguments["repo"])
+            return json.dumps(result)
 
         else:
             return json.dumps({"ok": False, "error": f"unknown tool: {name}"})

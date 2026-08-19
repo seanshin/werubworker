@@ -15,7 +15,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 log = logging.getLogger(__name__)
 
@@ -670,6 +670,33 @@ class AlertEngine:
                         (target_level, alert_id),
                     )
                     log.info("escalated alert %s to level %d", alert_id, target_level)
+
+    async def create_alert_issue(self, alert: dict, gitea_client: Any = None, owner: str = "", repo: str = "") -> dict:
+        """Critical 알림 발생 시 Gitea 이슈 자동 생성."""
+        if not gitea_client or not owner or not repo:
+            return {"ok": False, "error": "gitea client or repo not configured"}
+
+        severity = alert.get("severity", "warning")
+        server_id = alert.get("server_id", "unknown")
+        message = alert.get("message", "")
+
+        title = f"[Alert-{severity.upper()}] {server_id}: {message[:80]}"
+        body = f"""## 알림 상세
+
+| 항목 | 값 |
+|------|-----|
+| 심각도 | {severity} |
+| 서버 | {server_id} |
+| 메시지 | {message} |
+| 발생 시간 | {time.strftime('%Y-%m-%d %H:%M:%S')} |
+| 알림 ID | {alert.get('id', '')} |
+
+---
+*WeruBWorker Alert -> Gitea Issue 자동 생성*
+"""
+
+        result = await gitea_client.issues.create(owner, repo, title=title, body=body)
+        return {"ok": True, "issue": result}
 
     def _build_webhook_payload(self, url: str, alert: dict, text: str) -> dict:
         """URL 패턴에 따라 적절한 페이로드 구성."""

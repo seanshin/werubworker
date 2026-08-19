@@ -336,6 +336,18 @@ class DashboardMixin:
             )
         return self._pipeline_cache
 
+    def _get_agent_git_ops(self):
+        if not hasattr(self, "_agent_ops_cache"):
+            from ..connectors.gitea.agent_ops import AgentGitOps
+            self._agent_ops_cache = AgentGitOps(self._get_gitea_client(), provider=getattr(self, "provider", None))
+        return self._agent_ops_cache
+
+    def _get_gitea_wiki_sync(self):
+        if not hasattr(self, "_gitea_wiki_sync_cache"):
+            from ..connectors.gitea.sync import GiteaWikiSync
+            self._gitea_wiki_sync_cache = GiteaWikiSync(self._get_gitea_client(), wiki_store=getattr(self, "wiki_store", None))
+        return self._gitea_wiki_sync_cache
+
     def _get_gitea_client(self):
         """Lazy-init GiteaClient for REST API access."""
         if not hasattr(self, "_gitea_client_cache"):
@@ -991,6 +1003,53 @@ def register_dashboard_routes(app, manager) -> None:
         return {"ok": True, "commits": [{"sha": c.get("sha", "")[:8], "message": c.get("commit", {}).get("message", "").split("\n")[0], "author": c.get("commit", {}).get("author", {}).get("name", ""), "date": c.get("commit", {}).get("author", {}).get("date", "")} for c in (commits if isinstance(commits, list) else [])]}
 
     # ── CI/CD 파이프라인 ──
+
+    # ── 에이전트 Git 작업 ──
+
+    @app.post("/v1/gitea/agent/hotfix")
+    async def agent_hotfix(request: Request):
+        body = await request.json()
+        ops = manager._get_agent_git_ops()
+        return await ops.create_hotfix(
+            owner=body.get("owner", ""), repo=body.get("repo", ""),
+            filepath=body.get("filepath", ""), content=body.get("content", ""),
+            message=body.get("message", ""), title=body.get("title", ""), body=body.get("body", ""),
+        )
+
+    @app.post("/v1/gitea/agent/update-docs")
+    async def agent_update_docs(request: Request):
+        body = await request.json()
+        ops = manager._get_agent_git_ops()
+        return await ops.auto_update_docs(
+            owner=body.get("owner", ""), repo=body.get("repo", ""),
+            updates=body.get("updates", []),
+        )
+
+    @app.post("/v1/gitea/agent/cleanup")
+    async def agent_cleanup(request: Request):
+        body = await request.json()
+        ops = manager._get_agent_git_ops()
+        return await ops.scheduled_cleanup(owner=body.get("owner", ""), repo=body.get("repo", ""))
+
+    # ── Wiki ↔ Gitea 동기화 ──
+
+    @app.post("/v1/gitea/wiki/sync-to-gitea")
+    async def wiki_sync_to_gitea(request: Request):
+        body = await request.json()
+        sync = manager._get_gitea_wiki_sync()
+        return await sync.sync_wiki_to_gitea(owner=body.get("owner", ""), repo=body.get("repo", ""), categories=body.get("categories"))
+
+    @app.post("/v1/gitea/wiki/sync-from-gitea")
+    async def wiki_sync_from_gitea(request: Request):
+        body = await request.json()
+        sync = manager._get_gitea_wiki_sync()
+        return await sync.sync_gitea_to_wiki(owner=body.get("owner", ""), repo=body.get("repo", ""))
+
+    @app.post("/v1/gitea/wiki/auto-docs")
+    async def wiki_auto_docs(request: Request):
+        body = await request.json()
+        sync = manager._get_gitea_wiki_sync()
+        return await sync.auto_generate_repo_docs(owner=body.get("owner", ""), repo=body.get("repo", ""))
 
     @app.get("/v1/gitea/pipelines")
     def list_pipelines():

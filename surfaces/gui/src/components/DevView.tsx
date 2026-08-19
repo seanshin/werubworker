@@ -350,6 +350,15 @@ export function DevView() {
   const [reviewingPr, setReviewingPr] = useState<number | null>(null);
   const [giteaReviewResult, setGiteaReviewResult] = useState<Record<number, any>>({});
 
+  // Code browser
+  const [fileTree, setFileTree] = useState<{path: string; type: string; size: number}[]>([]);
+  const [selectedFile, setSelectedFile] = useState<{path: string; content: string; sha: string} | null>(null);
+  const [browsingRepo, setBrowsingRepo] = useState("");
+
+  // Wiki sync
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
+
   const fetchConfig = useCallback(async () => {
     try {
       const r = await fetch("/v1/dev/config");
@@ -437,6 +446,27 @@ export function DevView() {
   const fetchPipelines = useCallback(() => {
     fetch("/v1/gitea/pipelines").then(r => r.ok ? r.json() : null).then(d => { if (d?.ok) setPipelines(d.pipelines || []); }).catch(() => {});
     fetch("/v1/gitea/pipelines/runs?limit=15").then(r => r.ok ? r.json() : null).then(d => { if (d?.ok) setPipelineRuns(d.runs || []); }).catch(() => {});
+  }, []);
+
+  const fetchFileTree = useCallback((owner: string, repo: string) => {
+    setBrowsingRepo(`${owner}/${repo}`);
+    fetch(`/v1/gitea/repos/${owner}/${repo}/tree`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.ok) setFileTree(d.tree || []); })
+      .catch(() => {});
+  }, []);
+
+  const fetchFileContent = useCallback((owner: string, repo: string, filepath: string) => {
+    fetch(`/v1/gitea/repos/${owner}/${repo}/contents/${filepath}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d?.content) {
+          try {
+            setSelectedFile({ path: filepath, content: atob(d.content), sha: d.sha || "" });
+          } catch { setSelectedFile({ path: filepath, content: "(바이너리 파일)", sha: "" }); }
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleMerge = useCallback(async (number: number, method: string) => {
@@ -1025,6 +1055,31 @@ export function DevView() {
                       <Icon name="refresh" size={13} className="inline mr-1" />Refresh
                     </button>
                   </div>
+                  {/* Wiki sync */}
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      onClick={async () => {
+                        setSyncing(true);
+                        try {
+                          const res = await fetch("/v1/gitea/wiki/sync-to-gitea", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ owner: config?.owner || "shin", repo: config?.repo || "werubworker" }),
+                          });
+                          setSyncResult(await res.json());
+                        } catch {}
+                        setSyncing(false);
+                      }}
+                      disabled={syncing}
+                      className="text-xs px-2 py-1 rounded bg-paper hover:bg-accent/10 disabled:opacity-50"
+                    >
+                      {syncing ? "동기화 중..." : "Wiki → Gitea 동기화"}
+                    </button>
+                    {syncResult && (
+                      <span className="text-xs text-muted">
+                        {syncResult.ok ? `✅ ${syncResult.synced || syncResult.imported || 0}건 동기화` : `❌ ${syncResult.error}`}
+                      </span>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     {giteaRepos.length === 0 ? (
                       <div className="text-center text-muted text-xs py-8">리포지토리가 없습니다</div>
@@ -1033,6 +1088,12 @@ export function DevView() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-accent">{r.full_name}</span>
                           {r.language && <span className="px-1.5 py-0.5 rounded bg-paper text-muted text-[10px]">{r.language}</span>}
+                          <button
+                            onClick={() => { const parts = r.full_name.split("/"); fetchFileTree(parts[0], parts[1]); }}
+                            className="text-xs px-2 py-0.5 rounded bg-paper hover:bg-accent/10"
+                          >
+                            코드 탐색
+                          </button>
                           <span className="ml-auto text-muted">{"*"} {r.stars} | {r.forks} forks | {r.open_issues} issues</span>
                         </div>
                         {r.description && <div className="mt-1 text-muted">{r.description}</div>}
@@ -1042,6 +1103,77 @@ export function DevView() {
                       </div>
                     ))}
                   </div>
+                  {/* Code Browser */}
+                  {fileTree.length > 0 && (
+                    <div className={CARD + " p-4 mt-4"}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold">코드 브라우저: {browsingRepo}</h3>
+                        <button onClick={() => { setFileTree([]); setSelectedFile(null); }}
+                          className="text-xs text-muted hover:text-ink">닫기</button>
+                      </div>
+                      <div className="flex gap-3" style={{ maxHeight: "400px" }}>
+                        {/* File Tree */}
+                        <div className="w-64 overflow-auto border-r border-line pr-3">
+                          {(() => {
+                            const dirs: Record<string, typeof fileTree> = {};
+                            const rootFiles: typeof fileTree = [];
+                            fileTree.forEach((f) => {
+                              const parts = f.path.split("/");
+                              if (parts.length === 1) { rootFiles.push(f); }
+                              else {
+                                const dir = parts[0];
+                                if (!dirs[dir]) dirs[dir] = [];
+                                dirs[dir].push(f);
+                              }
+                            });
+                            return (
+                              <>
+                                {Object.keys(dirs).sort().map((dir) => (
+                                  <details key={dir} className="mb-1">
+                                    <summary className="text-xs cursor-pointer text-muted hover:text-ink py-0.5">
+                                      📁 {dir} <span className="text-[10px]">({dirs[dir].length})</span>
+                                    </summary>
+                                    <div className="pl-3">
+                                      {dirs[dir].filter((f) => f.type === "blob").slice(0, 30).map((f) => (
+                                        <div key={f.path}
+                                          onClick={() => { const parts = browsingRepo.split("/"); fetchFileContent(parts[0], parts[1], f.path); }}
+                                          className={`text-xs py-0.5 cursor-pointer hover:text-accent truncate ${selectedFile?.path === f.path ? "text-accent font-medium" : "text-muted"}`}>
+                                          📄 {f.path.split("/").pop()}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </details>
+                                ))}
+                                {rootFiles.filter((f) => f.type === "blob").map((f) => (
+                                  <div key={f.path}
+                                    onClick={() => { const parts = browsingRepo.split("/"); fetchFileContent(parts[0], parts[1], f.path); }}
+                                    className={`text-xs py-0.5 cursor-pointer hover:text-accent ${selectedFile?.path === f.path ? "text-accent font-medium" : "text-muted"}`}>
+                                    📄 {f.path}
+                                  </div>
+                                ))}
+                              </>
+                            );
+                          })()}
+                        </div>
+                        {/* File Content */}
+                        <div className="flex-1 overflow-auto">
+                          {selectedFile ? (
+                            <div>
+                              <div className="text-xs text-muted mb-2 flex items-center gap-2">
+                                <span className="font-mono">{selectedFile.path}</span>
+                                {selectedFile.sha && <span className="text-[10px]">SHA: {selectedFile.sha.slice(0, 8)}</span>}
+                              </div>
+                              <pre className="text-xs font-mono bg-paper p-3 rounded overflow-auto whitespace-pre-wrap" style={{ maxHeight: "350px" }}>
+                                {selectedFile.content}
+                              </pre>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted text-center py-8">파일을 선택하세요</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

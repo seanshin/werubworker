@@ -56,6 +56,8 @@ class BackupManager:
         "automation": "automation.db",
         "audit": "coworker.db",
         "workflows": "workflows.db",
+        "gitea": "/opt/homebrew/var/gitea/data/gitea.db",
+        "pipelines": "pipelines.db",
     }
 
     def __init__(self, data_dir: str | Path, config: BackupConfig | None = None) -> None:
@@ -110,11 +112,15 @@ class BackupManager:
                 errors.append(f"unknown target: {target}")
                 continue
 
-            src = self._data_dir / db_file
+            # 절대 경로와 상대 경로 분기 처리
+            if os.path.isabs(db_file):
+                src = Path(db_file)
+            else:
+                src = self._data_dir / db_file
             if not src.exists():
                 continue  # 아직 생성되지 않은 DB는 건너뜀
 
-            dst = backup_subdir / db_file
+            dst = backup_subdir / Path(db_file).name
             try:
                 # SQLite 안전 백업 (VACUUM INTO 사용)
                 conn = sqlite3.connect(str(src))
@@ -176,12 +182,15 @@ class BackupManager:
             if not db_file:
                 continue
 
-            src = backup_dir / db_file
+            src = backup_dir / Path(db_file).name
             if not src.exists():
                 errors.append(f"{target}: backup file not found")
                 continue
 
-            dst = self._data_dir / db_file
+            if os.path.isabs(db_file):
+                dst = Path(db_file)
+            else:
+                dst = self._data_dir / db_file
             try:
                 # 기존 파일 백업
                 if dst.exists():
@@ -260,7 +269,10 @@ class BackupManager:
         """백업 가능한 대상 목록."""
         targets = []
         for name, db_file in self.BACKUP_TARGETS.items():
-            path = self._data_dir / db_file
+            if os.path.isabs(db_file):
+                path = Path(db_file)
+            else:
+                path = self._data_dir / db_file
             targets.append({
                 "name": name,
                 "file": db_file,
