@@ -123,6 +123,26 @@ class GiteaWebhookHandler:
         else:
             summary = f"[{event.repo}] {event.event_type} 이벤트 수신"
 
+        # 파이프라인 트리거
+        if self._dashboard:
+            try:
+                pm = self._dashboard._get_pipeline_manager()
+                if event.event_type == "push":
+                    branch = event.data.get("ref", "").replace("refs/heads/", "")
+                    commits = event.data.get("commits", [])
+                    sha = event.data.get("after", "")
+                    msg = commits[0].get("message", "").split("\n")[0] if commits else ""
+                    pipeline_results = await pm.on_push(event.repo, branch, sha, msg, event.sender)
+                    for pr in pipeline_results:
+                        actions_taken.append({"type": "pipeline", "pipeline": pr.get("pipeline",""), "status": pr.get("status","")})
+                elif event.event_type == "create" and event.data.get("ref_type") == "tag":
+                    tag = event.data.get("ref", "")
+                    pipeline_results = await pm.on_tag(event.repo, tag, "", event.sender)
+                    for pr in pipeline_results:
+                        actions_taken.append({"type": "pipeline", "pipeline": pr.get("pipeline",""), "status": pr.get("status","")})
+            except Exception as e:
+                log.warning("pipeline trigger failed: %s", e)
+
         # 자동 리뷰 트리거 실행
         for action in actions_taken:
             if action.get("type") == "auto_review" and self._dashboard:

@@ -326,7 +326,7 @@ export function DevView() {
   const [showSetup, setShowSetup] = useState(false);
   const [showNewIssue, setShowNewIssue] = useState(false);
   const [showNewRelease, setShowNewRelease] = useState(false);
-  const [activeTab, setActiveTab] = useState<"prs" | "actions" | "issues" | "releases" | "commits" | "webhooks" | "repos">("prs");
+  const [activeTab, setActiveTab] = useState<"prs" | "actions" | "issues" | "releases" | "commits" | "webhooks" | "repos" | "pipelines">("prs");
   const [prFilter, setPrFilter] = useState<"open" | "closed" | "all">("open");
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
   const [prDetail, setPrDetail] = useState<PRDetail | null>(null);
@@ -339,6 +339,9 @@ export function DevView() {
   const [commits, setCommits] = useState<Commit[]>([]);
   const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
   const [giteaRepos, setGiteaRepos] = useState<any[]>([]);
+  const [pipelines, setPipelines] = useState<any[]>([]);
+  const [pipelineRuns, setPipelineRuns] = useState<any[]>([]);
+  const [runningPipeline, setRunningPipeline] = useState<string | null>(null);
   const [merging, setMerging] = useState(false);
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [showMergeConfirm, setShowMergeConfirm] = useState(false);
@@ -431,6 +434,11 @@ export function DevView() {
       .catch(() => {});
   }, []);
 
+  const fetchPipelines = useCallback(() => {
+    fetch("/v1/gitea/pipelines").then(r => r.ok ? r.json() : null).then(d => { if (d?.ok) setPipelines(d.pipelines || []); }).catch(() => {});
+    fetch("/v1/gitea/pipelines/runs?limit=15").then(r => r.ok ? r.json() : null).then(d => { if (d?.ok) setPipelineRuns(d.runs || []); }).catch(() => {});
+  }, []);
+
   const handleMerge = useCallback(async (number: number, method: string) => {
     setMerging(true);
     try {
@@ -486,6 +494,7 @@ export function DevView() {
   useEffect(() => { if (activeTab === "commits") fetchCommits(); }, [activeTab, fetchCommits]);
   useEffect(() => { if (activeTab === "webhooks") fetchWebhookEvents(); }, [activeTab, fetchWebhookEvents]);
   useEffect(() => { if (activeTab === "repos") fetchGiteaRepos(); }, [activeTab, fetchGiteaRepos]);
+  useEffect(() => { if (activeTab === "pipelines") fetchPipelines(); }, [activeTab, fetchPipelines]);
   useEffect(() => { if (config?.configured) fetchReviewCount(); }, [config, fetchReviewCount]);
 
   // Listen for github_event WebSocket events to auto-refresh
@@ -505,12 +514,13 @@ export function DevView() {
             if (activeTab === "commits") fetchCommits();
             if (activeTab === "webhooks") fetchWebhookEvents();
             if (activeTab === "repos") fetchGiteaRepos();
+            if (activeTab === "pipelines") fetchPipelines();
           }
         } catch { /* ignore */ }
       };
     } catch { /* ignore */ }
     return () => { ws?.close(); };
-  }, [config, activeTab, fetchAll, fetchIssues, fetchReleases, fetchCommits, fetchWebhookEvents, fetchGiteaRepos]);
+  }, [config, activeTab, fetchAll, fetchIssues, fetchReleases, fetchCommits, fetchWebhookEvents, fetchGiteaRepos, fetchPipelines]);
   useEffect(() => {
     if (selectedPR !== null) fetchPRDetail(selectedPR);
     else setPrDetail(null);
@@ -590,7 +600,7 @@ export function DevView() {
           {config?.configured && (
             <>
               <div className="flex gap-1 mb-4 flex-wrap">
-                {(["prs", "actions", "issues", "releases", "commits", "webhooks", "repos"] as const).map((tab) => (
+                {(["prs", "actions", "issues", "releases", "commits", "webhooks", "repos", "pipelines"] as const).map((tab) => (
                   <button
                     key={tab}
                     className={
@@ -614,7 +624,8 @@ export function DevView() {
                      tab === "releases" ? t("session:dev.releases") :
                      tab === "commits" ? t("session:dev.commits") :
                      tab === "webhooks" ? `Webhooks (${webhookEvents.length})` :
-                     `Repos (${giteaRepos.length})`}
+                     tab === "repos" ? `Repos (${giteaRepos.length})` :
+                     "Pipelines"}
                   </button>
                 ))}
               </div>
@@ -1030,6 +1041,65 @@ export function DevView() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Pipelines Tab */}
+              {activeTab === "pipelines" && (
+                <div className={CARD + " p-5 mb-4"}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[14px] font-semibold text-ink">CI/CD Pipelines</h3>
+                    <button className="text-[12.5px] text-accent font-medium" onClick={fetchPipelines}>
+                      <Icon name="refresh" size={13} className="inline mr-1" />Refresh
+                    </button>
+                  </div>
+
+                  {/* Pipeline Configs */}
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    {pipelines.map((p, i) => (
+                      <div key={i} className={CARD + " p-3"}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold">{p.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-paper text-muted">{p.trigger}</span>
+                        </div>
+                        <div className="text-xs text-muted mb-2">
+                          브랜치: {p.branch_filter} | 단계: {p.stages?.join(" → ")}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            setRunningPipeline(p.name);
+                            try {
+                              await fetch(`/v1/gitea/pipelines/${p.name}/run`, { method: "POST" });
+                              fetchPipelines();
+                            } catch {}
+                            setRunningPipeline(null);
+                          }}
+                          disabled={runningPipeline === p.name}
+                          className="text-xs px-2 py-1 rounded bg-accent text-white hover:bg-accent/90 disabled:opacity-50"
+                        >
+                          {runningPipeline === p.name ? "실행 중..." : "실행"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pipeline Runs */}
+                  <h3 className="text-sm font-semibold mb-2">실행 이력</h3>
+                  <div className="space-y-1">
+                    {pipelineRuns.map((r, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs p-2 rounded bg-paper">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium text-white ${r.status === "success" ? "bg-green-500" : r.status === "failed" ? "bg-red-500" : "bg-yellow-500"}`}>
+                          {r.status}
+                        </span>
+                        <span className="font-medium">{r.pipeline}</span>
+                        <span className="text-muted">{r.trigger} {r.ref}</span>
+                        {r.sha && <span className="text-muted font-mono">{r.sha}</span>}
+                        <span className="ml-auto text-muted">{r.duration_ms}ms</span>
+                        <span className="text-muted">{r.user}</span>
+                      </div>
+                    ))}
+                    {pipelineRuns.length === 0 && <div className="text-center text-muted text-xs py-4">실행 이력이 없습니다</div>}
                   </div>
                 </div>
               )}

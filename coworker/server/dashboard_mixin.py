@@ -7,6 +7,7 @@ This mixin is mixed into SessionManager and its routes are registered in create_
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any
 
 
@@ -323,6 +324,17 @@ class DashboardMixin:
             from ..connectors.slack_bot import SlackBot
             self._slack_bot_cache = SlackBot(secrets=getattr(self, "secrets", None), dashboard=self)
         return self._slack_bot_cache
+
+    def _get_pipeline_manager(self):
+        """Lazy-init PipelineManager."""
+        if not hasattr(self, "_pipeline_cache"):
+            from ..connectors.gitea.pipeline import PipelineManager
+            self._pipeline_cache = PipelineManager(
+                self.data_dir,
+                repo_path=str(Path(self.data_dir).parent) if hasattr(self, 'data_dir') else "",
+                gitea_client=self._get_gitea_client(),
+            )
+        return self._pipeline_cache
 
     def _get_gitea_client(self):
         """Lazy-init GiteaClient for REST API access."""
@@ -977,3 +989,29 @@ def register_dashboard_routes(app, manager) -> None:
         gc = manager._get_gitea_client()
         commits = await gc.commits.list(owner, repo, sha=sha, limit=limit)
         return {"ok": True, "commits": [{"sha": c.get("sha", "")[:8], "message": c.get("commit", {}).get("message", "").split("\n")[0], "author": c.get("commit", {}).get("author", {}).get("name", ""), "date": c.get("commit", {}).get("author", {}).get("date", "")} for c in (commits if isinstance(commits, list) else [])]}
+
+    # ── CI/CD 파이프라인 ──
+
+    @app.get("/v1/gitea/pipelines")
+    def list_pipelines():
+        pm = manager._get_pipeline_manager()
+        return {"ok": True, "pipelines": pm.list_pipelines()}
+
+    @app.post("/v1/gitea/pipelines/{name}/run")
+    async def run_pipeline(name: str):
+        pm = manager._get_pipeline_manager()
+        result = await pm.run(name)
+        return result
+
+    @app.get("/v1/gitea/pipelines/runs")
+    def list_pipeline_runs(pipeline: str = "", limit: int = 20):
+        pm = manager._get_pipeline_manager()
+        return {"ok": True, "runs": pm.list_runs(pipeline, limit)}
+
+    @app.get("/v1/gitea/pipelines/runs/{run_id}")
+    def get_pipeline_run(run_id: str):
+        pm = manager._get_pipeline_manager()
+        run = pm.get_run(run_id)
+        if not run:
+            return {"ok": False, "error": "not found"}
+        return {"ok": True, **run}

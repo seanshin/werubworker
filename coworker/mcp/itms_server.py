@@ -135,7 +135,7 @@ def _get_gitea():
 
 
 # ---------------------------------------------------------------------------
-# Tool definitions — 27 ITMS tools
+# Tool definitions — 29 ITMS tools
 # ---------------------------------------------------------------------------
 
 TOOLS = [
@@ -457,6 +457,29 @@ TOOLS = [
             "required": ["owner", "repo", "pr_number"],
         },
     ),
+    # ── CI/CD Pipeline ──
+    Tool(
+        name="gitea_pipeline_run",
+        description="CI/CD 파이프라인 수동 실행 (test, deploy, release).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "pipeline": {"type": "string", "description": "파이프라인명: test, deploy, release"},
+            },
+            "required": ["pipeline"],
+        },
+    ),
+    Tool(
+        name="gitea_pipeline_status",
+        description="CI/CD 파이프라인 실행 이력 조회.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "pipeline": {"type": "string", "description": "파이프라인명 필터 (비어있으면 전체)"},
+                "limit": {"type": "integer", "description": "최대 건수 (기본 10)"},
+            },
+        },
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -698,6 +721,18 @@ async def _handle_tool(name: str, arguments: dict) -> str:
             reviewer = CodeReviewer(gc)
             result = await reviewer.auto_merge_check(arguments["owner"], arguments["repo"], arguments["pr_number"])
             return json.dumps(result)
+
+        elif name == "gitea_pipeline_run":
+            from ..connectors.gitea.pipeline import PipelineManager
+            pm = PipelineManager(_data_dir(), gitea_client=_get_gitea())
+            result = await pm.run(arguments["pipeline"])
+            return json.dumps(result)
+
+        elif name == "gitea_pipeline_status":
+            from ..connectors.gitea.pipeline import PipelineManager
+            pm = PipelineManager(_data_dir())
+            runs = pm.list_runs(arguments.get("pipeline", ""), int(arguments.get("limit", 10)))
+            return json.dumps({"ok": True, "runs": runs})
 
         elif name == "gitea_webhook_events":
             from ..connectors.gitea_webhook import GiteaWebhookHandler
