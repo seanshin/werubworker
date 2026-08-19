@@ -6,6 +6,8 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_PORT=8765
 FRONTEND_PORT=1420
 GITEA_PORT=3000
+RUNNER_CONFIG="/opt/homebrew/etc/gitea-runner/config.yaml"
+RUNNER_DIR="/opt/homebrew/etc/gitea-runner"
 VENV="$DIR/.venv"
 GUI_DIR="$DIR/surfaces/gui"
 TOKEN_FILE="$HOME/.config/werubworker/sidecar-$BACKEND_PORT.token"
@@ -16,11 +18,17 @@ _status() {
     local be_pid=$(lsof -ti :$BACKEND_PORT 2>/dev/null | head -1)
     local fe_pid=$(lsof -ti :$FRONTEND_PORT 2>/dev/null | head -1)
     local gitea_pid=$(lsof -ti :$GITEA_PORT 2>/dev/null | head -1)
+    local runner_pid=$(pgrep -f "gitea-runner daemon" 2>/dev/null | head -1)
     echo "=== WeruBWorker 서비스 상태 ==="
     if [ -n "$gitea_pid" ]; then
         echo "  Gitea    (:$GITEA_PORT): 실행 중 (PID $gitea_pid)"
     else
         echo "  Gitea    (:$GITEA_PORT): 중지됨"
+    fi
+    if [ -n "$runner_pid" ]; then
+        echo "  Runner          : 실행 중 (PID $runner_pid)"
+    else
+        echo "  Runner          : 중지됨"
     fi
     if [ -n "$be_pid" ]; then
         echo "  백엔드 (:$BACKEND_PORT): 실행 중 (PID $be_pid)"
@@ -38,6 +46,7 @@ _stop() {
     echo "서비스 중지 중..."
     lsof -ti :$FRONTEND_PORT 2>/dev/null | xargs kill -TERM 2>/dev/null
     lsof -ti :$BACKEND_PORT 2>/dev/null | xargs kill -TERM 2>/dev/null
+    pkill -f "gitea-runner daemon" 2>/dev/null
     brew services stop gitea 2>/dev/null
     sleep 2
     echo "중지 완료"
@@ -56,6 +65,23 @@ _start() {
             echo "Gitea 시작 완료 (port $GITEA_PORT)"
         else
             echo "Gitea 시작 실패! 로그: $LOG_DIR/gitea.log"
+        fi
+    fi
+
+    # Gitea Runner 시작
+    local runner_pid=$(pgrep -f "gitea-runner daemon" 2>/dev/null | head -1)
+    if [ -n "$runner_pid" ]; then
+        echo "Runner 이미 실행 중 (PID $runner_pid)"
+    else
+        echo "Runner 시작 중..."
+        cd "$RUNNER_DIR"
+        gitea-runner daemon --config "$RUNNER_CONFIG" >> "$LOG_DIR/runner.log" 2>&1 &
+        cd "$DIR"
+        sleep 1
+        if pgrep -f "gitea-runner daemon" >/dev/null 2>&1; then
+            echo "Runner 시작 완료"
+        else
+            echo "Runner 시작 실패! 로그: $LOG_DIR/runner.log"
         fi
     fi
 
@@ -103,10 +129,11 @@ _start() {
 
     echo ""
     echo "=== WeruBWorker 서비스 시작 완료 ==="
-    echo "  Gitea: http://localhost:$GITEA_PORT"
-    echo "  GUI:   http://localhost:$FRONTEND_PORT"
-    echo "  API:   http://localhost:$BACKEND_PORT"
-    echo "  로그:  $LOG_DIR/"
+    echo "  Gitea:  http://localhost:$GITEA_PORT"
+    echo "  Runner: imac-runner (Actions)"
+    echo "  GUI:    http://localhost:$FRONTEND_PORT"
+    echo "  API:    http://localhost:$BACKEND_PORT"
+    echo "  로그:   $LOG_DIR/"
 }
 
 case "${1:-start}" in
