@@ -12,10 +12,10 @@ import time
 
 import pytest
 
-from coworker.monitoring.audit_ops import OpsAuditStore, OpsAuditEntry
+from coworker.monitoring.audit_ops import OpsAuditEntry, OpsAuditStore
 from coworker.monitoring.timeseries import TimeSeriesStore
 from coworker.security.hash_chain import GENESIS_HASH, HashChain
-from coworker.security.sensitive_filter import sanitize_text, sanitize_command
+from coworker.security.sensitive_filter import sanitize_command, sanitize_text
 
 
 @pytest.fixture
@@ -246,6 +246,47 @@ def test_buffered_record_beats_direct(tmp_path):
     assert buffered_elapsed < direct_elapsed, (
         f"buffered {buffered_elapsed:.3f}s not faster than direct {direct_elapsed:.3f}s"
     )
+
+
+def test_metrics_cache_hit(tmp_path):
+    """캐시 히트 시 latest 조회 < 5ms (기획서 목표 수치)."""
+    ts = TimeSeriesStore(tmp_path)
+    base = int(time.time()) // 60 * 60
+    for tick in range(20):
+        ts.record_batch([
+            {"server_id": f"srv-{i:04d}", "ts": base - tick * 60, "cpu": 1.0}
+            for i in range(200)
+        ])
+
+    ts.query_latest()  # 워밍업
+    start = time.monotonic()
+    rows = ts.query_latest()
+    elapsed = time.monotonic() - start
+
+    assert len(rows) == 200
+    assert elapsed < 0.005, f"cached latest took {elapsed * 1000:.2f}ms (expected < 5ms)"
+
+
+def test_metrics_cache_beats_cold_read(tmp_path):
+    """캐시 히트가 미스보다 빠르다 — 데이터가 쌓일수록 격차가 커진다."""
+    ts = TimeSeriesStore(tmp_path)
+    base = int(time.time()) // 60 * 60
+    for tick in range(50):
+        ts.record_batch([
+            {"server_id": f"srv-{i:04d}", "ts": base - tick * 60, "cpu": 1.0}
+            for i in range(200)
+        ])
+
+    ts.invalidate_cache()
+    start = time.monotonic()
+    ts.query_latest()
+    cold = time.monotonic() - start
+
+    start = time.monotonic()
+    ts.query_latest()
+    warm = time.monotonic() - start
+
+    assert warm < cold, f"cached {warm * 1000:.2f}ms not faster than cold {cold * 1000:.2f}ms"
 
 
 def test_audit_record_many_1000(audit):

@@ -13,6 +13,10 @@ import time
 from pathlib import Path
 
 from .batch_writer import BatchWriter
+from .cache import ALL_SERVERS, MAX_LATEST_TTL, MetricsCache
+
+# 집계 테이블별 버킷 길이(초) — 닫힌 구간 판정에 사용
+_BUCKET_SECONDS = {"metrics_5m": 300, "metrics_1h": 3600, "metrics_1d": 86400}
 
 # metrics_raw INSERT — record()/record_batch()/배치 플러시가 공유
 _RAW_INSERT = (
@@ -57,6 +61,8 @@ class TimeSeriesStore:
         batch_writes: bool = False,
         flush_size: int = 50,
         flush_interval: float = 0.1,
+        cache_enabled: bool = True,
+        cache_ttl: float = MAX_LATEST_TTL,
     ):
         """시계열 저장소.
 
@@ -66,6 +72,10 @@ class TimeSeriesStore:
         인스턴스에서의 read-after-write 일관성은 유지된다. 다만 다른
         프로세스나 다른 인스턴스는 플러시 전 데이터를 볼 수 없으므로
         기본값은 False다.
+
+        cache_enabled=True면 ``query_latest()``와 닫힌 집계 구간 조회를
+        캐시한다. 쓰기 시 해당 서버의 latest는 자동 무효화된다. 다른
+        프로세스의 쓰기는 최대 ``cache_ttl``초 늦게 보인다.
         """
         self._db = data_dir / "monitoring.db"
         self._lock = threading.Lock()
@@ -75,6 +85,9 @@ class TimeSeriesStore:
             BatchWriter(self._write_rows, flush_size, flush_interval)
             if batch_writes
             else None
+        )
+        self._cache: MetricsCache | None = (
+            MetricsCache(latest_ttl=cache_ttl) if cache_enabled else None
         )
 
     # ------------------------------------------------------------------
@@ -209,6 +222,9 @@ class TimeSeriesStore:
             return
         with self._lock, self._connect() as conn:
             conn.executemany(_RAW_INSERT, rows)
+        if self._cache is not None:
+            # 쓴 서버의 latest만 무효화 (range 캐시는 집계 테이블만 담으므로 무관)
+            self._cache.invalidate_latest({row[0] for row in rows})
 
     def flush(self) -> int:
         """배치 버퍼를 즉시 비운다. 반환값은 기록된 건수."""
@@ -234,12 +250,23 @@ class TimeSeriesStore:
         end: int,
         table: str = "metrics_raw",
     ) -> list[dict]:
-        """시간 범위로 메트릭 조회. 적절한 테이블 자동 선택."""
+        """시간 범위로 메트릭 조회. 적절한 테이블 자동 선택.
+
+        닫힌 집계 구간은 다시 계산되지 않으므로 캐시한다.
+        """
         self.flush()
         if table == "metrics_raw":
             table = self.auto_select_table(end - start)
         if table not in self.RETENTION:
             return []
+
+        cache_key = (server_id, start, end, table)
+        cacheable = self._cache is not None and self._is_settled_range(end, table)
+        if cacheable:
+            cached = self._cache.get_range(cache_key)
+            if cached is not None:
+                return cached
+
         try:
             with self._connect() as conn:
                 rows = conn.execute(
@@ -247,13 +274,36 @@ class TimeSeriesStore:
                     "WHERE server_id = ? AND ts >= ? AND ts <= ? ORDER BY ts ASC",
                     (server_id, start, end),
                 ).fetchall()
-            return [dict(r) for r in rows]
+            result = [dict(r) for r in rows]
         except Exception:
             return []
 
+        if cacheable:
+            self._cache.set_range(cache_key, result)
+        return result
+
+    @staticmethod
+    def _is_settled_range(end: int, table: str) -> bool:
+        """구간의 마지막 버킷이 이미 닫혔는지 판정.
+
+        raw 테이블은 계속 쓰이므로 대상이 아니고, 집계 테이블도 형성 중인
+        버킷이 포함되면 캐시하지 않는다.
+        """
+        bucket = _BUCKET_SECONDS.get(table)
+        return bucket is not None and end < time.time() - bucket
+
     def query_latest(self, server_id: str | None = None) -> list[dict]:
-        """각 서버의 최신 메트릭 1건씩."""
+        """각 서버의 최신 메트릭 1건씩.
+
+        TTL 캐시를 거치며, 쓰기 시 해당 서버 항목은 무효화된다.
+        """
         self.flush()
+        key = server_id or ALL_SERVERS
+        if self._cache is not None:
+            cached = self._cache.get_latest(key)
+            if cached is not None:
+                return cached
+
         try:
             with self._connect() as conn:
                 if server_id:
@@ -270,9 +320,24 @@ class TimeSeriesStore:
                         "  GROUP BY server_id"
                         ") latest ON m.server_id = latest.server_id AND m.ts = latest.max_ts"
                     ).fetchall()
-            return [dict(r) for r in rows]
+            result = [dict(r) for r in rows]
         except Exception:
             return []
+
+        if self._cache is not None:
+            self._cache.set_latest(key, result)
+        return result
+
+    def cache_stats(self) -> dict:
+        """캐시 히트율·크기. 캐시가 꺼져 있으면 enabled=False."""
+        if self._cache is None:
+            return {"enabled": False}
+        return {"enabled": True, **self._cache.stats()}
+
+    def invalidate_cache(self) -> None:
+        """캐시 전체 무효화. 외부 프로세스 쓰기 직후처럼 즉시 반영이 필요할 때."""
+        if self._cache is not None:
+            self._cache.invalidate_all()
 
     def auto_select_table(self, range_seconds: int) -> str:
         """조회 범위에 따라 최적 테이블 선택.
@@ -349,6 +414,9 @@ class TimeSeriesStore:
                         """
                     cursor = conn.execute(sql)
                     results[dst] = cursor.rowcount
+            if self._cache is not None:
+                # 집계 테이블에 행이 추가됐으므로 range 캐시는 더 이상 유효하지 않다
+                self._cache.invalidate_ranges()
             return {"ok": True, "downsampled": results}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -367,6 +435,9 @@ class TimeSeriesStore:
                         (cutoff,),
                     )
                     deleted[table] = cursor.rowcount
+            if self._cache is not None:
+                # 보관정책 삭제는 latest/range 양쪽에 영향을 준다
+                self._cache.invalidate_all()
             return {"ok": True, "deleted": deleted}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}

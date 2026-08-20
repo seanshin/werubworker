@@ -19,12 +19,25 @@
 | `record_batch()` 300서버 | 1.0 ms | 0.7 ms | 1.4× |
 | 감사 로그 1,000건 | 64.2 ms (단건) | 5.5 ms (`record_many`) | 11.7× |
 
+### Performance — 메트릭 조회 캐시 (성능개선 기획서 v2 Phase 3-1)
+- **`MetricsCache`** (신규 `monitoring/cache.py`): latest 캐시(TTL)와 range 캐시(LRU)를 함께 제공. 히트율·크기를 `stats()`로 노출
+- **latest 캐시**: `query_latest()` 결과를 TTL 10초로 보관. 쓰기 시 해당 server_id와 전체 조회 키만 무효화하므로 같은 인스턴스의 read-after-write 일관성 유지
+- **TTL 상한 고정** (`MAX_LATEST_TTL = 10.0`): 이 질의가 30초 주기 알림 평가 경로에 있어, TTL이 틱 주기에 가까워지면 낡은 메트릭으로 알림이 평가된다. 생성자 인자로 올려도 상한에서 잘린다
+- **range 캐시**: 닫힌 집계 구간(5m/1h/1d)만 LRU 200개까지 보관. 형성 중인 버킷과 raw 테이블은 대상 제외, 다운샘플링·정리 실행 시 무효화
+- **`TimeSeriesStore(cache_enabled=…)`** 및 `cache_stats()` / `invalidate_cache()` 추가. 캐시는 인스턴스 로컬이라 다른 프로세스의 쓰기는 최대 TTL만큼 늦게 보인다
+
+| 작업 | 캐시 미스 | 캐시 히트 | 배수 |
+|------|-----------|-----------|------|
+| `query_latest()` 200서버 / 2,016,000행 (7일치 raw) | 138.3 ms | 0.02 ms | 7,864× |
+| `query_latest()` 200서버 / 2,000행 | 0.52 ms | 0.01 ms | 52× |
+
 ### Added
 - 배치 쓰기 테스트 19개 (`tests/test_batch_writer.py`): 플러시 트리거 4종, 실패 시 폐기, 배치 모드 read-after-write, 해시체인 무결성(배치·혼합), 20스레드 동시 쓰기 2종
-- 성능 테스트 4개 (`tests/test_performance_v2.py`): 100서버 < 0.3초, 300서버 < 1초, 버퍼 모드 우위, 감사 1,000건 배치 < 0.3초
+- 캐시 테스트 16개 (`tests/test_metrics_cache.py`): TTL 만료·상한, 무효화 범위, 결과 복사본 반환, LRU 축출, 닫힌 구간만 캐시, 유지보수 무효화
+- 성능 테스트 6개 (`tests/test_performance_v2.py`): 100서버 < 0.3초, 300서버 < 1초, 버퍼 모드 우위, 감사 1,000건 배치 < 0.3초, 캐시 히트 < 5ms, 캐시 우위
 
 ### Stats
-- 테스트: 1,375 passed, 74 skipped (+23)
+- 테스트: 1,393 passed, 74 skipped (+41)
 
 ---
 
