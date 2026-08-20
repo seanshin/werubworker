@@ -1,5 +1,33 @@
 # Changelog
 
+## [Unreleased]
+
+### Performance — 배치 쓰기 (성능개선 기획서 v2 Phase 1-1)
+- **`BatchWriter`** (신규 `monitoring/batch_writer.py`): 쓰기 레코드를 메모리 버퍼에 모아 일괄 처리. `flush_size`(기본 50) 또는 `flush_interval`(기본 0.1초) 중 먼저 도달한 조건에서 플러시, 데몬 타이머로 유휴 시에도 상한 보장. 플러시 실패 시 배치 폐기 + `dropped` 누적 (버퍼 무한 증가 방지)
+- **`TimeSeriesStore` 커넥션 재사용**: 매 호출 `sqlite3.connect()` → 스레드 로컬 커넥션. 기존 코드는 커넥션을 닫지 않아 호출마다 새로 만들고 GC에 맡기던 구조였음
+- **`TimeSeriesStore` PRAGMA 튜닝**: `synchronous=NORMAL` (WAL에서 커밋마다 fsync 제거), 신규 DB에 한해 `page_size=8192`
+- **`record_batch()` executemany**: 건별 `execute()` 루프 → 파라미터 튜플 조립 후 `executemany()` 1회. 잘못된 포인트는 기존대로 `errors`로 보고
+- **`TimeSeriesStore(batch_writes=True)`**: `record()` 단건 호출을 버퍼링하는 선택적 모드. 조회·유지보수 메서드는 진입 시 자동 플러시하여 같은 인스턴스의 read-after-write 일관성 유지. 기본값은 False
+- **해시체인 배치 기록**: `AuditStore.append_many()`, `OpsAuditStore.record_many()` 추가 — 해시를 메모리에서 연쇄 계산한 뒤 `executemany`로 한 트랜잭션에 기록. 단건 경로와 섞어 써도 체인이 이어짐
+
+### Measured (best of 5, 로컬 SQLite)
+| 작업 | 이전 | 이후 | 배수 |
+|------|------|------|------|
+| `record()` × 1,000 (단건) | 181.8 ms | 23.8 ms | 7.6× |
+| `record()` × 1,000 (버퍼 모드) | 181.8 ms | 3.3 ms | 55× |
+| `record_batch()` 100서버 | 0.5 ms | 0.2 ms | 2.5× |
+| `record_batch()` 300서버 | 1.0 ms | 0.7 ms | 1.4× |
+| 감사 로그 1,000건 | 64.2 ms (단건) | 5.5 ms (`record_many`) | 11.7× |
+
+### Added
+- 배치 쓰기 테스트 19개 (`tests/test_batch_writer.py`): 플러시 트리거 4종, 실패 시 폐기, 배치 모드 read-after-write, 해시체인 무결성(배치·혼합), 20스레드 동시 쓰기 2종
+- 성능 테스트 4개 (`tests/test_performance_v2.py`): 100서버 < 0.3초, 300서버 < 1초, 버퍼 모드 우위, 감사 1,000건 배치 < 0.3초
+
+### Stats
+- 테스트: 1,375 passed, 74 skipped (+23)
+
+---
+
 ## [2.3.4] - 2026-08-20
 
 ### Performance — 감사 로그·알림 최적화 (성능개선 기획서 v2 Phase 1·3·4)

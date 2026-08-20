@@ -5,6 +5,7 @@ Measures:
 - Sensitive filter throughput (with combined pre-check pattern)
 - Chain verification streaming performance
 - Alert rule evaluation with cached rules
+- Batched metric/audit writes (executemany, single transaction)
 """
 
 import time
@@ -12,6 +13,7 @@ import time
 import pytest
 
 from coworker.monitoring.audit_ops import OpsAuditStore, OpsAuditEntry
+from coworker.monitoring.timeseries import TimeSeriesStore
 from coworker.security.hash_chain import GENESIS_HASH, HashChain
 from coworker.security.sensitive_filter import sanitize_text, sanitize_command
 
@@ -180,3 +182,88 @@ def test_hash_compute_throughput():
         prev = HashChain.compute_hash(prev, str(i), "data", "test")
     elapsed = time.monotonic() - start
     assert elapsed < 1.0, f"100K hashes took {elapsed:.2f}s"
+
+
+# -- 배치 쓰기 (Phase 1-1) --
+
+
+def _points(count: int, ts: int) -> list[dict]:
+    return [
+        {
+            "server_id": f"srv-{i:04d}",
+            "ts": ts,
+            "cpu": 10.0 + i % 90,
+            "memory": 20.0 + i % 70,
+            "disk": 30.0 + i % 60,
+            "net_rx": i * 1000,
+            "net_tx": i * 500,
+            "load_1m": 0.5,
+        }
+        for i in range(count)
+    ]
+
+
+def test_batch_write_100_servers(tmp_path):
+    """100서버 메트릭 배치 쓰기 < 0.3초 (기획서 목표 수치)."""
+    ts = TimeSeriesStore(tmp_path)
+    points = _points(100, int(time.time()) // 60 * 60)
+    start = time.monotonic()
+    result = ts.record_batch(points)
+    elapsed = time.monotonic() - start
+    assert result["ok"] and result["inserted"] == 100
+    assert elapsed < 0.3, f"100 servers took {elapsed:.3f}s (expected < 0.3s)"
+
+
+def test_batch_write_300_servers(tmp_path):
+    """300서버 메트릭 배치 쓰기 < 1초 (기획서 목표 수치)."""
+    ts = TimeSeriesStore(tmp_path)
+    points = _points(300, int(time.time()) // 60 * 60)
+    start = time.monotonic()
+    result = ts.record_batch(points)
+    elapsed = time.monotonic() - start
+    assert result["ok"] and result["inserted"] == 300
+    assert elapsed < 1.0, f"300 servers took {elapsed:.3f}s (expected < 1.0s)"
+
+
+def test_buffered_record_beats_direct(tmp_path):
+    """배치 버퍼 모드가 단건 즉시 쓰기보다 빠르다 (1,000건 기준)."""
+    direct = TimeSeriesStore(tmp_path / "direct")
+    start = time.monotonic()
+    for i in range(1000):
+        direct.record(f"srv-{i:04d}", cpu=1.0, memory=2.0, disk=3.0)
+    direct_elapsed = time.monotonic() - start
+
+    buffered = TimeSeriesStore(
+        tmp_path / "buffered", batch_writes=True, flush_size=50, flush_interval=0
+    )
+    start = time.monotonic()
+    for i in range(1000):
+        buffered.record(f"srv-{i:04d}", cpu=1.0, memory=2.0, disk=3.0)
+    buffered.flush()
+    buffered_elapsed = time.monotonic() - start
+
+    assert len(buffered.server_list()) == 1000
+    assert buffered_elapsed < direct_elapsed, (
+        f"buffered {buffered_elapsed:.3f}s not faster than direct {direct_elapsed:.3f}s"
+    )
+
+
+def test_audit_record_many_1000(audit):
+    """감사 로그 1,000건 배치 기록 < 0.3초 (해시체인 포함)."""
+    now = time.time()
+    entries = [
+        OpsAuditEntry(
+            timestamp=now + i * 0.001,
+            user="agent:ops",
+            action="ssh_execute",
+            target=f"ssh:server-{i % 50:02d}",
+            command=f"uptime && free -h  # iteration {i}",
+            result="success",
+        )
+        for i in range(1000)
+    ]
+    start = time.monotonic()
+    result = audit.record_many(entries)
+    elapsed = time.monotonic() - start
+    assert result["ok"] and result["inserted"] == 1000
+    assert elapsed < 0.3, f"1000 batched appends took {elapsed:.3f}s (expected < 0.3s)"

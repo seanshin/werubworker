@@ -12,6 +12,15 @@ import threading
 import time
 from pathlib import Path
 
+from .batch_writer import BatchWriter
+
+# metrics_raw INSERT — record()/record_batch()/배치 플러시가 공유
+_RAW_INSERT = (
+    "INSERT OR REPLACE INTO metrics_raw "
+    "(server_id, ts, cpu, memory, disk, net_rx, net_tx, load_1m, custom) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+)
+
 # Aggregated table columns shared by metrics_5m, metrics_1h, metrics_1d
 _AGG_SCHEMA = """
     server_id TEXT NOT NULL,
@@ -42,21 +51,53 @@ class TimeSeriesStore:
         ("metrics_1h", "metrics_1d", 86400),
     ]
 
-    def __init__(self, data_dir: Path):
+    def __init__(
+        self,
+        data_dir: Path,
+        batch_writes: bool = False,
+        flush_size: int = 50,
+        flush_interval: float = 0.1,
+    ):
+        """시계열 저장소.
+
+        batch_writes=True면 ``record()`` 단건 호출을 메모리 버퍼에 모아
+        ``flush_size``건 또는 ``flush_interval``초마다 일괄 INSERT한다.
+        조회/유지보수 메서드는 진입 시 자동으로 버퍼를 비우므로 같은
+        인스턴스에서의 read-after-write 일관성은 유지된다. 다만 다른
+        프로세스나 다른 인스턴스는 플러시 전 데이터를 볼 수 없으므로
+        기본값은 False다.
+        """
         self._db = data_dir / "monitoring.db"
         self._lock = threading.Lock()
+        self._local = threading.local()  # thread-local connection pool
         self._init_db()
+        self._writer: BatchWriter | None = (
+            BatchWriter(self._write_rows, flush_size, flush_interval)
+            if batch_writes
+            else None
+        )
 
     # ------------------------------------------------------------------
     # Connection & schema
     # ------------------------------------------------------------------
 
     def _connect(self) -> sqlite3.Connection:
+        """Get or create a thread-local SQLite connection."""
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            return conn
         self._db.parent.mkdir(parents=True, exist_ok=True)
         is_new = not self._db.exists()
         conn = sqlite3.connect(str(self._db), timeout=5)
         conn.row_factory = sqlite3.Row
+        if is_new:
+            # page_size는 첫 테이블 생성 전에만 반영된다. 시계열은 행이
+            # 작고 순차적이라 8KB 페이지가 페이지당 행 수를 늘려준다.
+            conn.execute("PRAGMA page_size=8192")
         conn.execute("PRAGMA journal_mode=WAL")
+        # WAL에서 NORMAL은 커밋마다 fsync하지 않는다 (OS 크래시 시에만
+        # 마지막 트랜잭션 유실 가능). 메트릭 쓰기 처리량에 가장 크게 기여.
+        conn.execute("PRAGMA synchronous=NORMAL")
         if is_new:
             try:
                 import os
@@ -64,6 +105,7 @@ class TimeSeriesStore:
                 os.chmod(self._db, 0o600)
             except OSError:
                 pass
+        self._local.conn = conn
         return conn
 
     def _init_db(self) -> None:
@@ -112,52 +154,74 @@ class TimeSeriesStore:
         load_1m: float = 0.0,
         custom: dict | None = None,
     ) -> dict:
-        """메트릭 한 건 저장. ts는 현재 epoch초 (1분 단위로 반올림)."""
+        """메트릭 한 건 저장. ts는 현재 epoch초 (1분 단위로 반올림).
+
+        batch_writes 모드에서는 버퍼에 적재만 하고 즉시 반환한다.
+        """
         ts = int(time.time()) // 60 * 60
-        custom_json = json.dumps(custom or {})
+        row = (
+            server_id, ts, cpu, memory, disk,
+            net_rx, net_tx, load_1m, json.dumps(custom or {}),
+        )
         try:
-            with self._lock, self._connect() as conn:
-                conn.execute(
-                    "INSERT OR REPLACE INTO metrics_raw "
-                    "(server_id, ts, cpu, memory, disk, net_rx, net_tx, load_1m, custom) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (server_id, ts, cpu, memory, disk, net_rx, net_tx, load_1m, custom_json),
-                )
+            if self._writer is not None:
+                self._writer.enqueue(row)
+            else:
+                self._write_rows([row])
             return {"ok": True, "server_id": server_id, "ts": ts}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
 
     def record_batch(self, points: list[dict]) -> dict:
-        """다중 서버 메트릭 일괄 저장."""
-        ts = int(time.time()) // 60 * 60
-        inserted = 0
+        """다중 서버 메트릭 일괄 저장 (executemany 단일 트랜잭션)."""
+        default_ts = int(time.time()) // 60 * 60
+        rows: list[tuple] = []
         errors: list[str] = []
+        for pt in points:
+            try:
+                rows.append(self._build_row(pt, default_ts))
+            except Exception as exc:
+                errors.append(f"{pt.get('server_id', '?')}: {exc}")
         try:
-            with self._lock, self._connect() as conn:
-                for pt in points:
-                    try:
-                        conn.execute(
-                            "INSERT OR REPLACE INTO metrics_raw "
-                            "(server_id, ts, cpu, memory, disk, net_rx, net_tx, "
-                            "load_1m, custom) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                            (
-                                pt["server_id"],
-                                pt.get("ts", ts),
-                                pt.get("cpu", 0.0),
-                                pt.get("memory", 0.0),
-                                pt.get("disk", 0.0),
-                                pt.get("net_rx", 0),
-                                pt.get("net_tx", 0),
-                                pt.get("load_1m", 0.0),
-                                json.dumps(pt.get("custom") or {}),
-                            ),
-                        )
-                        inserted += 1
-                    except Exception as exc:
-                        errors.append(f"{pt.get('server_id', '?')}: {exc}")
-            return {"ok": True, "inserted": inserted, "errors": errors}
+            self._write_rows(rows)
+            return {"ok": True, "inserted": len(rows), "errors": errors}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
+
+    @staticmethod
+    def _build_row(pt: dict, default_ts: int) -> tuple:
+        """포인트 dict를 metrics_raw INSERT 파라미터 튜플로 변환."""
+        return (
+            pt["server_id"],
+            pt.get("ts", default_ts),
+            pt.get("cpu", 0.0),
+            pt.get("memory", 0.0),
+            pt.get("disk", 0.0),
+            pt.get("net_rx", 0),
+            pt.get("net_tx", 0),
+            pt.get("load_1m", 0.0),
+            json.dumps(pt.get("custom") or {}),
+        )
+
+    def _write_rows(self, rows: list[tuple]) -> None:
+        """metrics_raw에 일괄 INSERT. 트랜잭션 1회로 커밋."""
+        if not rows:
+            return
+        with self._lock, self._connect() as conn:
+            conn.executemany(_RAW_INSERT, rows)
+
+    def flush(self) -> int:
+        """배치 버퍼를 즉시 비운다. 반환값은 기록된 건수."""
+        return self._writer.flush() if self._writer is not None else 0
+
+    def close(self) -> None:
+        """버퍼를 플러시하고 현재 스레드의 커넥션을 닫는다."""
+        if self._writer is not None:
+            self._writer.close()
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            conn.close()
+            self._local.conn = None
 
     # ------------------------------------------------------------------
     # Read operations
@@ -171,6 +235,7 @@ class TimeSeriesStore:
         table: str = "metrics_raw",
     ) -> list[dict]:
         """시간 범위로 메트릭 조회. 적절한 테이블 자동 선택."""
+        self.flush()
         if table == "metrics_raw":
             table = self.auto_select_table(end - start)
         if table not in self.RETENTION:
@@ -188,6 +253,7 @@ class TimeSeriesStore:
 
     def query_latest(self, server_id: str | None = None) -> list[dict]:
         """각 서버의 최신 메트릭 1건씩."""
+        self.flush()
         try:
             with self._connect() as conn:
                 if server_id:
@@ -230,6 +296,7 @@ class TimeSeriesStore:
 
         각 소스 테이블에서 아직 집계되지 않은 구간을 AVG/MAX/SUM으로 집계.
         """
+        self.flush()
         results: dict[str, int] = {}
         try:
             with self._lock, self._connect() as conn:
@@ -288,6 +355,7 @@ class TimeSeriesStore:
 
     def prune(self) -> dict:
         """RETENTION 정책에 따라 오래된 데이터 삭제."""
+        self.flush()
         now = int(time.time())
         deleted: dict[str, int] = {}
         try:
@@ -305,6 +373,7 @@ class TimeSeriesStore:
 
     def server_list(self) -> list[str]:
         """메트릭이 존재하는 서버 ID 목록."""
+        self.flush()
         try:
             with self._connect() as conn:
                 rows = conn.execute(

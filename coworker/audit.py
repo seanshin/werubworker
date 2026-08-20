@@ -32,6 +32,14 @@ _BODY_KEYS = ("body", "content", "html")
 # Fields included in hash chain computation
 _HASH_FIELDS = ("session_id", "tool", "stage", "status", "args")
 
+_INSERT_SQL = """
+    INSERT INTO audit_events
+        (session_id, agent, workspace, connector, tool, stage,
+         status, approval, args, result_preview, reason, resource,
+         prev_hash, hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
 
 class AuditStore:
     def __init__(self, db_path: str | Path) -> None:
@@ -81,7 +89,10 @@ class AuditStore:
                 "ALTER TABLE audit_events ADD COLUMN hash TEXT DEFAULT ''"
             )
 
-    def append(self, event: dict[str, Any]) -> None:
+    def _build_row(
+        self, event: dict[str, Any], prev_hash: str
+    ) -> tuple[tuple[Any, ...], str]:
+        """이벤트를 INSERT 파라미터 튜플과 체인 해시로 변환."""
         tool = str(event.get("tool") or event.get("tool_name") or "")
         connector = str(event.get("connector") or connector_for_tool(tool) or "")
         args = _sanitize_args(tool, event.get("arguments") or {})
@@ -92,40 +103,53 @@ class AuditStore:
         status = event.get("status") or ""
         args_json = json.dumps(args, default=str)
 
+        current_hash = HashChain.compute_hash(
+            prev_hash, session_id, tool, stage, status, args_json
+        )
+
+        row = (
+            session_id,
+            event.get("agent") or "",
+            event.get("workspace") or "",
+            connector,
+            tool,
+            stage,
+            status,
+            event.get("approval") or "",
+            args_json,
+            _truncate(str(event.get("result_preview") or "")),
+            _truncate(str(event.get("reason") or "")),
+            _truncate(str(resource or "")),
+            prev_hash,
+            current_hash,
+        )
+        return row, current_hash
+
+    def append(self, event: dict[str, Any]) -> None:
         with self._lock:
-            prev_hash = self._last_hash
-
-            current_hash = HashChain.compute_hash(
-                prev_hash, session_id, tool, stage, status, args_json
-            )
-
-            self._conn.execute(
-                """
-                INSERT INTO audit_events
-                    (session_id, agent, workspace, connector, tool, stage,
-                     status, approval, args, result_preview, reason, resource,
-                     prev_hash, hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    session_id,
-                    event.get("agent") or "",
-                    event.get("workspace") or "",
-                    connector,
-                    tool,
-                    stage,
-                    status,
-                    event.get("approval") or "",
-                    args_json,
-                    _truncate(str(event.get("result_preview") or "")),
-                    _truncate(str(event.get("reason") or "")),
-                    _truncate(str(resource or "")),
-                    prev_hash,
-                    current_hash,
-                ),
-            )
+            row, current_hash = self._build_row(event, self._last_hash)
+            self._conn.execute(_INSERT_SQL, row)
             self._conn.commit()
             self._last_hash = current_hash
+
+    def append_many(self, events: list[dict[str, Any]]) -> int:
+        """여러 이벤트를 한 트랜잭션에 일괄 기록.
+
+        해시체인은 메모리에서 연쇄 계산한 뒤 executemany로 한 번에
+        INSERT하므로, 건당 커밋 비용이 배치 전체에 분산된다.
+        """
+        if not events:
+            return 0
+        with self._lock:
+            prev_hash = self._last_hash
+            rows: list[tuple[Any, ...]] = []
+            for event in events:
+                row, prev_hash = self._build_row(event, prev_hash)
+                rows.append(row)
+            self._conn.executemany(_INSERT_SQL, rows)
+            self._conn.commit()
+            self._last_hash = prev_hash
+        return len(rows)
 
     def list(
         self,

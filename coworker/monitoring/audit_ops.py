@@ -31,6 +31,13 @@ log = logging.getLogger(__name__)
 # Fields included in hash chain computation
 _HASH_FIELDS = ("ts", "user", "action", "target", "command")
 
+_INSERT_SQL = (
+    "INSERT INTO ops_audit "
+    "(ts, user, action, target, command, result, session_id, "
+    "approval_id, metadata, prev_hash, hash) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+)
+
 
 @dataclass
 class OpsAuditEntry:
@@ -131,43 +138,64 @@ class OpsAuditStore:
                 "ALTER TABLE ops_audit ADD COLUMN hash TEXT DEFAULT ''"
             )
 
+    @staticmethod
+    def _build_row(entry: OpsAuditEntry, prev_hash: str) -> tuple[tuple, str]:
+        """항목을 INSERT 파라미터 튜플과 체인 해시로 변환."""
+        filtered_command = sanitize_command(entry.command)
+        ts = entry.timestamp or time.time()
+
+        current_hash = HashChain.compute_hash(
+            prev_hash, ts, entry.user, entry.action,
+            entry.target, filtered_command,
+        )
+
+        row = (
+            ts,
+            entry.user,
+            entry.action,
+            entry.target,
+            filtered_command,
+            entry.result,
+            entry.session_id,
+            entry.approval_id,
+            json.dumps(entry.metadata or {}),
+            prev_hash,
+            current_hash,
+        )
+        return row, current_hash
+
     def record(self, entry: OpsAuditEntry) -> dict:
         """감사 로그 기록 (민감정보 필터 + 해시체인)."""
         try:
-            filtered_command = sanitize_command(entry.command)
-            ts = entry.timestamp or time.time()
-
             with self._lock, self._connect() as conn:
-                prev_hash = self._last_hash
-
-                current_hash = HashChain.compute_hash(
-                    prev_hash, ts, entry.user, entry.action,
-                    entry.target, filtered_command,
-                )
-
-                conn.execute(
-                    "INSERT INTO ops_audit "
-                    "(ts, user, action, target, command, result, session_id, "
-                    "approval_id, metadata, prev_hash, hash) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        ts,
-                        entry.user,
-                        entry.action,
-                        entry.target,
-                        filtered_command,
-                        entry.result,
-                        entry.session_id,
-                        entry.approval_id,
-                        json.dumps(entry.metadata or {}),
-                        prev_hash,
-                        current_hash,
-                    ),
-                )
+                row, current_hash = self._build_row(entry, self._last_hash)
+                conn.execute(_INSERT_SQL, row)
             self._last_hash = current_hash
             return {"ok": True}
         except Exception as exc:
             log.exception("audit record failed: %s", exc)
+            return {"ok": False, "error": str(exc)}
+
+    def record_many(self, entries: list[OpsAuditEntry]) -> dict:
+        """여러 항목을 한 트랜잭션에 일괄 기록.
+
+        해시체인은 메모리에서 연쇄 계산한 뒤 executemany로 한 번에
+        INSERT한다. 체인 순서는 리스트 순서를 따른다.
+        """
+        if not entries:
+            return {"ok": True, "inserted": 0}
+        try:
+            with self._lock, self._connect() as conn:
+                prev_hash = self._last_hash
+                rows: list[tuple] = []
+                for entry in entries:
+                    row, prev_hash = self._build_row(entry, prev_hash)
+                    rows.append(row)
+                conn.executemany(_INSERT_SQL, rows)
+            self._last_hash = prev_hash
+            return {"ok": True, "inserted": len(rows)}
+        except Exception as exc:
+            log.exception("audit record_many failed: %s", exc)
             return {"ok": False, "error": str(exc)}
 
     def verify_chain(self) -> tuple[bool, int | None]:
