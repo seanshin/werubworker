@@ -16,15 +16,99 @@ from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
+# 동시 수집 상한 — SSH 세션 수와 파일 디스크립터를 고려한 안전선
+MAX_PARALLEL_WORKERS = 50
+
+# 적응형 타임아웃: 성공 이력 EWMA에 곱하는 여유 배수
+_TIMEOUT_MARGIN = 3.0
+_EWMA_ALPHA = 0.3
+# 한 시간 동안 수집되지 않은 서버 이력은 버린다 (맵 무한 증가 방지)
+_HISTORY_TTL = 3600.0
+
 
 @dataclass
 class CollectorConfig:
     """수집기 설정."""
 
     interval_seconds: int = 60
-    parallel_workers: int = 10
+    parallel_workers: int = 20
     collect_local: bool = True
     ssh_timeout: int = 15
+    adaptive_timeout: bool = True
+    min_ssh_timeout: int = 5
+    max_ssh_timeout: int = 30
+
+    def __post_init__(self) -> None:
+        self.parallel_workers = max(1, min(self.parallel_workers, MAX_PARALLEL_WORKERS))
+        self.min_ssh_timeout = max(1, self.min_ssh_timeout)
+        self.max_ssh_timeout = max(self.min_ssh_timeout, self.max_ssh_timeout)
+
+
+class TimeoutTracker:
+    """서버별 SSH 응답 시간 이력으로 타임아웃을 조정한다.
+
+    빠른 서버에는 짧은 타임아웃을 줘서 장애 시 빨리 포기하게 하고,
+    느린 서버에는 넉넉히 줘서 정상 응답이 잘리지 않게 한다. 이력이 없으면
+    설정된 고정 타임아웃을 쓰고, 실패한 서버는 다음 시도에서 상한을 준다.
+    """
+
+    def __init__(self, config: CollectorConfig) -> None:
+        self._config = config
+        self._ewma: dict[str, float] = {}
+        self._failed: set[str] = set()
+        self._seen: dict[str, float] = {}
+
+    def timeout_for(self, server_id: str) -> int:
+        if not self._config.adaptive_timeout:
+            return self._config.ssh_timeout
+        if server_id in self._failed:
+            # 직전에 실패 — 느려서 잘린 것일 수 있으므로 최대치로 재시도
+            return self._config.max_ssh_timeout
+        ewma = self._ewma.get(server_id)
+        if ewma is None:
+            return self._config.ssh_timeout
+        estimate = int(ewma * _TIMEOUT_MARGIN) + 1
+        return max(
+            self._config.min_ssh_timeout,
+            min(estimate, self._config.max_ssh_timeout),
+        )
+
+    def record_success(self, server_id: str, elapsed: float) -> None:
+        prev = self._ewma.get(server_id)
+        self._ewma[server_id] = (
+            elapsed if prev is None else _EWMA_ALPHA * elapsed + (1 - _EWMA_ALPHA) * prev
+        )
+        self._failed.discard(server_id)
+        self._seen[server_id] = time.time()
+        self._prune()
+
+    def record_failure(self, server_id: str) -> None:
+        self._failed.add(server_id)
+        self._seen[server_id] = time.time()
+        self._prune()
+
+    def _prune(self) -> None:
+        """오래 보이지 않은 서버 이력 제거 — 장기 운영 시 맵 증가 방지."""
+        cutoff = time.time() - _HISTORY_TTL
+        stale = [sid for sid, seen in self._seen.items() if seen < cutoff]
+        for sid in stale:
+            self._seen.pop(sid, None)
+            self._ewma.pop(sid, None)
+            self._failed.discard(sid)
+
+    def stats(self) -> dict[str, Any]:
+        """서버별 현재 타임아웃과 평균 응답 시간."""
+        return {
+            "tracked": len(self._ewma),
+            "failing": sorted(self._failed),
+            "servers": {
+                sid: {
+                    "avg_seconds": round(ewma, 2),
+                    "timeout": self.timeout_for(sid),
+                }
+                for sid, ewma in sorted(self._ewma.items())
+            },
+        }
 
 
 class MetricCollector:
@@ -72,6 +156,11 @@ class MetricCollector:
         self._on_collect = on_collect
         self._running = False
         self._task: asyncio.Task[None] | None = None
+        self._timeouts = TimeoutTracker(self._config)
+
+    def timeout_stats(self) -> dict[str, Any]:
+        """서버별 적응형 타임아웃 현황 (운영 진단용)."""
+        return self._timeouts.stats()
 
     # ------------------------------------------------------------------
     # Public API
@@ -286,17 +375,27 @@ class MetricCollector:
             "cat /proc/loadavg 2>/dev/null || sysctl -n vm.loadavg 2>/dev/null"
         )
 
+        timeout = self._timeouts.timeout_for(server_id)
         loop = asyncio.get_event_loop()
-        result: dict[str, Any] = await loop.run_in_executor(
-            None, lambda: client.execute(cmd, timeout=self._config.ssh_timeout)
-        )
+        started = time.monotonic()
+        try:
+            result: dict[str, Any] = await loop.run_in_executor(
+                None, lambda: client.execute(cmd, timeout=timeout)
+            )
+        except Exception:
+            self._timeouts.record_failure(server_id)
+            raise
+        elapsed = time.monotonic() - started
 
         if not result.get("ok"):
+            self._timeouts.record_failure(server_id)
             return {
                 "ok": False,
                 "server_id": server_id,
                 "error": result.get("error", result.get("stderr", "ssh failed")),
             }
+
+        self._timeouts.record_success(server_id, elapsed)
 
         point = self._parse_remote_output(result.get("stdout", ""))
         point["server_id"] = server_id

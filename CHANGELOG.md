@@ -31,13 +31,27 @@
 | `query_latest()` 200서버 / 2,016,000행 (7일치 raw) | 138.3 ms | 0.02 ms | 7,864× |
 | `query_latest()` 200서버 / 2,000행 | 0.52 ms | 0.01 ms | 52× |
 
+### Performance — 수집 병렬도 확대 (성능개선 기획서 v2 Phase 2-1)
+- **`parallel_workers` 기본 10 → 20**, 상한 `MAX_PARALLEL_WORKERS = 50`으로 클램프 (SSH 세션 수·파일 디스크립터 안전선). 하한 1
+- **`TimeoutTracker`** (신규, `collector.py`): 서버별 SSH 응답 시간 EWMA(α=0.3)로 타임아웃을 조정. 빠른 서버는 하한(5초)까지 줄여 장애 시 빨리 포기하고, 느린 서버는 상한(30초)까지 늘려 정상 응답이 잘리지 않게 함. 여유 배수 3배
+- **실패 서버 처리**: 직전 실패한 서버는 다음 시도에서 상한 타임아웃 — 느려서 잘린 경우 회복 기회를 준다. 성공하면 다시 적응형으로 복귀
+- **이력 TTL 1시간**: 한 시간 동안 수집되지 않은 서버 이력은 자동 제거 (장기 운영 시 맵 무한 증가 방지 — Phase 6-1 선반영)
+- `CollectorConfig.adaptive_timeout=False`로 기존 고정 타임아웃 동작 유지 가능. `MetricCollector.timeout_stats()`로 서버별 현황 조회
+
+| 200서버 수집 (서버당 SSH 0.5초 시뮬레이션) | 시간 |
+|---|---|
+| `parallel_workers=10` (이전 기본) | 10.03 s |
+| `parallel_workers=20` (신규 기본) | 5.02 s (2.0×) |
+| `parallel_workers=50` (상한) | 2.01 s |
+
 ### Added
+- 수집 병렬도·타임아웃 테스트 14개 (`tests/test_collector_timeout.py`): 병렬도 클램프 3종, 동시 실행 상한 준수, 적응형 타임아웃 7종, 이력 TTL 정리, 통계 노출
 - 배치 쓰기 테스트 19개 (`tests/test_batch_writer.py`): 플러시 트리거 4종, 실패 시 폐기, 배치 모드 read-after-write, 해시체인 무결성(배치·혼합), 20스레드 동시 쓰기 2종
 - 캐시 테스트 16개 (`tests/test_metrics_cache.py`): TTL 만료·상한, 무효화 범위, 결과 복사본 반환, LRU 축출, 닫힌 구간만 캐시, 유지보수 무효화
 - 성능 테스트 6개 (`tests/test_performance_v2.py`): 100서버 < 0.3초, 300서버 < 1초, 버퍼 모드 우위, 감사 1,000건 배치 < 0.3초, 캐시 히트 < 5ms, 캐시 우위
 
 ### Stats
-- 테스트: 1,393 passed, 74 skipped (+41)
+- 테스트: 1,407 passed, 74 skipped (+55)
 
 ---
 
