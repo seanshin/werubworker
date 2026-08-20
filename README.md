@@ -4,8 +4,8 @@
 
 서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다. Gitea + MCP를 통합하여 에이전트와 소스 리포지토리가 하나의 플랫폼으로 동작합니다.
 
-[![Version](https://img.shields.io/badge/version-2.3.3-blue)]()
-[![Tests](https://img.shields.io/badge/tests-1%2C343%20passed-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-2.3.4-blue)]()
+[![Tests](https://img.shields.io/badge/tests-1%2C352%20passed-brightgreen)]()
 [![Tools](https://img.shields.io/badge/tools-300%2B-orange)]()
 [![Capabilities](https://img.shields.io/badge/capabilities-28-purple)]()
 [![MCP](https://img.shields.io/badge/MCP-32%20tools-blueviolet)]()
@@ -685,7 +685,7 @@ cd surfaces/gui && npx tsc --noEmit
 | [**v2.0 아키텍처**](docs/v2-architecture.md) | 전체 시스템 구조, 모니터링/위키/도구 아키텍처, 데이터 저장소 |
 | [**v2.0 API 레퍼런스**](docs/v2-api-reference.md) | 대시보드/인프라/Wiki API 엔드포인트 전체 명세 |
 | [**MCP 서버 설정**](docs/mcp-setup.md) | Claude Desktop/Cursor/Claude Code MCP 연동 가이드 |
-| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.3 전체 변경 이력 |
+| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.4 전체 변경 이력 |
 | [**확장 설계서**](docs/cloud-server-ops-expansion-design.md) | 통합 모니터링, 알림, 인시던트, 서비스 위키 리포지토리 설계 |
 | [**개발팀 조율 가이드**](docs/dev-team/TEAM-COORDINATION.md) | 병렬 개발 규칙, 작업 분배, 충돌 방지 |
 
@@ -693,7 +693,8 @@ cd surfaces/gui && npx tsc --noEmit
 
 | 버전 | 날짜 | 주요 내용 |
 |------|------|----------|
-| **v2.3.3** | **2026-08-20** | **Sign 연동 보안 강화: 해시체인, TOTP 2FA, 봉투 암호화, HMAC 서명, MCP 보안 도구 5개 (테스트 1,343개)** |
+| **v2.3.4** | **2026-08-20** | **성능 최적화: 해시체인 메모리 캐시, 커넥션 풀링, 민감정보 필터 빠른 탈출, 알림 규칙 캐시, 체인 스트리밍 검증 (테스트 1,352개)** |
+| v2.3.3 | 2026-08-20 | Sign 연동 보안 강화: 해시체인, TOTP 2FA, 봉투 암호화, HMAC 서명, MCP 보안 도구 5개 (테스트 1,343개) |
 | v2.3.0 | 2026-08-18 | Phase 1~6: 실시간 메트릭, AI 이상탐지/사후분석, GUI 4개 신규, 워크플로우, 보안/백업, Slack Bot, Gitea+ITMS MCP 통합 |
 | [v2.2.2](https://github.com/seanshin/werubworker/releases/tag/v2.2.2) | 2026-08-14 | 성능 부하 테스트 11개, 100서버 < 1초 검증 |
 | [v2.2.0](https://github.com/seanshin/werubworker/releases/tag/v2.2.0) | 2026-08-14 | GUI 모니터링 대시보드 페이지 (809줄) |

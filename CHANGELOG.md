@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.3.4] - 2026-08-20
+
+### Performance — 감사 로그·알림 최적화 (성능개선 기획서 v2 Phase 1·3·4)
+- **해시체인 메모리 캐시** (`audit.py`, `audit_ops.py`): 마지막 해시를 인스턴스 변수(`_last_hash`)로 유지 — append마다 실행되던 `SELECT hash ORDER BY id DESC LIMIT 1` 제거 (I/O 2회 → 1회)
+- **스레드 로컬 커넥션 풀링** (`audit_ops.py`): 매 호출 `sqlite3.connect()` → 스레드별 커넥션 재사용 (생성 90% 감소)
+- **민감정보 필터 빠른 탈출** (`sensitive_filter.py`): 합성 pre-check 정규식(`_QUICK_CHECK`, `_CMD_QUICK_CHECK`)으로 1회 스캔 — 민감정보 없는 텍스트는 14패턴 순회 없이 즉시 반환, 4자 미만 스킵
+- **알림 규칙 인메모리 캐시** (`alerting.py`): `list_rules(enabled_only=True)` TTL 5초 캐시, `add_rule()`/`remove_rule()` 시 자동 무효화
+- **해시체인 스트리밍 검증** (`hash_chain.py`): `verify_chain_streaming()` 커서 기반 O(1) 메모리 검증 추가, `AuditStore.verify_chain()`이 이를 사용하도록 전환 (100K+ 레코드 OOM 방지)
+
+### Added
+- 성능 테스트 9개 (`tests/test_performance_v2.py`): 1K append < 1초, 민감정보 포함 1K < 1.5초, 10K 스트리밍 검증 < 3초, `chain_head()` 무조회 반환, 클린 텍스트 10K 필터 < 0.1초, 혼합 10K < 0.5초, 명령어 10K < 0.3초, 50규칙 × 200서버 평가 < 1초, 해시 계산 100K < 1초
+- 성능 개선 기획서 v2 (`docs/WeruBWorker_성능개선_기획서_v2.md`): 6 Phase, 우선순위 12항목, 성능 목표 수치표
+
+### Stats
+- 테스트: 1,352 passed, 74 skipped (성능 +9)
+- 잔여 계획: Phase 1-1 배치 쓰기, 2-1 수집 병렬도 확대, 3-1 메트릭 조회 캐시, 6-2 디스크 관리 자동화 등 (기획서 §3 구현 우선순위 참조)
+
+---
+
 ## [2.3.3] - 2026-08-20
 
 ### Added — Sign 연동 보안 강화 (Phase 1~6)
