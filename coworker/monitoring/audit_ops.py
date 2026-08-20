@@ -3,6 +3,10 @@
 Records every consequential action taken by agents or users: SSH commands,
 Docker restarts, K8s scaling, DB queries, etc. The audit trail is immutable
 (append-only) and retained for 1 year.
+
+Security features:
+- Command-level sensitive data masking (passwords, tokens, keys)
+- SHA-256 hash chain for tamper detection
 """
 
 from __future__ import annotations
@@ -19,7 +23,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..security.hash_chain import GENESIS_HASH, HashChain
+from ..security.sensitive_filter import sanitize_command
+
 log = logging.getLogger(__name__)
+
+# Fields included in hash chain computation
+_HASH_FIELDS = ("ts", "user", "action", "target", "command")
 
 
 @dataclass
@@ -88,31 +98,81 @@ class OpsAuditStore:
                 CREATE INDEX IF NOT EXISTS idx_ops_audit_action ON ops_audit(action);
                 CREATE INDEX IF NOT EXISTS idx_ops_audit_target ON ops_audit(target);
             """)
+            self._migrate_hash_columns(conn)
+
+    def _migrate_hash_columns(self, conn: sqlite3.Connection) -> None:
+        """Add prev_hash/hash columns if they don't exist yet."""
+        cursor = conn.execute("PRAGMA table_info(ops_audit)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "prev_hash" not in columns:
+            conn.execute(
+                "ALTER TABLE ops_audit ADD COLUMN prev_hash TEXT DEFAULT ''"
+            )
+        if "hash" not in columns:
+            conn.execute(
+                "ALTER TABLE ops_audit ADD COLUMN hash TEXT DEFAULT ''"
+            )
 
     def record(self, entry: OpsAuditEntry) -> dict:
-        """감사 로그 기록."""
+        """감사 로그 기록 (민감정보 필터 + 해시체인)."""
         try:
+            filtered_command = sanitize_command(entry.command)
+            ts = entry.timestamp or time.time()
+
             with self._lock, self._connect() as conn:
+                # Retrieve previous hash for chain linking
+                row = conn.execute(
+                    "SELECT hash FROM ops_audit ORDER BY rowid DESC LIMIT 1"
+                ).fetchone()
+                prev_hash = row["hash"] if row and row["hash"] else GENESIS_HASH
+
+                current_hash = HashChain.compute_hash(
+                    prev_hash, ts, entry.user, entry.action,
+                    entry.target, filtered_command,
+                )
+
                 conn.execute(
                     "INSERT INTO ops_audit "
                     "(ts, user, action, target, command, result, session_id, "
-                    "approval_id, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "approval_id, metadata, prev_hash, hash) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        entry.timestamp or time.time(),
+                        ts,
                         entry.user,
                         entry.action,
                         entry.target,
-                        entry.command,
+                        filtered_command,
                         entry.result,
                         entry.session_id,
                         entry.approval_id,
                         json.dumps(entry.metadata or {}),
+                        prev_hash,
+                        current_hash,
                     ),
                 )
             return {"ok": True}
         except Exception as exc:
             log.exception("audit record failed: %s", exc)
             return {"ok": False, "error": str(exc)}
+
+    def verify_chain(self) -> tuple[bool, int | None]:
+        """운영 감사 로그 해시체인 무결성 검증."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM ops_audit ORDER BY rowid ASC"
+            ).fetchall()
+        entries = [dict(r) for r in rows]
+        return HashChain.verify_chain(
+            entries, field_keys=list(_HASH_FIELDS),
+        )
+
+    def chain_head(self) -> str:
+        """현재 체인의 마지막 해시값 반환."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT hash FROM ops_audit ORDER BY rowid DESC LIMIT 1"
+            ).fetchone()
+        return row["hash"] if row and row["hash"] else GENESIS_HASH
 
     def query(
         self,

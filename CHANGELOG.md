@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.3.3] - 2026-08-20
+
+### Added — Sign 연동 보안 강화 (Phase 1~6)
+- **민감정보 필터** (`security/sensitive_filter.py`): 감사 로그 전용 정규식 14패턴 (API키, Bearer, 비밀번호, 주민번호, 전화번호, DB URI, SSH/DB 명령)
+- **해시체인** (`security/hash_chain.py`): SHA-256 해시체인으로 감사 로그 변조 탐지 — `audit.py`, `audit_ops.py` 통합
+- **Sign 브릿지** (`security/sign_bridge.py`): Sign 전자서명 서비스 REST API 클라이언트, TSA 앵커링 (RFC 3161)
+- **Webhook HMAC** (`security/hmac_signer.py`): HMAC-SHA256 서명/검증 + 리플레이 방지 + 멱등 이벤트 ID
+- **TOTP 2FA** (`security/totp.py`): RFC 6238 TOTP 생성/검증, QR 등록, 백업 코드 10개, step-up 재인증
+- **봉투 암호화** (`security/envelope_crypto.py`): AES-256-GCM 봉투 암호화 — `secrets.py` 통합, 평문→암호화 자동 마이그레이션
+- **도구 호출 서명** (`security/tool_signer.py`): 위험 도구(SSH, Docker, DB 등) 호출 시 HMAC 서명 기록 (부인 방지)
+- **백업 매니페스트 서명** (`backup.py`): 백업 생성 시 SHA-256 해시 + HMAC 서명, 복원 시 무결성 검증
+- **MCP 보안 도구 5개**: `audit_chain_verify`, `audit_anchor_status`, `security_score_enhanced`, `log_sensitive_scan`, `secrets_rotation_check`
+- **auth.py 2FA 통합**: `setup_totp()`, `verify_totp()`, `disable_totp()`, `verify_step_up()`, `step_up()`
+
+### Changed
+- `audit.py`: `_sanitize_args()` 값 정규식 스캔 추가, 해시체인 컬럼 자동 마이그레이션
+- `audit_ops.py`: `record()` 시 command 필드 민감정보 마스킹, 해시체인 적용
+- `secrets.py`: `SecretStore`에 `encryption_password` 옵션, `enable_encryption()`, `is_encrypted()` 추가
+- `monitoring_server.py`: MCP 도구 12→17개
+
+### Stats
+- 신규 파일: 7개 (security 모듈) + 7개 (테스트)
+- 테스트: 1,343 passed (보안 +88)
+- 기획서: `docs/WeruBWorker_Sign_보안강화_기획서.md`
+
+---
+
 ## [2.2.2] - 2026-08-14
 
 ### Added

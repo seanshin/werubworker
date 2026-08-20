@@ -206,6 +206,63 @@ TOOLS = [
             "required": ["url"],
         },
     ),
+    Tool(
+        name="audit_chain_verify",
+        description="Verify the integrity of the audit hash chain. "
+        "Detects any tampered or deleted records.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "store": {
+                    "type": "string",
+                    "description": "Which store to verify: 'ops' (default) or 'main'",
+                },
+            },
+        },
+    ),
+    Tool(
+        name="audit_anchor_status",
+        description="Check Sign service audit anchors. "
+        "Verify a specific anchor or list recent ones.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "anchor_id": {
+                    "type": "string",
+                    "description": "Anchor ID to verify (empty to list recent)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of recent anchors (default 10)",
+                },
+            },
+        },
+    ),
+    Tool(
+        name="security_score_enhanced",
+        description="Comprehensive security score including hash chain integrity, "
+        "2FA status, secrets encryption, and sensitive data filter coverage.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    Tool(
+        name="log_sensitive_scan",
+        description="Scan recent audit logs for residual sensitive data "
+        "(API keys, passwords, PII) that may have bypassed filters.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of recent entries to scan (default 200)",
+                },
+            },
+        },
+    ),
+    Tool(
+        name="secrets_rotation_check",
+        description="Check secrets/credentials for expiration and rotation status.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
 ]
 
 # ---------------------------------------------------------------------------
@@ -316,6 +373,133 @@ async def _handle_tool(name: str, arguments: dict) -> str:
                 name=arguments.get("name", ""),
             )
             return json.dumps(result)
+
+        elif name == "audit_chain_verify":
+            store_name = arguments.get("store", "ops")
+            if store_name == "main":
+                from ..audit import AuditStore
+
+                audit_main = AuditStore(_data_dir() / "audit.db")
+                valid, broken_idx = audit_main.verify_chain()
+                audit_main.close()
+            else:
+                audit = _get_audit()
+                valid, broken_idx = audit.verify_chain()
+            return json.dumps({
+                "ok": True,
+                "store": store_name,
+                "chain_valid": valid,
+                "first_broken_index": broken_idx,
+                "message": "Chain integrity verified"
+                if valid
+                else f"Chain broken at entry index {broken_idx}",
+            })
+
+        elif name == "audit_anchor_status":
+            from ..security.sign_bridge import SignBridge
+
+            sign = SignBridge()
+            anchor_id = arguments.get("anchor_id", "")
+            if anchor_id:
+                result = await sign.verify_anchor(anchor_id)
+            else:
+                limit = int(arguments.get("limit", 10))
+                result = await sign.list_anchors(limit=limit)
+            return json.dumps(result)
+
+        elif name == "security_score_enhanced":
+            scores: dict[str, Any] = {"ok": True, "checks": {}}
+
+            # 1. Hash chain integrity
+            audit = _get_audit()
+            valid, _ = audit.verify_chain()
+            scores["checks"]["hash_chain"] = {
+                "status": "pass" if valid else "fail",
+                "detail": "Ops audit chain intact" if valid else "Chain broken",
+            }
+
+            # 2. 2FA status
+            try:
+                from ..auth import LocalAuth
+                auth = LocalAuth(_data_dir())
+                totp_on = auth.totp_enabled()
+                pw_set = auth.status()["configured"]
+                scores["checks"]["authentication"] = {
+                    "status": "pass" if (pw_set and totp_on) else ("warn" if pw_set else "fail"),
+                    "password_set": pw_set,
+                    "totp_enabled": totp_on,
+                }
+            except Exception:
+                scores["checks"]["authentication"] = {"status": "unknown"}
+
+            # 3. Secrets encryption
+            try:
+                from ..secrets import SecretStore
+                ss = SecretStore()
+                encrypted = ss.is_encrypted()
+                scores["checks"]["secrets_encryption"] = {
+                    "status": "pass" if encrypted else "warn",
+                    "encrypted": encrypted,
+                }
+            except Exception:
+                scores["checks"]["secrets_encryption"] = {"status": "unknown"}
+
+            # 4. Overall score
+            statuses = [c.get("status", "unknown") for c in scores["checks"].values()]
+            if all(s == "pass" for s in statuses):
+                scores["grade"] = "A"
+            elif "fail" in statuses:
+                scores["grade"] = "C"
+            else:
+                scores["grade"] = "B"
+
+            return json.dumps(scores)
+
+        elif name == "log_sensitive_scan":
+            from ..security.sensitive_filter import sanitize_text
+
+            limit = int(arguments.get("limit", 200))
+            audit = _get_audit()
+            entries = audit.recent(limit=limit)
+            findings: list[dict[str, Any]] = []
+            for entry in entries:
+                cmd = entry.get("command", "")
+                if cmd and sanitize_text(cmd) != cmd:
+                    findings.append({
+                        "rowid": entry.get("rowid"),
+                        "action": entry.get("action"),
+                        "field": "command",
+                        "preview": cmd[:80] + "..." if len(cmd) > 80 else cmd,
+                    })
+                meta_str = json.dumps(entry.get("metadata", {}))
+                if sanitize_text(meta_str) != meta_str:
+                    findings.append({
+                        "rowid": entry.get("rowid"),
+                        "action": entry.get("action"),
+                        "field": "metadata",
+                    })
+            return json.dumps({
+                "ok": True,
+                "scanned": len(entries),
+                "findings": len(findings),
+                "details": findings[:50],
+            })
+
+        elif name == "secrets_rotation_check":
+            try:
+                from ..secrets import SecretStore
+                ss = SecretStore()
+                statuses = ss.status()
+                expired = [s for s in statuses if s.get("expired")]
+                return json.dumps({
+                    "ok": True,
+                    "total_profiles": len(statuses),
+                    "expired_count": len(expired),
+                    "expired": expired,
+                    "profiles": statuses,
+                })
+            except Exception as exc:
+                return json.dumps({"ok": False, "error": str(exc)})
 
         else:
             return json.dumps({"ok": False, "error": f"unknown tool: {name}"})

@@ -1,4 +1,9 @@
-"""Durable local audit log for connector/tool actions."""
+"""Durable local audit log for connector/tool actions.
+
+Security features:
+- Sensitive data filtering (regex-based pattern matching on values)
+- SHA-256 hash chain for tamper detection
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .connectors import connector_for_tool
+from .security.hash_chain import GENESIS_HASH, HashChain
+from .security.sensitive_filter import sanitize_text
 
 _SECRET_KEYS = (
     "token",
@@ -21,6 +28,9 @@ _SECRET_KEYS = (
     "raw",
 )
 _BODY_KEYS = ("body", "content", "html")
+
+# Fields included in hash chain computation
+_HASH_FIELDS = ("session_id", "tool", "stage", "status", "args")
 
 
 class AuditStore:
@@ -47,33 +57,67 @@ class AuditStore:
                 resource TEXT
             )
             """)
+        self._migrate_hash_columns()
         self._conn.commit()
+
+    def _migrate_hash_columns(self) -> None:
+        """Add prev_hash/hash columns if they don't exist yet."""
+        cursor = self._conn.execute("PRAGMA table_info(audit_events)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "prev_hash" not in columns:
+            self._conn.execute(
+                "ALTER TABLE audit_events ADD COLUMN prev_hash TEXT DEFAULT ''"
+            )
+        if "hash" not in columns:
+            self._conn.execute(
+                "ALTER TABLE audit_events ADD COLUMN hash TEXT DEFAULT ''"
+            )
 
     def append(self, event: dict[str, Any]) -> None:
         tool = str(event.get("tool") or event.get("tool_name") or "")
         connector = str(event.get("connector") or connector_for_tool(tool) or "")
         args = _sanitize_args(tool, event.get("arguments") or {})
         resource = _resource(tool, event.get("arguments") or {}, event.get("result") or {})
+
+        session_id = event.get("session_id") or ""
+        stage = event.get("stage") or ""
+        status = event.get("status") or ""
+        args_json = json.dumps(args, default=str)
+
         with self._lock:
+            # Retrieve previous hash for chain linking
+            row = self._conn.execute(
+                "SELECT hash FROM audit_events ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            prev_hash = row["hash"] if row and row["hash"] else GENESIS_HASH
+
+            current_hash = HashChain.compute_hash(
+                prev_hash, session_id, tool, stage, status, args_json
+            )
+
             self._conn.execute(
                 """
                 INSERT INTO audit_events
-                    (session_id, agent, workspace, connector, tool, stage, status, approval, args, result_preview, reason, resource)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (session_id, agent, workspace, connector, tool, stage,
+                     status, approval, args, result_preview, reason, resource,
+                     prev_hash, hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    event.get("session_id") or "",
+                    session_id,
                     event.get("agent") or "",
                     event.get("workspace") or "",
                     connector,
                     tool,
-                    event.get("stage") or "",
-                    event.get("status") or "",
+                    stage,
+                    status,
                     event.get("approval") or "",
-                    json.dumps(args, default=str),
+                    args_json,
                     _truncate(str(event.get("result_preview") or "")),
                     _truncate(str(event.get("reason") or "")),
                     _truncate(str(resource or "")),
+                    prev_hash,
+                    current_hash,
                 ),
             )
             self._conn.commit()
@@ -114,6 +158,17 @@ class AuditStore:
             out.append(item)
         return out
 
+    def verify_chain(self) -> tuple[bool, int | None]:
+        """Verify audit log hash chain integrity."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM audit_events ORDER BY id ASC"
+            ).fetchall()
+        entries = [dict(r) for r in rows]
+        return HashChain.verify_chain(
+            entries, field_keys=list(_HASH_FIELDS),
+        )
+
     def close(self) -> None:
         self._conn.close()
 
@@ -131,7 +186,11 @@ def _sanitize_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
         elif any(b == lk or lk.endswith("_" + b) for b in _BODY_KEYS):
             out[key] = "[redacted body]"
         else:
-            out[key] = _summarize(value)
+            val = _summarize(value)
+            # Scan string values for credential patterns
+            if isinstance(val, str):
+                val = sanitize_text(val)
+            out[key] = val
     return out
 
 

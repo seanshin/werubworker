@@ -142,6 +142,9 @@ class BackupManager:
         status = "completed" if not errors else ("partial" if backed_up else "failed")
         location = str(backup_subdir)
 
+        # Generate signed manifest for integrity verification
+        manifest = self._create_manifest(backup_subdir, backed_up, backup_id, timestamp)
+
         self._db.execute(
             "INSERT INTO backup_records (id, timestamp, targets, size_bytes, location, status, error) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (backup_id, timestamp, json.dumps(backed_up), total_size, location, status, "; ".join(errors)),
@@ -161,10 +164,11 @@ class BackupManager:
             "location": location,
             "status": status,
             "errors": errors,
+            "manifest_signed": manifest.get("signed", False),
         }
 
     def restore(self, backup_id: str, targets: list[str] | None = None) -> dict:
-        """백업에서 복원한다."""
+        """백업에서 복원한다. 매니페스트 서명이 있으면 무결성 검증 후 진행."""
         record = self._get_record(backup_id)
         if not record:
             return {"ok": False, "error": "backup not found"}
@@ -172,6 +176,11 @@ class BackupManager:
         backup_dir = Path(record["location"])
         if not backup_dir.exists():
             return {"ok": False, "error": "backup directory not found"}
+
+        # Verify manifest signature before restore
+        manifest_ok, manifest_err = self._verify_manifest(backup_dir)
+        if manifest_err:
+            return {"ok": False, "error": f"Manifest verification failed: {manifest_err}"}
 
         restore_targets = targets or json.loads(record["targets"])
         restored: list[str] = []
@@ -316,6 +325,83 @@ class BackupManager:
                 log.info("uploaded %s to s3://%s/%s", f.name, self._config.s3_bucket, key)
         except Exception:
             log.warning("S3 upload failed", exc_info=True)
+
+    def _create_manifest(
+        self, backup_dir: Path, targets: list[str], backup_id: str, timestamp: float,
+    ) -> dict:
+        """Create a signed manifest for backup integrity verification."""
+        import hashlib as _hashlib
+
+        file_hashes: dict[str, str] = {}
+        for f in sorted(backup_dir.iterdir()):
+            if f.name == "manifest.json":
+                continue
+            h = _hashlib.sha256(f.read_bytes()).hexdigest()
+            file_hashes[f.name] = h
+
+        manifest: dict[str, Any] = {
+            "backup_id": backup_id,
+            "timestamp": timestamp,
+            "targets": targets,
+            "files": file_hashes,
+        }
+
+        # Sign with HMAC
+        try:
+            from ..security.hmac_signer import sign_payload
+            payload = json.dumps(manifest, separators=(",", ":"), sort_keys=True)
+            manifest["signature"] = sign_payload(payload, f"backup-{backup_id}")
+            manifest["signed"] = True
+        except Exception:
+            manifest["signed"] = False
+
+        manifest_path = backup_dir / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2))
+        return manifest
+
+    def _verify_manifest(self, backup_dir: Path) -> tuple[bool, str]:
+        """Verify a backup manifest signature and file hashes.
+
+        Returns (True, "") on success, or (True, "") if no manifest exists (legacy).
+        Returns (False, error) on verification failure.
+        """
+        import hashlib as _hashlib
+
+        manifest_path = backup_dir / "manifest.json"
+        if not manifest_path.exists():
+            return True, ""  # Legacy backup without manifest — allow restore
+
+        try:
+            manifest = json.loads(manifest_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return False, "Cannot read manifest"
+
+        if not manifest.get("signed"):
+            return True, ""  # Unsigned manifest — allow
+
+        # Verify HMAC signature
+        sig = manifest.pop("signature", "")
+        signed_flag = manifest.pop("signed", True)
+        try:
+            from ..security.hmac_signer import sign_payload
+            payload = json.dumps(manifest, separators=(",", ":"), sort_keys=True)
+            expected = sign_payload(payload, f"backup-{manifest['backup_id']}")
+            import hmac
+            if not hmac.compare_digest(expected, sig):
+                return False, "Signature mismatch — backup may have been tampered with"
+        except Exception as exc:
+            return False, f"Signature verification error: {exc}"
+
+        # Verify file hashes
+        for fname, expected_hash in manifest.get("files", {}).items():
+            fpath = backup_dir / fname
+            if not fpath.exists():
+                return False, f"Missing file: {fname}"
+            actual_hash = _hashlib.sha256(fpath.read_bytes()).hexdigest()
+            if actual_hash != expected_hash:
+                return False, f"Hash mismatch for {fname}"
+
+        return True, ""
 
     @staticmethod
     def _human_size(size: int) -> str:

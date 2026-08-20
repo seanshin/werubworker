@@ -1,8 +1,8 @@
 """Local master password authentication for WeruBWorker.
 
 Provides PBKDF2-SHA256 password hashing, session tokens with configurable auto-lock
-timeout, and a pass-through mode when no password is configured (existing installs
-keep working with zero friction).
+timeout, optional TOTP two-factor authentication, and a pass-through mode when no
+password is configured (existing installs keep working with zero friction).
 """
 
 from __future__ import annotations
@@ -22,6 +22,13 @@ _DEFAULT_LOCK_TIMEOUT = 30 * 60  # 30 minutes
 _MAX_LOGIN_FAILURES = 5
 _LOCKOUT_DURATION = 5 * 60  # 5 minutes
 
+# Actions that require step-up re-authentication when 2FA is enabled
+_STEP_UP_ACTIONS = frozenset({
+    "ssh_execute", "docker_restart", "db_write",
+    "secret_access", "k8s_scale", "server_reboot",
+})
+_STEP_UP_WINDOW = 5 * 60  # 5 minutes — re-auth valid for this period
+
 
 class LocalAuth:
     """Disk-backed master password gate.
@@ -37,6 +44,7 @@ class LocalAuth:
         # Live session — never persisted to disk.
         self._token: Optional[str] = None
         self._token_issued_at: float = 0.0
+        self._step_up_at: float = 0.0  # last step-up re-auth timestamp
 
     # -- public API -----------------------------------------------------------
 
@@ -96,6 +104,10 @@ class LocalAuth:
             self._state["login_fail_count"] = 0
             self._state["login_fail_time"] = 0.0
             self._save()
+
+        # If 2FA is enabled, password alone is not enough — return pending token
+        if self._state.get("totp_secret"):
+            return self._issue_token(pending_2fa=True)
         return self._issue_token()
 
     def verify(self, token: Optional[str] = None) -> bool:
@@ -104,12 +116,16 @@ class LocalAuth:
         - No password configured → always ``True`` (pass-through).
         - Password configured but no token → ``False``.
         - Valid, non-expired token → ``True``.
+        - 2FA pending token → ``False`` (must complete verify_totp first).
         """
         if not self._state.get("hash"):
             return True  # pass-through: no auth configured
         if not token or not self._token:
             return False
         if not secrets.compare_digest(token, self._token):
+            return False
+        # Reject pending-2FA tokens
+        if getattr(self, "_pending_2fa", False):
             return False
         timeout = self._state.get("lock_timeout", _DEFAULT_LOCK_TIMEOUT)
         if time.time() - self._token_issued_at > timeout:
@@ -143,6 +159,98 @@ class LocalAuth:
         self._state["lock_timeout"] = seconds
         self._save()
 
+    # -- TOTP 2FA ----------------------------------------------------------------
+
+    def setup_totp(self, account: str = "admin") -> dict:
+        """Enable TOTP 2FA. Returns secret, provisioning URI, and backup codes.
+
+        Must be called while authenticated. The secret is persisted in auth.json.
+        """
+        from .security.totp import generate_backup_codes, generate_secret, get_provisioning_uri
+
+        secret = generate_secret()
+        backup_codes = generate_backup_codes()
+        self._state["totp_secret"] = secret
+        self._state["totp_backup_codes"] = backup_codes
+        self._save()
+        return {
+            "secret": secret,
+            "provisioning_uri": get_provisioning_uri(secret, account),
+            "backup_codes": backup_codes,
+        }
+
+    def verify_totp(self, code: str) -> str:
+        """Verify a TOTP code and upgrade a pending-2FA token to a full session.
+
+        Also accepts one-time backup codes for recovery.
+        Returns a full session token on success.
+        """
+        totp_secret = self._state.get("totp_secret")
+        if not totp_secret:
+            raise ValueError("TOTP is not configured.")
+        if not getattr(self, "_pending_2fa", False):
+            raise ValueError("No pending 2FA login.")
+
+        # Try backup code first
+        backup_codes = self._state.get("totp_backup_codes", [])
+        if code in backup_codes:
+            backup_codes.remove(code)
+            self._state["totp_backup_codes"] = backup_codes
+            self._save()
+            self._pending_2fa = False
+            return self._token  # type: ignore[return-value]
+
+        # Verify TOTP code
+        from .security.totp import verify_code
+
+        if not verify_code(totp_secret, code):
+            raise ValueError("Invalid TOTP code.")
+
+        self._pending_2fa = False
+        return self._token  # type: ignore[return-value]
+
+    def disable_totp(self, password: str) -> None:
+        """Disable TOTP 2FA. Requires current password for confirmation."""
+        if not self._check(password):
+            raise ValueError("Incorrect password.")
+        self._state.pop("totp_secret", None)
+        self._state.pop("totp_backup_codes", None)
+        self._save()
+
+    def totp_enabled(self) -> bool:
+        """Check if TOTP 2FA is enabled."""
+        return bool(self._state.get("totp_secret"))
+
+    def verify_step_up(self, action: str) -> bool:
+        """Check if a step-up re-authentication is required for an action.
+
+        Returns True if the action is allowed (no step-up needed or within window).
+        Returns False if step-up re-authentication is required.
+        """
+        if not self._state.get("totp_secret"):
+            return True  # No 2FA → no step-up
+        if action not in _STEP_UP_ACTIONS:
+            return True  # Not a sensitive action
+        if time.time() - self._step_up_at < _STEP_UP_WINDOW:
+            return True  # Within step-up window
+        return False
+
+    def step_up(self, code: str) -> bool:
+        """Perform step-up re-authentication with a TOTP code.
+
+        Returns True if the code is valid. Refreshes the step-up window.
+        """
+        totp_secret = self._state.get("totp_secret")
+        if not totp_secret:
+            return True  # No 2FA configured
+
+        from .security.totp import verify_code
+
+        if verify_code(totp_secret, code):
+            self._step_up_at = time.time()
+            return True
+        return False
+
     def status(self) -> dict:
         """Public status blob (safe to expose to unauthenticated callers)."""
         configured = bool(self._state.get("hash"))
@@ -151,6 +259,7 @@ class LocalAuth:
             "configured": configured,
             "locked": locked,
             "lock_timeout": self._state.get("lock_timeout", _DEFAULT_LOCK_TIMEOUT),
+            "totp_enabled": self.totp_enabled(),
         }
 
     # -- internals ------------------------------------------------------------
@@ -169,9 +278,10 @@ class LocalAuth:
         candidate = self._hash(password, salt)
         return secrets.compare_digest(candidate, stored)
 
-    def _issue_token(self) -> str:
+    def _issue_token(self, *, pending_2fa: bool = False) -> str:
         self._token = secrets.token_urlsafe(_TOKEN_BYTES)
         self._token_issued_at = time.time()
+        self._pending_2fa = pending_2fa
         return self._token
 
     def _load(self) -> dict:

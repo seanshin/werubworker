@@ -105,12 +105,21 @@ def write_private_text(path: str | Path, content: str) -> Path:
 
 
 class SecretStore:
-    """File-backed secret store. Reads resolve `${VAR}` refs; status never leaks values."""
+    """File-backed secret store. Reads resolve `${VAR}` refs; status never leaks values.
 
-    def __init__(self, path: Optional[str | Path] = None) -> None:
+    When *encryption_password* is provided, the store uses AES-256-GCM envelope
+    encryption. Existing plaintext stores are automatically migrated on first write.
+    """
+
+    def __init__(
+        self,
+        path: Optional[str | Path] = None,
+        encryption_password: Optional[str] = None,
+    ) -> None:
         self.path = Path(path).expanduser() if path else state_dir() / "secrets.json"
         self._dotenv_path = self.path.parent / ".env"
         self._lock = threading.Lock()
+        self._encryption_password = encryption_password
 
     # -- reads ------------------------------------------------------------------
     def get(self, profile: str) -> Optional[dict[str, Any]]:
@@ -171,14 +180,43 @@ class SecretStore:
             self._write(store)
             return True
 
+    def enable_encryption(self, password: str) -> None:
+        """Enable encryption and migrate existing plaintext secrets."""
+        with self._lock:
+            store = self._read()
+            self._encryption_password = password
+            self._write(store)
+
+    def is_encrypted(self) -> bool:
+        """Check if the secrets file is currently encrypted."""
+        if not self.path.is_file():
+            return False
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            from .security.envelope_crypto import is_encrypted
+            return is_encrypted(raw)
+        except (OSError, json.JSONDecodeError):
+            return False
+
     # -- internals --------------------------------------------------------------
     def _read(self) -> dict[str, Any]:
         if not self.path.is_file():
             return {}
         try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return {}
+        # Decrypt if encrypted
+        from .security.envelope_crypto import is_encrypted
+        if is_encrypted(raw):
+            if not self._encryption_password:
+                return {}  # Can't decrypt without password
+            from .security.envelope_crypto import decrypt_secrets
+            try:
+                return decrypt_secrets(raw, self._encryption_password)
+            except ValueError:
+                return {}
+        return raw
 
     def _write(self, store: dict[str, Any]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -186,7 +224,13 @@ class SecretStore:
             _restrict_to_user(self.path.parent, is_dir=True)
         except OSError:
             pass
+        # Encrypt if password is configured
+        if self._encryption_password:
+            from .security.envelope_crypto import encrypt_secrets
+            content = json.dumps(encrypt_secrets(store, self._encryption_password), indent=2)
+        else:
+            content = json.dumps(store, indent=2)
         tmp = self.path.with_name(self.path.name + ".tmp")
-        tmp.write_text(json.dumps(store, indent=2), encoding="utf-8")
+        tmp.write_text(content, encoding="utf-8")
         _restrict_to_user(tmp, is_dir=False)
         os.replace(tmp, self.path)
