@@ -149,6 +149,10 @@ class AlertEngine:
         self._condition_tracker: dict[tuple[str, str], float] = {}
         self._remediation_engine = None
         self._hc_manager = None
+        # Rule cache: avoid DB query on every evaluate() call
+        self._rules_cache: list[dict] | None = None
+        self._rules_cache_ts: float = 0.0
+        self._rules_cache_ttl: float = 5.0  # seconds
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
@@ -260,14 +264,24 @@ class AlertEngine:
                     1 if rule.enabled else 0,
                 ),
             )
+        self._rules_cache = None  # invalidate cache
         return {"ok": True, "rule_id": rule.id}
 
     def remove_rule(self, rule_id: str) -> dict:
         with self._lock, self._connect() as conn:
             conn.execute("DELETE FROM alert_rules WHERE id = ?", (rule_id,))
+        self._rules_cache = None  # invalidate cache
         return {"ok": True}
 
+    def _invalidate_rules_cache(self) -> None:
+        self._rules_cache = None
+
     def list_rules(self, enabled_only: bool = False) -> list[dict]:
+        # Fast path: return cached enabled rules if still fresh
+        if enabled_only and self._rules_cache is not None:
+            if time.time() - self._rules_cache_ts < self._rules_cache_ttl:
+                return self._rules_cache
+
         with self._connect() as conn:
             if enabled_only:
                 rows = conn.execute(
@@ -285,6 +299,12 @@ class AlertEngine:
             d["enabled"] = bool(d.get("enabled", 1))
             d["auto_remediate"] = bool(d.get("auto_remediate", 0))
             result.append(d)
+
+        # Cache enabled rules only (most frequent query path)
+        if enabled_only:
+            self._rules_cache = result
+            self._rules_cache_ts = time.time()
+
         return result
 
     # -- 평가 --

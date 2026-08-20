@@ -64,9 +64,15 @@ class OpsAuditStore:
     def __init__(self, data_dir: Path):
         self._db = data_dir / "monitoring.db"
         self._lock = threading.Lock()
+        self._local = threading.local()  # thread-local connection pool
         self._init_db()
+        self._last_hash = self._load_last_hash()
 
     def _connect(self) -> sqlite3.Connection:
+        """Get or create a thread-local SQLite connection."""
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            return conn
         self._db.parent.mkdir(parents=True, exist_ok=True)
         is_new = not self._db.exists()
         conn = sqlite3.connect(str(self._db), timeout=5)
@@ -77,7 +83,19 @@ class OpsAuditStore:
                 os.chmod(self._db, 0o600)
             except OSError:
                 pass
+        self._local.conn = conn
         return conn
+
+    def _load_last_hash(self) -> str:
+        """Load the most recent hash once at init."""
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT hash FROM ops_audit ORDER BY rowid DESC LIMIT 1"
+                ).fetchone()
+            return row["hash"] if row and row["hash"] else GENESIS_HASH
+        except Exception:
+            return GENESIS_HASH
 
     def _init_db(self) -> None:
         with self._connect() as conn:
@@ -120,11 +138,7 @@ class OpsAuditStore:
             ts = entry.timestamp or time.time()
 
             with self._lock, self._connect() as conn:
-                # Retrieve previous hash for chain linking
-                row = conn.execute(
-                    "SELECT hash FROM ops_audit ORDER BY rowid DESC LIMIT 1"
-                ).fetchone()
-                prev_hash = row["hash"] if row and row["hash"] else GENESIS_HASH
+                prev_hash = self._last_hash
 
                 current_hash = HashChain.compute_hash(
                     prev_hash, ts, entry.user, entry.action,
@@ -150,29 +164,26 @@ class OpsAuditStore:
                         current_hash,
                     ),
                 )
+            self._last_hash = current_hash
             return {"ok": True}
         except Exception as exc:
             log.exception("audit record failed: %s", exc)
             return {"ok": False, "error": str(exc)}
 
     def verify_chain(self) -> tuple[bool, int | None]:
-        """운영 감사 로그 해시체인 무결성 검증."""
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM ops_audit ORDER BY rowid ASC"
-            ).fetchall()
-        entries = [dict(r) for r in rows]
-        return HashChain.verify_chain(
-            entries, field_keys=list(_HASH_FIELDS),
+        """운영 감사 로그 해시체인 무결성 검증 (스트리밍, O(1) 메모리)."""
+        conn = self._connect()
+        cursor = conn.execute(
+            "SELECT * FROM ops_audit ORDER BY rowid ASC"
+        )
+        rows = (dict(r) for r in cursor)
+        return HashChain.verify_chain_streaming(
+            rows, field_keys=list(_HASH_FIELDS),
         )
 
     def chain_head(self) -> str:
-        """현재 체인의 마지막 해시값 반환."""
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT hash FROM ops_audit ORDER BY rowid DESC LIMIT 1"
-            ).fetchone()
-        return row["hash"] if row and row["hash"] else GENESIS_HASH
+        """현재 체인의 마지막 해시값 반환 (메모리 캐시)."""
+        return self._last_hash
 
     def query(
         self,

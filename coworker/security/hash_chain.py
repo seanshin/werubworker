@@ -8,7 +8,7 @@ deleting any record breaks the chain from that point forward.
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Sequence
+from typing import Any, Iterable, Sequence
 
 GENESIS_HASH = "0" * 64
 
@@ -78,5 +78,45 @@ class HashChain:
                     return False, i
 
             expected_prev = stored_hash
+
+        return True, None
+
+    @staticmethod
+    def verify_chain_streaming(
+        rows: Iterable[dict[str, Any]],
+        hash_key: str = "hash",
+        prev_hash_key: str = "prev_hash",
+        field_keys: Sequence[str] = (),
+    ) -> tuple[bool, int | None]:
+        """Verify hash chain integrity using streaming iteration.
+
+        Unlike verify_chain(), this does not load all entries into memory.
+        Suitable for large datasets (100K+ records) with O(1) memory.
+        """
+        expected_prev = GENESIS_HASH
+        started = False
+        idx = 0
+
+        for entry in rows:
+            stored_hash = entry.get(hash_key, "")
+            if not started:
+                if not stored_hash:
+                    idx += 1
+                    continue
+                started = True
+
+            stored_prev = entry.get(prev_hash_key, "")
+
+            if stored_prev != expected_prev:
+                return False, idx
+
+            if field_keys:
+                fields = [entry.get(k, "") for k in field_keys]
+                recomputed = HashChain.compute_hash(stored_prev, *fields)
+                if recomputed != stored_hash:
+                    return False, idx
+
+            expected_prev = stored_hash
+            idx += 1
 
         return True, None

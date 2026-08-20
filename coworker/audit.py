@@ -59,6 +59,14 @@ class AuditStore:
             """)
         self._migrate_hash_columns()
         self._conn.commit()
+        self._last_hash = self._load_last_hash()
+
+    def _load_last_hash(self) -> str:
+        """Load the most recent hash once at init (avoids per-append SELECT)."""
+        row = self._conn.execute(
+            "SELECT hash FROM audit_events ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return row["hash"] if row and row["hash"] else GENESIS_HASH
 
     def _migrate_hash_columns(self) -> None:
         """Add prev_hash/hash columns if they don't exist yet."""
@@ -85,11 +93,7 @@ class AuditStore:
         args_json = json.dumps(args, default=str)
 
         with self._lock:
-            # Retrieve previous hash for chain linking
-            row = self._conn.execute(
-                "SELECT hash FROM audit_events ORDER BY id DESC LIMIT 1"
-            ).fetchone()
-            prev_hash = row["hash"] if row and row["hash"] else GENESIS_HASH
+            prev_hash = self._last_hash
 
             current_hash = HashChain.compute_hash(
                 prev_hash, session_id, tool, stage, status, args_json
@@ -121,6 +125,7 @@ class AuditStore:
                 ),
             )
             self._conn.commit()
+            self._last_hash = current_hash
 
     def list(
         self,
@@ -159,15 +164,15 @@ class AuditStore:
         return out
 
     def verify_chain(self) -> tuple[bool, int | None]:
-        """Verify audit log hash chain integrity."""
+        """Verify audit log hash chain integrity (streaming, O(1) memory)."""
         with self._lock:
-            rows = self._conn.execute(
+            cursor = self._conn.execute(
                 "SELECT * FROM audit_events ORDER BY id ASC"
-            ).fetchall()
-        entries = [dict(r) for r in rows]
-        return HashChain.verify_chain(
-            entries, field_keys=list(_HASH_FIELDS),
-        )
+            )
+            rows = (dict(r) for r in cursor)
+            return HashChain.verify_chain_streaming(
+                rows, field_keys=list(_HASH_FIELDS),
+            )
 
     def close(self) -> None:
         self._conn.close()
