@@ -230,6 +230,34 @@ class TimeSeriesStore:
         """배치 버퍼를 즉시 비운다. 반환값은 기록된 건수."""
         return self._writer.flush() if self._writer is not None else 0
 
+    def checkpoint(self) -> dict:
+        """WAL을 본 DB로 합치고 WAL 파일을 잘라낸다.
+
+        WAL은 자동 체크포인트로 관리되지만, 쓰기가 꾸준한 환경에서는 파일이
+        계속 커진다. 유휴 시점에 명시적으로 잘라내 디스크 사용량을 회수한다.
+        """
+        self.flush()
+        try:
+            with self._lock, self._connect() as conn:
+                row = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            return {
+                "ok": True,
+                "busy": row[0] if row else None,
+                "wal_pages": row[1] if row else None,
+                "checkpointed": row[2] if row else None,
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def db_size_bytes(self) -> int:
+        """DB 파일 크기 (WAL 포함). 디스크 사용량 경보용."""
+        total = 0
+        for suffix in ("", "-wal", "-shm"):
+            path = self._db.with_name(self._db.name + suffix)
+            if path.exists():
+                total += path.stat().st_size
+        return total
+
     def close(self) -> None:
         """버퍼를 플러시하고 현재 스레드의 커넥션을 닫는다."""
         if self._writer is not None:

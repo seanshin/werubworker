@@ -44,14 +44,29 @@
 | `parallel_workers=20` (신규 기본) | 5.02 s (2.0×) |
 | `parallel_workers=50` (상한) | 2.01 s |
 
+### Fixed — 보관정책 정리가 해시체인을 끊던 문제
+- **`OpsAuditStore.prune()`이 `verify_chain()`을 영구 실패시키던 버그**: 오래된 기록을 삭제하면 남은 첫 기록이 연결하던 앞 기록이 사라져 검증이 인덱스 0에서 실패했다(`(False, 0)`). 자동 정리를 도입하면 변조 탐지가 상시 오탐이 되므로 먼저 수정
+- **체인 앵커 도입**: 정리 시 남은 첫 기록의 `prev_hash`를 메타 테이블(`ops_audit_meta` / `audit_meta`)에 저장하고, 검증은 GENESIS 대신 이 앵커에서 시작. 전부 삭제된 경우 현재 head를 앵커로 삼아 이후 기록과 이어짐. 재기동 후에도 유지
+- `HashChain.verify_chain_streaming(start_hash=…)` 파라미터 추가 (기본값은 기존 GENESIS라 호출부 호환)
+- `chain_anchor()` 접근자 추가 (`AuditStore`, `OpsAuditStore`)
+
+### Performance — 디스크 관리 자동화 (성능개선 기획서 v2 Phase 6-2, 1-2 잔여)
+- **`DiskMaintenance`** (신규 `monitoring/maintenance.py`): 일 1회 주기를 스스로 판단해 다운샘플링 → 보관정책 정리 → 백업 정리 → WAL 체크포인트를 순서대로 실행. 각 단계는 독립 예외 처리라 저장소 하나가 실패해도 나머지가 진행되고, 실패는 `errors`에 모임
+- **실행 순서 근거**: 정리로 지워질 raw 데이터를 먼저 집계하고, 삭제로 생긴 공간을 마지막 체크포인트에서 회수
+- **`AuditStore.prune(retention_days=90)`** 신규, `OpsAuditStore.prune()`은 기본 365일 유지 — 기획서 6-2의 보관정책 수치
+- **`TimeSeriesStore.checkpoint()`**: `PRAGMA wal_checkpoint(TRUNCATE)`로 WAL 파일 회수 (기획서 1-2의 수동 체크포인트 스케줄)
+- **`TimeSeriesStore.db_size_bytes()`**: DB+WAL+SHM 합계. 1GB 초과 시 경고 (기획서 6-3 디스크 사용량 알림)
+- 스케줄러 틱(`manager.py`)에 연결 — 매 틱 호출하되 주기가 안 되면 즉시 skip
+
 ### Added
+- 디스크 관리·체인 앵커 테스트 23개 (`tests/test_maintenance.py`): 정리 후 체인 검증, 앵커 재기동 유지, 전체 삭제 시 head 앵커, WAL 절단, 단계 순서, 단일 저장소 실패 격리, 보관 기간 전달, 스케줄러 배선 이름 고정
 - 수집 병렬도·타임아웃 테스트 14개 (`tests/test_collector_timeout.py`): 병렬도 클램프 3종, 동시 실행 상한 준수, 적응형 타임아웃 7종, 이력 TTL 정리, 통계 노출
 - 배치 쓰기 테스트 19개 (`tests/test_batch_writer.py`): 플러시 트리거 4종, 실패 시 폐기, 배치 모드 read-after-write, 해시체인 무결성(배치·혼합), 20스레드 동시 쓰기 2종
 - 캐시 테스트 16개 (`tests/test_metrics_cache.py`): TTL 만료·상한, 무효화 범위, 결과 복사본 반환, LRU 축출, 닫힌 구간만 캐시, 유지보수 무효화
 - 성능 테스트 6개 (`tests/test_performance_v2.py`): 100서버 < 0.3초, 300서버 < 1초, 버퍼 모드 우위, 감사 1,000건 배치 < 0.3초, 캐시 히트 < 5ms, 캐시 우위
 
 ### Stats
-- 테스트: 1,407 passed, 74 skipped (+55)
+- 테스트: 1,430 passed, 74 skipped (+78)
 
 ---
 

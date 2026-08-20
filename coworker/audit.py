@@ -65,9 +65,16 @@ class AuditStore:
                 resource TEXT
             )
             """)
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS audit_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """)
         self._migrate_hash_columns()
         self._conn.commit()
         self._last_hash = self._load_last_hash()
+        self._anchor = self._load_anchor()
 
     def _load_last_hash(self) -> str:
         """Load the most recent hash once at init (avoids per-append SELECT)."""
@@ -75,6 +82,13 @@ class AuditStore:
             "SELECT hash FROM audit_events ORDER BY id DESC LIMIT 1"
         ).fetchone()
         return row["hash"] if row and row["hash"] else GENESIS_HASH
+
+    def _load_anchor(self) -> str:
+        """정리(prune)로 잘려나간 체인의 시작 해시. 없으면 GENESIS."""
+        row = self._conn.execute(
+            "SELECT value FROM audit_meta WHERE key = 'chain_anchor'"
+        ).fetchone()
+        return row["value"] if row and row["value"] else GENESIS_HASH
 
     def _migrate_hash_columns(self) -> None:
         """Add prev_hash/hash columns if they don't exist yet."""
@@ -188,15 +202,55 @@ class AuditStore:
         return out
 
     def verify_chain(self) -> tuple[bool, int | None]:
-        """Verify audit log hash chain integrity (streaming, O(1) memory)."""
+        """Verify audit log hash chain integrity (streaming, O(1) memory).
+
+        보관정책으로 오래된 기록이 삭제된 경우 남아 있는 첫 기록은 GENESIS가
+        아니라 삭제 시점에 저장한 앵커에 연결된다.
+        """
         with self._lock:
             cursor = self._conn.execute(
                 "SELECT * FROM audit_events ORDER BY id ASC"
             )
             rows = (dict(r) for r in cursor)
             return HashChain.verify_chain_streaming(
-                rows, field_keys=list(_HASH_FIELDS),
+                rows, field_keys=list(_HASH_FIELDS), start_hash=self._anchor,
             )
+
+    def chain_anchor(self) -> str:
+        """현재 체인 검증의 시작 해시 (정리 이력이 없으면 GENESIS)."""
+        return self._anchor
+
+    def prune(self, retention_days: int = 90) -> dict[str, Any]:
+        """보관 기간 초과 감사 이벤트 삭제.
+
+        삭제하면 남은 첫 기록이 연결하던 앞 기록이 사라지므로, 그 기록의
+        prev_hash를 새 체인 앵커로 저장한다. 저장하지 않으면 이후
+        ``verify_chain()``이 0번 인덱스에서 영구히 실패한다.
+        """
+        with self._lock:
+            try:
+                cursor = self._conn.execute(
+                    "DELETE FROM audit_events "
+                    "WHERE timestamp < datetime('now', ?)",
+                    (f"-{int(retention_days)} days",),
+                )
+                deleted = cursor.rowcount
+                if deleted:
+                    row = self._conn.execute(
+                        "SELECT prev_hash FROM audit_events ORDER BY id ASC LIMIT 1"
+                    ).fetchone()
+                    # 전부 삭제됐다면 다음 기록은 현재 head에 연결된다
+                    anchor = row["prev_hash"] if row else self._last_hash
+                    self._conn.execute(
+                        "INSERT OR REPLACE INTO audit_meta (key, value) VALUES "
+                        "('chain_anchor', ?)",
+                        (anchor or GENESIS_HASH,),
+                    )
+                    self._anchor = anchor or GENESIS_HASH
+                self._conn.commit()
+                return {"ok": True, "deleted": deleted, "chain_anchor": self._anchor}
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
 
     def close(self) -> None:
         self._conn.close()

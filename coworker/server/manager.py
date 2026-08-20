@@ -262,6 +262,14 @@ class SessionManager(
 
     # -- monitoring tick (runs every scheduler cycle, ~30s) ----------------------
 
+    def _daily_maintenance(self):
+        """일 1회 디스크 유지보수 헬퍼 (실행 주기는 스스로 판단한다)."""
+        if not hasattr(self, "_daily_maintenance_cache"):
+            from ..monitoring.maintenance import DiskMaintenance
+
+            self._daily_maintenance_cache = DiskMaintenance()
+        return self._daily_maintenance_cache
+
     async def _combined_tick(self) -> None:
         """Combined tick: self-wake resume + monitoring collection."""
         await self.resume_due_wakes()
@@ -319,6 +327,15 @@ class SessionManager(
                 hc.prune_results()
                 alert.prune_alerts()
                 self._last_maintenance = time.time()
+
+            # 6. Daily disk maintenance — 보관정책, 백업 정리, WAL 체크포인트
+            #    (self-throttling: 주기가 안 됐으면 즉시 skip)
+            self._daily_maintenance().run(
+                ts=ts,
+                ops_audit=self._get_audit_store(),
+                audit=getattr(self, "audit_store", None),
+                backups=self._get_backup_manager(),
+            )
 
         except Exception:
             log.debug("monitoring tick error", exc_info=True)

@@ -74,6 +74,7 @@ class OpsAuditStore:
         self._local = threading.local()  # thread-local connection pool
         self._init_db()
         self._last_hash = self._load_last_hash()
+        self._anchor = self._load_anchor()
 
     def _connect(self) -> sqlite3.Connection:
         """Get or create a thread-local SQLite connection."""
@@ -104,9 +105,33 @@ class OpsAuditStore:
         except Exception:
             return GENESIS_HASH
 
+    def _load_anchor(self) -> str:
+        """정리(prune)로 잘려나간 체인의 시작 해시. 없으면 GENESIS."""
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT value FROM ops_audit_meta WHERE key = 'chain_anchor'"
+                ).fetchone()
+            return row["value"] if row and row["value"] else GENESIS_HASH
+        except Exception:
+            return GENESIS_HASH
+
+    def _save_anchor(self, conn: sqlite3.Connection, value: str) -> None:
+        conn.execute(
+            "INSERT OR REPLACE INTO ops_audit_meta (key, value) VALUES "
+            "('chain_anchor', ?)",
+            (value,),
+        )
+        self._anchor = value
+
     def _init_db(self) -> None:
         with self._connect() as conn:
             conn.executescript("""
+                CREATE TABLE IF NOT EXISTS ops_audit_meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS ops_audit (
                     rowid INTEGER PRIMARY KEY AUTOINCREMENT,
                     ts REAL NOT NULL,
@@ -199,15 +224,23 @@ class OpsAuditStore:
             return {"ok": False, "error": str(exc)}
 
     def verify_chain(self) -> tuple[bool, int | None]:
-        """운영 감사 로그 해시체인 무결성 검증 (스트리밍, O(1) 메모리)."""
+        """운영 감사 로그 해시체인 무결성 검증 (스트리밍, O(1) 메모리).
+
+        보관정책으로 오래된 기록이 삭제된 경우 남아 있는 첫 기록은 GENESIS가
+        아니라 삭제 시점에 저장한 앵커에 연결된다.
+        """
         conn = self._connect()
         cursor = conn.execute(
             "SELECT * FROM ops_audit ORDER BY rowid ASC"
         )
         rows = (dict(r) for r in cursor)
         return HashChain.verify_chain_streaming(
-            rows, field_keys=list(_HASH_FIELDS),
+            rows, field_keys=list(_HASH_FIELDS), start_hash=self._anchor,
         )
+
+    def chain_anchor(self) -> str:
+        """현재 체인 검증의 시작 해시 (정리 이력이 없으면 GENESIS)."""
+        return self._anchor
 
     def chain_head(self) -> str:
         """현재 체인의 마지막 해시값 반환 (메모리 캐시)."""
@@ -378,13 +411,25 @@ class OpsAuditStore:
         return buf.getvalue()
 
     def prune(self, retention_days: int = 365) -> dict:
-        """보관 기간 초과 로그 삭제."""
+        """보관 기간 초과 로그 삭제.
+
+        삭제하면 남은 첫 기록이 연결하던 앞 기록이 사라지므로, 그 기록의
+        prev_hash를 새 체인 앵커로 저장한다. 저장하지 않으면 이후
+        ``verify_chain()``이 0번 인덱스에서 영구히 실패한다.
+        """
         cutoff = time.time() - (retention_days * 86400)
         try:
             with self._lock, self._connect() as conn:
                 cur = conn.execute("DELETE FROM ops_audit WHERE ts < ?", (cutoff,))
                 deleted = cur.rowcount
-            return {"ok": True, "deleted": deleted}
+                if deleted:
+                    row = conn.execute(
+                        "SELECT prev_hash FROM ops_audit ORDER BY rowid ASC LIMIT 1"
+                    ).fetchone()
+                    # 전부 삭제됐다면 다음 기록은 현재 head에 연결된다
+                    anchor = row["prev_hash"] if row else self._last_hash
+                    self._save_anchor(conn, anchor or GENESIS_HASH)
+            return {"ok": True, "deleted": deleted, "chain_anchor": self._anchor}
         except Exception as exc:
             log.exception("prune failed: %s", exc)
             return {"ok": False, "error": str(exc)}

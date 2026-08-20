@@ -87,13 +87,19 @@ class HashChain:
         hash_key: str = "hash",
         prev_hash_key: str = "prev_hash",
         field_keys: Sequence[str] = (),
+        start_hash: str = GENESIS_HASH,
     ) -> tuple[bool, int | None]:
         """Verify hash chain integrity using streaming iteration.
 
         Unlike verify_chain(), this does not load all entries into memory.
         Suitable for large datasets (100K+ records) with O(1) memory.
+
+        ``start_hash`` is the hash the first row must link back to. It defaults
+        to the genesis value, but a store that has pruned its oldest records
+        passes the anchor saved at prune time — otherwise verification would
+        fail at row 0 because the record it chains from no longer exists.
         """
-        expected_prev = GENESIS_HASH
+        expected_prev = start_hash
         started = False
         idx = 0
 
