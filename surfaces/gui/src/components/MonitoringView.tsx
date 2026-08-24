@@ -4,6 +4,9 @@ import { MiniChart } from "./MiniChart";
 import { ProgressBar } from "./ProgressBar";
 import { Icon } from "./Icon";
 
+// Incidents load a page at a time; 50 matches the store's own default page size.
+const INCIDENT_PAGE = 50;
+
 const CARD = "rounded-xl2 border border-line bg-panel";
 const POLL_MS = 30_000;
 
@@ -210,6 +213,8 @@ export function MonitoringView() {
 
   // Incidents
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [incidentTotal, setIncidentTotal] = useState(0);
+  const [incidentsLoading, setIncidentsLoading] = useState(false);
   const [expandedIncident, setExpandedIncident] = useState<string | null>(null);
 
   // Health checks
@@ -274,14 +279,37 @@ export function MonitoringView() {
       .catch(() => {});
   }, []);
 
-  const fetchIncidents = useCallback(() => {
-    fetch("/v1/dashboard/incidents")
+  // The list is served a page at a time. It has always been capped at 50 server-side, but
+  // without an offset there was no way to reach incident 51 — the tail was unreachable, not
+  // merely unshown. `total` is what lets the panel say so.
+  const fetchIncidents = useCallback((offset = 0) => {
+    fetch(`/v1/dashboard/incidents?limit=${INCIDENT_PAGE}&offset=${offset}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d?.ok) setIncidents(d.incidents || []);
+        if (!d?.ok) return;
+        const page = d.incidents || [];
+        setIncidents((prev) => (offset === 0 ? page : [...prev, ...page]));
+        setIncidentTotal(typeof d.total === "number" ? d.total : page.length);
       })
       .catch(() => {});
   }, []);
+
+  const loadMoreIncidents = useCallback(() => {
+    setIncidentsLoading(true);
+    fetch(`/v1/dashboard/incidents?limit=${INCIDENT_PAGE}&offset=${incidents.length}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d?.ok) return;
+        // Append by id so a refresh landing mid-page cannot duplicate rows.
+        setIncidents((prev) => {
+          const seen = new Set(prev.map((i) => i.id));
+          return [...prev, ...(d.incidents || []).filter((i: Incident) => !seen.has(i.id))];
+        });
+        setIncidentTotal(typeof d.total === "number" ? d.total : 0);
+      })
+      .catch(() => {})
+      .finally(() => setIncidentsLoading(false));
+  }, [incidents.length]);
 
   const fetchAudit = useCallback(() => {
     fetch("/v1/dashboard/audit")
@@ -521,6 +549,9 @@ export function MonitoringView() {
         {activeTab === "incidents" && (
           <IncidentsPanel
             incidents={incidents}
+            total={incidentTotal}
+            loadingMore={incidentsLoading}
+            onLoadMore={loadMoreIncidents}
             expandedId={expandedIncident}
             onToggle={(id) =>
               setExpandedIncident(expandedIncident === id ? null : id)
@@ -919,6 +950,9 @@ function AlertsPanel({
 
 function IncidentsPanel({
   incidents,
+  total,
+  loadingMore,
+  onLoadMore,
   expandedId,
   onToggle,
   postmortemLoading,
@@ -926,6 +960,9 @@ function IncidentsPanel({
   onPostmortem,
 }: {
   incidents: Incident[];
+  total: number;
+  loadingMore: boolean;
+  onLoadMore: () => void;
   expandedId: string | null;
   onToggle: (id: string) => void;
   postmortemLoading: string | null;
@@ -935,7 +972,8 @@ function IncidentsPanel({
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-semibold text-ink mb-3">
-        인시던트 ({incidents.length})
+        인시던트 ({incidents.length}
+        {total > incidents.length ? ` / ${total}` : ""})
       </h2>
       {incidents.map((inc) => (
         <div key={inc.id} className={`${CARD} overflow-hidden`}>
@@ -1001,6 +1039,15 @@ function IncidentsPanel({
       ))}
       {incidents.length === 0 && (
         <p className="text-sm text-muted">인시던트가 없습니다.</p>
+      )}
+      {total > incidents.length && (
+        <button
+          onClick={onLoadMore}
+          disabled={loadingMore}
+          className="w-full py-2 rounded-lg border border-line text-sm text-muted hover:text-ink hover:bg-paper disabled:opacity-50 transition-colors"
+        >
+          {loadingMore ? "불러오는 중..." : `이전 인시던트 ${total - incidents.length}건 더 보기`}
+        </button>
       )}
     </div>
   );

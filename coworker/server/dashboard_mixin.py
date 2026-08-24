@@ -126,12 +126,24 @@ class DashboardMixin:
         history = alert.alert_history(limit=limit)
         return {"ok": True, "active": active, "history": history}
 
-    def dashboard_incidents(self, status: str = "") -> dict:
-        """인시던트 목록."""
+    def dashboard_incidents(self, status: str = "", limit: int = 50, offset: int = 0) -> dict:
+        """인시던트 목록 (페이지네이션).
+
+        `total`을 함께 돌려주므로 호출자는 더 가져올 게 남았는지 알 수 있다 — 이전에는
+        50건에서 조용히 잘려서 그 뒤가 있는지조차 알 수 없었다.
+        """
         inc = self._get_incident_manager()
-        if status:
-            return {"ok": True, "incidents": inc.list_incidents(status=status)}
-        return {"ok": True, "incidents": inc.list_incidents()}
+        limit = max(1, min(limit, 200))
+        offset = max(0, offset)
+        incidents = inc.list_incidents(status=status, limit=limit, offset=offset)
+        total = inc.count_incidents(status=status)
+        return {
+            "ok": True,
+            "incidents": incidents,
+            "total": total,
+            "offset": offset,
+            "has_more": offset + len(incidents) < total,
+        }
 
     def dashboard_audit_recent(self, limit: int = 50) -> dict:
         """최근 운영 감사 로그."""
@@ -408,8 +420,8 @@ def register_dashboard_routes(app, manager) -> None:
         return manager.dashboard_alert_feed(limit)
 
     @app.get("/v1/dashboard/incidents")
-    async def api_incidents(status: str = ""):
-        return manager.dashboard_incidents(status)
+    async def api_incidents(status: str = "", limit: int = 50, offset: int = 0):
+        return manager.dashboard_incidents(status, limit=limit, offset=offset)
 
     @app.get("/v1/dashboard/audit")
     async def api_audit_recent(limit: int = 50):

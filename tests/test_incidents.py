@@ -78,3 +78,64 @@ def test_link_postmortem(mgr):
     mgr.link_postmortem(r["incident_id"], "postmortem-123")
     inc = mgr.get(r["incident_id"])
     assert inc["postmortem_page_id"] == "postmortem-123"
+
+
+# -- pagination (성능개선 기획서 v2 Phase 5-1) ------------------------------------
+
+
+def test_incident_list_paginates_past_the_first_page(tmp_path):
+    """The tail of the list used to be unreachable, not merely unshown.
+
+    `list_incidents` has always capped at 50 with no offset, so incident 51 could not be
+    fetched by any caller."""
+    from coworker.monitoring.incidents import IncidentManager
+
+    mgr = IncidentManager(tmp_path)
+    created = [mgr.create(f"incident {i}", "P3") for i in range(60)]
+    assert all(c["ok"] for c in created)
+
+    first = mgr.list_incidents(limit=50, offset=0)
+    second = mgr.list_incidents(limit=50, offset=50)
+
+    assert len(first) == 50
+    assert len(second) == 10
+    # No overlap and no gap: the two pages together are the whole set.
+    ids = [i["id"] for i in first] + [i["id"] for i in second]
+    assert len(set(ids)) == 60
+    assert mgr.count_incidents() == 60
+
+
+def test_incident_count_respects_status_filter(tmp_path):
+    from coworker.monitoring.incidents import IncidentManager
+
+    mgr = IncidentManager(tmp_path)
+    for i in range(5):
+        mgr.create(f"open {i}", "P3")
+    resolved = mgr.create("closed", "P3")
+    mgr.update_status(resolved["incident_id"], "resolved")
+
+    assert mgr.count_incidents() == 6
+    assert mgr.count_incidents(status="resolved") == 1
+    assert len(mgr.list_incidents(status="resolved")) == 1
+
+
+def test_dashboard_incidents_reports_whether_more_remain(tmp_path):
+    """`has_more`/`total` are what let the UI say the list is truncated."""
+    from coworker.server import SessionManager
+
+    manager = SessionManager(workspace=tmp_path, data_dir=tmp_path / "data")
+    inc = manager._get_incident_manager()
+    for i in range(12):
+        inc.create(f"incident {i}", "P3")
+
+    page = manager.dashboard_incidents(limit=5, offset=0)
+    assert page["total"] == 12
+    assert len(page["incidents"]) == 5
+    assert page["has_more"] is True
+
+    last = manager.dashboard_incidents(limit=5, offset=10)
+    assert len(last["incidents"]) == 2
+    assert last["has_more"] is False
+
+    # A limit past the cap is clamped, not honoured verbatim.
+    assert len(manager.dashboard_incidents(limit=10_000)["incidents"]) == 12

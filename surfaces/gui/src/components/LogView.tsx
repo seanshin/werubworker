@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { List, useDynamicRowHeight, useListRef, type RowComponentProps } from "react-window";
 
 const CARD = "rounded-xl2 border border-line bg-panel";
+
+// The viewer holds `limit=500` entries and re-fetches every 10s. Rendered plainly that is
+// ~2,500 DOM nodes torn down and rebuilt on every refresh, which is what made scrolling
+// stutter while a refresh landed. Above the threshold the rows are virtualized instead, so
+// the node count tracks the viewport rather than the result size.
+const VIRTUAL_THRESHOLD = 60;
+// Log lines wrap (`whitespace-pre-wrap`), so row heights genuinely vary — a stack trace is
+// several times a one-line entry. `useDynamicRowHeight` measures them rather than forcing a
+// fixed height, which would either clip long lines or leave gaps after short ones.
+const EST_ROW_HEIGHT = 20;
 
 interface LogEntry {
   ts: number;
@@ -34,6 +45,8 @@ export function LogView() {
   const [servers, setServers] = useState<string[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useListRef(null);
+  const rowHeight = useDynamicRowHeight({ defaultRowHeight: EST_ROW_HEIGHT });
 
   const fetchLogs = useCallback(() => {
     setLoading(true);
@@ -71,12 +84,16 @@ export function LogView() {
     return () => clearInterval(id);
   }, [fetchLogs]);
 
-  // Auto-scroll
+  // Auto-scroll. The virtualized list owns its own scroll container, so pinning the outer
+  // div's scrollTop would do nothing there — ask the list to scroll to the last row instead.
   useEffect(() => {
-    if (autoScroll && containerRef.current) {
+    if (!autoScroll || entries.length === 0) return;
+    if (entries.length > VIRTUAL_THRESHOLD) {
+      listRef.current?.scrollToRow({ index: entries.length - 1, align: "end" });
+    } else if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [entries, autoScroll]);
+  }, [entries, autoScroll, listRef]);
 
   const severities = ["", "critical", "error", "warning", "info", "debug"];
 
@@ -143,24 +160,18 @@ export function LogView() {
           <div className="text-center text-muted py-8">
             {loading ? "로그 로딩 중..." : "로그 데이터가 없습니다"}
           </div>
+        ) : entries.length > VIRTUAL_THRESHOLD ? (
+          <List
+            listRef={listRef}
+            rowComponent={VirtualLogRow}
+            rowProps={{ entries }}
+            rowCount={entries.length}
+            rowHeight={rowHeight}
+            overscanCount={10}
+            style={{ height: "100%" }}
+          />
         ) : (
-          entries.map((e, i) => (
-            <div
-              key={i}
-              className="flex gap-2 hover:bg-paper/50 px-1 rounded"
-              style={{ borderLeft: `3px solid ${SEVERITY_COLORS[e.severity] || "#6b7280"}` }}
-            >
-              <span className="text-muted whitespace-nowrap">{formatTs(e.ts)}</span>
-              <span className="text-muted whitespace-nowrap">[{e.server_id}]</span>
-              <span
-                className="font-medium whitespace-nowrap"
-                style={{ color: SEVERITY_COLORS[e.severity] || "var(--ink)" }}
-              >
-                {e.severity?.toUpperCase().padEnd(8)}
-              </span>
-              <span className="whitespace-pre-wrap break-all">{e.line}</span>
-            </div>
-          ))
+          entries.map((e, i) => <LogRow key={i} entry={e} />)
         )}
       </div>
 
@@ -169,4 +180,29 @@ export function LogView() {
       </div>
     </div>
   );
+}
+
+// One log line. Shared by both paths so the virtualized list can never drift from the plain
+// one — a difference between them would only ever show up past 60 entries.
+function LogRow({ entry, style }: { entry: LogEntry; style?: React.CSSProperties }) {
+  return (
+    <div
+      style={{ ...style, borderLeft: `3px solid ${SEVERITY_COLORS[entry.severity] || "#6b7280"}` }}
+      className="flex gap-2 hover:bg-paper/50 px-1 rounded"
+    >
+      <span className="text-muted whitespace-nowrap">{formatTs(entry.ts)}</span>
+      <span className="text-muted whitespace-nowrap">[{entry.server_id}]</span>
+      <span
+        className="font-medium whitespace-nowrap"
+        style={{ color: SEVERITY_COLORS[entry.severity] || "var(--ink)" }}
+      >
+        {entry.severity?.toUpperCase().padEnd(8)}
+      </span>
+      <span className="whitespace-pre-wrap break-all">{entry.line}</span>
+    </div>
+  );
+}
+
+function VirtualLogRow({ index, style, entries }: RowComponentProps<{ entries: LogEntry[] }>) {
+  return <LogRow entry={entries[index]} style={style} />;
 }

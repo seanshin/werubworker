@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { List, useDynamicRowHeight, type RowComponentProps } from "react-window";
 import { useTranslation } from "react-i18next";
 import { getAudit, type AuditEvent } from "../api";
 import { PanelHead } from "./IntegrationsView";
@@ -10,12 +11,23 @@ const CARD = "rounded-xl2 border border-line bg-panel";
 const INPUT = "px-3 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent";
 const BTN_ACCENT = "text-[12.5px] px-3 py-1.5 rounded-lg bg-accent text-white shrink-0";
 
+// The list holds up to `limit` events, each an ~9-node card. Past the threshold the rows are
+// virtualized so the node count tracks the viewport instead of the result size.
+const VIRTUAL_THRESHOLD = 40;
+// Card heights vary — resource, args and reason lines are each optional — so heights are
+// measured rather than assumed. This is the height used before a row has been measured.
+const EST_ROW_HEIGHT = 92;
+// Height of the virtualized viewport. The page itself scrolls, so the list needs a concrete
+// height rather than the `100%` of a flex child.
+const LIST_HEIGHT = 640;
+
 export function AuditView() {
   const { t } = useTranslation(["session"]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [sessionFilter, setSessionFilter] = useState("");
   const [connectorFilter, setConnectorFilter] = useState("");
   const [toolFilter, setToolFilter] = useState("");
+  const rowHeight = useDynamicRowHeight({ defaultRowHeight: EST_ROW_HEIGHT });
 
   const refresh = () =>
     getAudit({
@@ -52,15 +64,36 @@ export function AuditView() {
           {events.length === 0 ? (
             <div className={CARD + " p-4 text-[13px] text-muted"}>{t("session:audit.noEvents")}</div>
           ) : (
-            <div className="space-y-2">
-              {events.map((ev) => (
-                <AuditRow ev={ev} key={ev.id} />
-              ))}
-            </div>
+            events.length > VIRTUAL_THRESHOLD ? (
+              <List
+                rowComponent={VirtualAuditRow}
+                rowProps={{ events }}
+                rowCount={events.length}
+                rowHeight={rowHeight}
+                overscanCount={6}
+                style={{ height: LIST_HEIGHT }}
+              />
+            ) : (
+              <div className="space-y-2">
+                {events.map((ev) => (
+                  <AuditRow ev={ev} key={ev.id} />
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>
     </main>
+  );
+}
+
+function VirtualAuditRow({ index, style, events }: RowComponentProps<{ events: AuditEvent[] }>) {
+  // `space-y-2` cannot apply inside a virtualized list (the rows are absolutely positioned),
+  // so the gap moves onto the row itself to keep the two paths looking the same.
+  return (
+    <div style={style} className="pb-2">
+      <AuditRow ev={events[index]} />
+    </div>
   );
 }
 

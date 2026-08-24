@@ -368,19 +368,35 @@ class IncidentManager:
 
         return d
 
-    def list_incidents(self, status: str = "", limit: int = 50) -> list[dict]:
-        """인시던트 목록 (타임라인 제외)."""
+    def count_incidents(self, status: str = "") -> int:
+        """전체 건수 — 목록이 잘렸는지 호출자가 알 수 있게 한다."""
+        with self._connect() as conn:
+            if status:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM incidents WHERE status = ?", (status,)
+                ).fetchone()
+            else:
+                row = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()
+        return int(row[0]) if row else 0
+
+    def list_incidents(self, status: str = "", limit: int = 50, offset: int = 0) -> list[dict]:
+        """인시던트 목록 (타임라인 제외).
+
+        `offset`은 페이지네이션용이다. 이 목록은 예전부터 50건에서 잘렸는데 더 가져올
+        수단이 없어서, 51번째 이후 인시던트에 도달할 방법이 아예 없었다.
+        """
+        offset = max(0, offset)
         with self._connect() as conn:
             if status:
                 rows = conn.execute(
                     "SELECT * FROM incidents WHERE status = ? "
-                    "ORDER BY created_at DESC LIMIT ?",
-                    (status, limit),
+                    "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                    (status, limit, offset),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM incidents ORDER BY created_at DESC LIMIT ?",
-                    (limit,),
+                    "SELECT * FROM incidents ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                    (limit, offset),
                 ).fetchall()
 
         result = []
