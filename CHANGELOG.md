@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed — 프론트엔드 테스트 40건 실패 정리
+- **i18next가 테스트에서 초기화되지 않던 문제 (36건)**: `useTranslation`이 키 자체(`"settings:modelChecklist.modelFamily"`)를 반환해서, 실제 UI 텍스트를 찾는 테스트가 전부 실패했다. 텍스트가 없는 게 아니라 **해석되지 않은 상태**였다. `src/test-setup.ts`에서 앱의 i18n 모듈을 로드해 해결
+- **언어를 `en`으로 고정한 뒤 로드**: i18n 모듈은 import 시점에 저장된 언어를 읽고, `en`이 아니면 한국어 번들을 비동기로 불러와 **테스트 도중에** 언어를 바꾼다. jsdom은 localStorage가 비어 있어 기본값이 `ko`라 이 고정이 없으면 영어 기준 단언이 깨진다
+- **이름 변경 낙진 4건**: `131d056`(OpenWorker → WeruBWorker 재빌드)에서 코드만 바뀌고 테스트가 따라오지 않은 것들 — 인증 헤더 `X-OpenWorker-Token` → `X-WeruBWorker-Token`, WebSocket 서브프로토콜 `openworker` → `werubworker`, 스킬 메뉴 라벨 `Create with OpenWorker` → `Create with WeruBWorker`, 승인 카드의 곡선 따옴표(`“digest”`) → 직선(`"digest"`), 파킹된 승인 버튼 `Approve` → `Allow`
+- **`eventHandlers.ts` 타입 오류**: `p[i].kind === "user"`로 좁힌 타입이 두 번째 `p[i]` 접근에 이어지지 않아(반복 변수 인덱스라 narrowing이 유지되지 않음) `.text` 읽기가 미검사 상태였다. 지역 변수로 묶어 해결
+- **결과**: 40 failed / 69 passed → **115 passed (20 파일)**, `tsc --noEmit` 오류 0. README에 프론트엔드 테스트 명령 추가
+
+---
+
 ## [2.3.6] - 2026-08-25
 
 > 성능개선 기획서 v2의 마지막 세 항목(2-3, 6-1, 5-1)을 마무리해 §3 우선순위 표 12개 항목이

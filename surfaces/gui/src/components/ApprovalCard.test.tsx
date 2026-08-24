@@ -142,7 +142,7 @@ describe("ApprovalCard — §35 shapes", () => {
 
   it("short send_message text keeps the inline quote (no preview box)", () => {
     render(<ApprovalCard item={sendApproval()} onApprove={vi.fn()} />);
-    expect(screen.getByText(/“digest”/)).toBeTruthy();
+    expect(screen.getByText(/"digest"/)).toBeTruthy();
     expect(document.querySelector(".approval-prev")).toBeNull();
   });
 
@@ -194,7 +194,7 @@ describe("InboxItemCard — Allow every time on parked run approvals", () => {
     // A plain unattended-session approval (no task data) keeps Approve/Deny only.
     render(<InboxItemCard item={baseItem()} onResolve={vi.fn()} />);
     expect(screen.queryByText("Allow every time")).toBeNull();
-    expect(screen.getByText("Approve")).toBeTruthy();
+    expect(screen.getByText("Allow")).toBeTruthy();
     expect(screen.getByText("Deny")).toBeTruthy();
   });
 

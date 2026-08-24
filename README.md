@@ -645,6 +645,10 @@ cd surfaces/gui && VITE_COWORKER_API_TOKEN="$TOKEN" npx vite --host 0.0.0.0
 
 # TypeScript 검증
 cd surfaces/gui && npx tsc --noEmit
+
+# 프론트엔드 테스트
+cd surfaces/gui && npx vitest run
+# 115 passed (20 files)
 ```
 
 | 테스트 파일 | 테스트 수 | 대상 |

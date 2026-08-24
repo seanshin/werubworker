@@ -71,7 +71,10 @@ const handlers: Record<string, Handler> = {
       ctx.setItems((p) => {
         // Search backward (up to 5 recent items) for a matching local echo to dedupe
         for (let i = p.length - 1; i >= Math.max(0, p.length - 5); i--) {
-          if (p[i].kind === "user" && p[i].text === shown) return p;
+          // Bind before testing: narrowing `p[i].kind` does not carry to a second `p[i]`
+          // access when the index is a loop variable, so the `.text` read was unchecked.
+          const prev = p[i];
+          if (prev.kind === "user" && prev.text === shown) return p;
         }
         return [...p, { kind: "user", text: shown, ts: Date.now() / 1000 }];
       });
