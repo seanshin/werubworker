@@ -1582,6 +1582,43 @@ class SessionManager(
             except Exception:
                 self.unregister_session_client(session_id, cb)
 
+    def memory_stats(self) -> dict[str, Any]:
+        """Sizes of the long-lived in-memory registries.
+
+        These are the structures that live for the process's lifetime, so a leak shows up here
+        as a number that only ever goes up. Reported rather than capped where capping would be
+        wrong: `session_clients` tracks real open sockets, and shrinking it would mean dropping
+        a live viewer. Lazily-built subsystems are reported only if something already built
+        them — asking for stats must not be what creates a store.
+        """
+        collector = getattr(self, "_collector_cache", None)
+        ts_store = getattr(self, "_ts_store_cache", None)
+        stats: dict[str, Any] = {
+            "engines": self._engines.stats(),
+            "websockets": {
+                "session_ids": len(self._session_clients),
+                "session_sockets": sum(len(v) for v in self._session_clients.values()),
+                "event_sockets": len(self._event_clients),
+                "metrics_sockets": len(self._metrics_clients),
+            },
+            "sessions": {
+                "running": len(self._running_sessions),
+                "autotitle_inflight": len(self._autotitle_inflight),
+                "autotitle_tasks": len(self._autotitle_tasks),
+            },
+            "people": len(self._people),
+        }
+        if collector is not None:
+            tracker = getattr(collector, "_timeouts", None)
+            if tracker is not None:
+                stats["collector_timeouts_tracked"] = tracker.stats().get("tracked", 0)
+        if ts_store is not None and hasattr(ts_store, "cache_stats"):
+            try:
+                stats["metrics_cache"] = ts_store.cache_stats()
+            except Exception:
+                pass
+        return stats
+
     async def aclose(self) -> None:
         await self.scheduler.stop()
         await self.stop_gateway()

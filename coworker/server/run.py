@@ -161,6 +161,17 @@ def _ws_compression_enabled() -> bool:
     return os.environ.get("COWORKER_WS_COMPRESSION", "1").strip().lower() not in {"0", "false", "no"}
 
 
+# Zombie-socket detection. A peer that dies without a close frame (laptop lid, killed
+# browser, dropped VPN) leaves `ws.receive_text()` blocked forever, and the socket stays in
+# the manager's client registry — so every broadcast keeps fanning out to a connection nobody
+# is reading. These are also uvicorn's defaults, pinned here for the same reason as
+# compression: the failure mode is silent accumulation, not a visible error. A dead peer is
+# dropped after at most interval + timeout (~40s), which then raises WebSocketDisconnect in
+# the endpoint and runs its `finally` unregister.
+_WS_PING_INTERVAL_SECONDS = 20.0
+_WS_PING_TIMEOUT_SECONDS = 20.0
+
+
 def main(argv=None) -> None:
     _ensure_ca_bundle()
     cfg = load_config()  # global config supplies defaults
@@ -208,6 +219,8 @@ def main(argv=None) -> None:
             port=args.port,
             ws_max_size=_WS_MAX_FRAME_BYTES,
             ws_per_message_deflate=_ws_compression_enabled(),
+            ws_ping_interval=_WS_PING_INTERVAL_SECONDS,
+            ws_ping_timeout=_WS_PING_TIMEOUT_SECONDS,
         )
     finally:
         if generated_token_path is not None:

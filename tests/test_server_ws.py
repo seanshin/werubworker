@@ -848,3 +848,115 @@ async def test_metrics_socket_actually_negotiates_deflate(tmp_path, monkeypatch)
     finally:
         server.should_exit = True
         await task
+
+
+# -- long-lived registry bounds (성능개선 기획서 v2 Phase 6-1) --------------------
+
+
+def test_server_pins_websocket_ping_settings(tmp_path, monkeypatch):
+    """Zombie-socket detection is what keeps the broadcast registries from accumulating
+    sockets nobody reads, so it must not be inherited from a library default."""
+    import sys
+    from types import SimpleNamespace
+
+    from coworker.server import run as server_run
+
+    seen = {}
+    monkeypatch.setattr(server_run, "_ensure_ca_bundle", lambda: None)
+    monkeypatch.setattr(server_run, "_exit_when_orphaned", lambda: None)
+    monkeypatch.setattr(server_run, "build_app", lambda *args: object())
+    monkeypatch.setitem(
+        sys.modules, "uvicorn", SimpleNamespace(run=lambda app, **kwargs: seen.update(kwargs))
+    )
+
+    server_run.main(["--cwd", str(tmp_path), "--port", "8766"])
+
+    assert seen["ws_ping_interval"] == server_run._WS_PING_INTERVAL_SECONDS
+    assert seen["ws_ping_timeout"] == server_run._WS_PING_TIMEOUT_SECONDS
+    # A dead peer must be dropped in bounded time, not merely pinged.
+    assert 0 < seen["ws_ping_interval"] + seen["ws_ping_timeout"] <= 60
+
+
+def test_socket_registries_drain_on_disconnect(tmp_path):
+    """Every socket that opens must leave the registry when it closes."""
+    client = _client(tmp_path, [_text("hi")])
+
+    with client.websocket_connect("/ws/events"):
+        pass
+    with client.websocket_connect("/ws/metrics"):
+        pass
+    with client.websocket_connect("/ws/session/s1") as ws:
+        assert ws.receive_json()["type"] == "ready"
+
+    stats = client.get("/v1/diagnostics/memory").json()["stats"]["websockets"]
+    assert stats["event_sockets"] == 0
+    assert stats["metrics_sockets"] == 0
+    assert stats["session_sockets"] == 0
+    assert stats["session_ids"] == 0  # the per-session set is removed, not left empty
+
+
+@pytest.mark.asyncio
+async def test_broadcast_drops_a_socket_that_fails(tmp_path):
+    """A socket that raises on send is unregistered, not retried forever."""
+    manager = SessionManager(workspace=tmp_path, provider=ScriptedProvider([]))
+    try:
+        async def dead(_message):
+            raise ConnectionResetError("peer gone")
+
+        manager.register_metrics_client(dead)
+        manager.register_event_client(dead)
+        assert manager.memory_stats()["websockets"]["metrics_sockets"] == 1
+
+        await manager.broadcast_metrics([{"server_id": "a", "cpu": 1.0}])
+        await manager.broadcast_event({"type": "noop"})
+
+        ws = manager.memory_stats()["websockets"]
+        assert ws["metrics_sockets"] == 0
+        assert ws["event_sockets"] == 0
+    finally:
+        await manager.aclose()
+
+
+def test_engine_cache_reports_hit_rate_and_eviction_cause(tmp_path):
+    """LRU and TTL evictions are counted separately: the first means the cache is too small
+    for the live session count, the second is just idle sessions aging out."""
+    from coworker.server.engine_cache import EngineCache
+
+    cache: EngineCache[str, str] = EngineCache(max_size=2, ttl=3600)
+    cache["a"] = "engine-a"
+    cache["b"] = "engine-b"
+
+    assert cache.get("a") == "engine-a"
+    assert cache.get("missing") is None
+
+    cache["c"] = "engine-c"  # over max_size → one LRU eviction
+
+    stats = cache.stats()
+    assert stats["size"] == 2 and stats["max_size"] == 2
+    assert stats["hits"] == 1 and stats["misses"] == 1
+    assert stats["hit_rate"] == 0.5
+    assert stats["evicted_lru"] == 1
+    assert stats["evicted_ttl"] == 0
+
+    expiring: EngineCache[str, str] = EngineCache(max_size=50, ttl=0)
+    expiring["x"] = "engine-x"
+    expiring["y"] = "engine-y"  # the write runs eviction, retiring the idle "x"
+    assert expiring.stats()["evicted_ttl"] >= 1
+    assert expiring.stats()["evicted_lru"] == 0
+
+
+def test_memory_stats_does_not_build_lazy_subsystems(tmp_path):
+    """Asking for diagnostics must not be what creates a store — that would make the
+    numbers a side effect of reading them."""
+    manager = SessionManager(workspace=tmp_path, provider=ScriptedProvider([]))
+    try:
+        stats = manager.memory_stats()
+        assert "collector_timeouts_tracked" not in stats
+        assert "metrics_cache" not in stats
+        assert not hasattr(manager, "_collector_cache")
+        assert not hasattr(manager, "_ts_store_cache")
+        assert stats["engines"]["size"] == 0
+    finally:
+        import asyncio
+
+        asyncio.run(manager.aclose())

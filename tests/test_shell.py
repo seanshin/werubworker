@@ -170,3 +170,144 @@ def test_background_unknown_task_errors(executor):
     reg.register_all(shell_tools(executor))
     assert "unknown task" in reg.execute("shell_task_output", {"task_id": "bg-99"})["error"]
     assert "unknown task" in reg.execute("shell_task_kill", {"task_id": "bg-99"})["error"]
+
+
+# -- background task memory bounds (성능개선 기획서 v2 Phase 6-1) ------------------
+
+
+@pytest.mark.skipif(_WIN, reason="uses a POSIX loop to generate bulk output")
+def test_background_buffer_is_bounded(executor):
+    """A chatty background task must not grow its buffer without limit.
+
+    The reader thread drains the child's stdout for the life of the process, so before this
+    was bounded one `tail -f`-shaped command held every line it ever emitted — measured at
+    15.8 MB for 200k lines, retained even after the process exited and the output was read."""
+    from coworker.tools.shell import _BG_MAX_CHARS, _BG_MAX_LINES
+
+    started = executor.run_background("for i in $(seq 1 50000); do echo \"line $i padding\"; done")
+    task = executor._bg_tasks[started["task_id"]]
+    for _ in range(100):
+        if task.proc.poll() is not None:
+            break
+        time.sleep(0.1)
+
+    assert len(task._lines) <= _BG_MAX_LINES
+    assert task._chars <= _BG_MAX_CHARS
+    # The task really did produce far more than it kept — otherwise this proves nothing.
+    assert task._appended > _BG_MAX_LINES * 5
+
+
+@pytest.mark.skipif(_WIN, reason="uses a POSIX loop to generate bulk output")
+def test_background_output_reports_dropped_lines(executor):
+    """Evicted output is gone, and the caller is told rather than shown a silent gap."""
+    started = executor.run_background("for i in $(seq 1 50000); do echo \"line $i padding\"; done")
+    task = executor._bg_tasks[started["task_id"]]
+    for _ in range(100):
+        if task.proc.poll() is not None:
+            break
+        time.sleep(0.1)
+
+    res = executor.background_output(started["task_id"])
+    assert res["dropped_lines"] > 0
+    assert "scrolled out" in res["note"]
+    # The tail survived: the last line the command emitted is still readable.
+    assert "line 50000" in res["output"]
+
+    # And the drop counter resets — the next read is not re-reported.
+    assert "dropped_lines" not in executor.background_output(started["task_id"])
+
+
+def test_background_reads_stay_incremental_across_eviction(executor):
+    """The read cursor is an absolute line count, not a deque index.
+
+    An index-based cursor silently re-reads or skips lines once eviction starts, which is
+    worse than dropping them: the caller sees plausible output that never happened."""
+    from coworker.tools.shell import _BackgroundTask
+
+    task = _BackgroundTask.__new__(_BackgroundTask)  # no child process needed
+    import threading
+    from collections import deque
+
+    task._lock = threading.Lock()
+    task._lines = deque()
+    task._chars = 0
+    task._appended = 0
+    task._cursor = 0
+    task._dropped_unread = 0
+
+    def emit(text):
+        with task._lock:
+            task._lines.append(text)
+            task._chars += len(text)
+            task._appended += 1
+            task._evict()
+
+    import coworker.tools.shell as shell_mod
+
+    original = shell_mod._BG_MAX_LINES
+    shell_mod._BG_MAX_LINES = 3
+    try:
+        for i in range(3):
+            emit(f"{i}\n")
+        assert task.read_new() == ("0\n1\n2\n", 0)
+
+        # Overflow past the cap while nothing is read: the oldest lines are evicted.
+        for i in range(3, 9):
+            emit(f"{i}\n")
+        text, dropped = task.read_new()
+        # Exactly the retained tail, each line once, in order — no repeats from index reuse.
+        assert text == "6\n7\n8\n"
+        assert dropped == 3  # lines 3,4,5 evicted unread
+        assert task.read_new() == ("", 0)
+
+        # Reads stay incremental after eviction.
+        emit("9\n")
+        assert task.read_new() == ("9\n", 0)
+    finally:
+        shell_mod._BG_MAX_LINES = original
+
+
+@pytest.mark.skipif(_WIN, reason="POSIX shell command")
+def test_finished_background_tasks_are_reaped(executor):
+    """Finished tasks must not accumulate for the life of the session."""
+    from coworker.tools.shell import _BG_KEEP_FINISHED
+
+    ids = []
+    for _ in range(_BG_KEEP_FINISHED + 5):
+        started = executor.run_background("echo done")
+        ids.append(started["task_id"])
+        for _ in range(50):
+            if executor._bg_tasks[ids[-1]].proc.poll() is not None:
+                break
+            time.sleep(0.05)
+
+    # One more start triggers the reap of everything past the retention window.
+    executor.run_background("echo done")
+    assert len(executor._bg_tasks) <= _BG_KEEP_FINISHED + 1
+
+    # The oldest are gone and say so; the most recent stay readable.
+    assert "unknown task" in executor.background_output(ids[0])["error"]
+    assert "error" not in executor.background_output(ids[-1])
+
+
+@pytest.mark.skipif(_WIN, reason="POSIX shell command")
+def test_running_background_tasks_are_never_reaped(executor):
+    """Reaping frees memory; it must not kill a dev server the user is relying on."""
+    from coworker.tools.shell import _BG_KEEP_FINISHED
+
+    long_running = executor.run_background("sleep 30")
+    try:
+        for _ in range(_BG_KEEP_FINISHED + 5):
+            started = executor.run_background("echo done")
+            for _ in range(50):
+                if executor._bg_tasks.get(started["task_id"]) is None:
+                    break
+                if executor._bg_tasks[started["task_id"]].proc.poll() is not None:
+                    break
+                time.sleep(0.05)
+        executor.run_background("echo done")
+
+        assert long_running["task_id"] in executor._bg_tasks
+        assert executor._bg_tasks[long_running["task_id"]].proc.poll() is None
+    finally:
+        executor.background_kill(long_running["task_id"])

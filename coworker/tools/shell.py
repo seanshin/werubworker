@@ -31,6 +31,7 @@ import sys
 import threading
 import time
 import uuid
+from collections import deque
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Optional
@@ -62,6 +63,18 @@ def _is_blocked(command: str) -> str | None:
 # a model-requested timeout can't wedge the turn for more than ten minutes.
 _DEFAULT_TIMEOUT = 120.0
 _MAX_TIMEOUT = 600.0
+
+# Caps on what one background task keeps in memory. Its reader thread drains the child's
+# stdout for the life of the process, so an unbounded buffer is a real leak: a `tail -f` or a
+# chatty dev server grows it forever (measured 15.8 MB for one 200k-line command, retained
+# even after the process exits and the output was read). `background_output` only ever returns
+# the last `max_output_chars`, so keeping more than that plus headroom buys nothing.
+_BG_MAX_LINES = 2_000
+_BG_MAX_CHARS = 256_000
+# Finished tasks stay readable for a while, then get reaped so their buffers can be freed.
+# Running tasks are never reaped — killing a user's dev server to save memory would be worse
+# than the leak.
+_BG_KEEP_FINISHED = 10
 
 # Env defaults that discourage commands from blocking on a prompt.
 _NONINTERACTIVE_ENV = {
@@ -117,8 +130,14 @@ class _BackgroundTask:
             **spawn_kwargs,
         )
         self._lock = threading.Lock()
-        self._lines: list[str] = []
+        # Bounded ring buffer. `_cursor` and `_appended` are ABSOLUTE line counts, not indices
+        # into `_lines` — the deque drops from the left, so an index-based cursor would silently
+        # re-read or skip lines once eviction starts.
+        self._lines: deque[str] = deque()
+        self._chars = 0
+        self._appended = 0
         self._cursor = 0
+        self._dropped_unread = 0
         self._reader = threading.Thread(target=self._read_loop, daemon=True)
         self._reader.start()
 
@@ -127,12 +146,43 @@ class _BackgroundTask:
         for line in self.proc.stdout:
             with self._lock:
                 self._lines.append(line)
+                self._chars += len(line)
+                self._appended += 1
+                self._evict()
 
-    def read_new(self) -> str:
+    def _evict(self) -> None:
+        """Drop oldest lines past either cap. Caller holds the lock."""
+        while self._lines and (len(self._lines) > _BG_MAX_LINES or self._chars > _BG_MAX_CHARS):
+            self._chars -= len(self._lines.popleft())
+            # An evicted line the reader never got is output that is genuinely gone; count it
+            # so `background_output` can say so rather than presenting a gap as continuous.
+            if self._first_absolute() > self._cursor:
+                self._dropped_unread += 1
+                self._cursor += 1
+
+    def _first_absolute(self) -> int:
+        """Absolute index of `_lines[0]`. Caller holds the lock."""
+        return self._appended - len(self._lines)
+
+    def read_new(self) -> tuple[str, int]:
+        """Unread output since the last call, plus how many lines were dropped unread."""
         with self._lock:
-            new = "".join(self._lines[self._cursor :])
-            self._cursor = len(self._lines)
-        return new
+            start = max(0, self._cursor - self._first_absolute())
+            new = "".join(list(self._lines)[start:])
+            self._cursor = self._appended
+            dropped, self._dropped_unread = self._dropped_unread, 0
+        return new, dropped
+
+    def release(self) -> None:
+        """Free the buffer and the stdout pipe. Only for a task that has exited."""
+        try:
+            if self.proc.stdout is not None:
+                self.proc.stdout.close()
+        except OSError:
+            pass
+        with self._lock:
+            self._lines.clear()
+            self._chars = 0
 
     def kill(self) -> None:
         if self.proc.poll() is not None:
@@ -319,6 +369,7 @@ class LocalExecutor(Executor):
 
     # -- background tasks ---------------------------------------------------------
     def run_background(self, command: str) -> dict[str, Any]:
+        self._reap_bg_tasks()
         self._bg_counter += 1
         task_id = f"bg-{self._bg_counter}"
         try:
@@ -337,18 +388,39 @@ class LocalExecutor(Executor):
         task = self._bg_tasks.get(task_id)
         if task is None:
             return {"error": f"unknown task: {task_id}"}
-        output = task.read_new()
+        output, dropped = task.read_new()
         truncated = len(output) > self.max_output_chars
         if truncated:
             output = output[-self.max_output_chars :]
         exit_code = task.proc.poll()
-        return {
+        result = {
             "task_id": task_id,
             "status": "running" if exit_code is None else "exited",
             "exit_code": exit_code,
             "output": output,
             "truncated": truncated,
         }
+        if dropped:
+            # Say it out loud: this output is gone, not merely trimmed from this response.
+            result["dropped_lines"] = dropped
+            result["note"] = (
+                f"{dropped} line(s) scrolled out of the task buffer before being read "
+                "— read output more often, or redirect the command to a file."
+            )
+        return result
+
+    def _reap_bg_tasks(self) -> None:
+        """Release buffers held by long-finished tasks.
+
+        Without this, every background command a session ever ran keeps its output buffer and
+        stdout pipe for the life of the session. The most recent `_BG_KEEP_FINISHED` finished
+        tasks stay fully readable; older ones are dropped from the registry entirely, so a
+        later `shell_task_output` reports an unknown task rather than silently empty output.
+        Running tasks are never touched.
+        """
+        finished = [tid for tid, t in self._bg_tasks.items() if t.proc.poll() is not None]
+        for task_id in finished[: max(0, len(finished) - _BG_KEEP_FINISHED)]:
+            self._bg_tasks.pop(task_id).release()
 
     def background_kill(self, task_id: str) -> dict[str, Any]:
         task = self._bg_tasks.get(task_id)

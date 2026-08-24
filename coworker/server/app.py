@@ -327,6 +327,12 @@ def create_app(manager: SessionManager) -> FastAPI:
             "model": manager.model,
         }
 
+    @app.get("/v1/diagnostics/memory")
+    def diagnostics_memory() -> dict[str, Any]:
+        """Sizes of the long-lived in-memory registries — watch these over days to catch a
+        leak while it is still small."""
+        return {"ok": True, "stats": manager.memory_stats()}
+
     @app.get("/v1/agents")
     def agents() -> dict[str, Any]:
         return {"agents": manager.list_agents()}
