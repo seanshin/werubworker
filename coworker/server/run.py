@@ -141,6 +141,26 @@ def _ensure_api_token(port: int) -> Path | None:
     return write_private_text(state_dir() / f"sidecar-{port}.token", token + "\n")
 
 
+def _ws_compression_enabled() -> bool:
+    """Whether to negotiate permessage-deflate on our WebSockets.
+
+    On by default. This is also uvicorn's default, but we pass it explicitly because the
+    metric/session streams lean on it hard: a 200-server `metrics_update` frame is ~24 kB of
+    highly repetitive JSON that deflate takes to ~2 kB (measured -90.6% across ten ticks, since
+    context takeover lets each frame back-reference the last). Inheriting that from a library
+    default means a uvicorn upgrade could silently flip it off and nobody would notice — the
+    stream keeps working, just fatter.
+
+    `COWORKER_WS_COMPRESSION=0` turns it off, which is only useful for measuring the stream or
+    reading frames off the wire in a packet capture.
+
+    Note this is what makes `_WS_MAX_FRAME_BYTES` load-bearing against a decompression bomb:
+    `ws_max_size` is enforced by `websockets` on the *decompressed* message as it inflates, so a
+    small hostile frame that expands past the cap is aborted mid-inflate rather than buffered.
+    """
+    return os.environ.get("COWORKER_WS_COMPRESSION", "1").strip().lower() not in {"0", "false", "no"}
+
+
 def main(argv=None) -> None:
     _ensure_ca_bundle()
     cfg = load_config()  # global config supplies defaults
@@ -182,7 +202,13 @@ def main(argv=None) -> None:
 
         _exit_when_orphaned()
         app = build_app(args.cwd, args.model, args.mode)
-        uvicorn.run(app, host=bind_host, port=args.port, ws_max_size=_WS_MAX_FRAME_BYTES)
+        uvicorn.run(
+            app,
+            host=bind_host,
+            port=args.port,
+            ws_max_size=_WS_MAX_FRAME_BYTES,
+            ws_per_message_deflate=_ws_compression_enabled(),
+        )
     finally:
         if generated_token_path is not None:
             generated_token_path.unlink(missing_ok=True)

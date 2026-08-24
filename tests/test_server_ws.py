@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from conftest import ScriptedProvider, _client, _drain, _text, _tool
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient
@@ -725,3 +726,125 @@ def test_set_provider_persists_extra_fields(tmp_path):
     manager.set_provider("ollama", {"base_url": ""})
     providers = {p["name"]: p for p in manager.get_providers()}
     assert "base_url" not in providers["ollama"]["values"]
+
+
+# -- WebSocket compression (성능개선 기획서 v2 Phase 2-3) ------------------------
+
+
+def test_server_enables_websocket_compression_explicitly(tmp_path, monkeypatch):
+    """permessage-deflate must be passed to uvicorn, not inherited from its default.
+
+    It happens to match uvicorn's current default; pinning it is what stops a dependency
+    upgrade from silently un-compressing the metric stream (which still *works* uncompressed,
+    so nothing would fail loudly)."""
+    import sys
+    from types import SimpleNamespace
+
+    from coworker.server import run as server_run
+
+    seen = {}
+    monkeypatch.delenv("COWORKER_WS_COMPRESSION", raising=False)
+    monkeypatch.setattr(server_run, "_ensure_ca_bundle", lambda: None)
+    monkeypatch.setattr(server_run, "_exit_when_orphaned", lambda: None)
+    monkeypatch.setattr(server_run, "build_app", lambda *args: object())
+    monkeypatch.setitem(
+        sys.modules,
+        "uvicorn",
+        SimpleNamespace(run=lambda app, **kwargs: seen.update(kwargs)),
+    )
+
+    server_run.main(["--cwd", str(tmp_path), "--port", "8766"])
+
+    assert seen["ws_per_message_deflate"] is True
+
+
+def test_websocket_compression_can_be_disabled_by_env(tmp_path, monkeypatch):
+    """The opt-out exists so the stream can be measured on the wire."""
+    import sys
+    from types import SimpleNamespace
+
+    from coworker.server import run as server_run
+
+    monkeypatch.setattr(server_run, "_ensure_ca_bundle", lambda: None)
+    monkeypatch.setattr(server_run, "_exit_when_orphaned", lambda: None)
+    monkeypatch.setattr(server_run, "build_app", lambda *args: object())
+
+    for value, expected in (("0", False), ("false", False), ("NO", False), ("1", True), ("", True)):
+        seen = {}
+        monkeypatch.setenv("COWORKER_WS_COMPRESSION", value)
+        monkeypatch.setitem(
+            sys.modules,
+            "uvicorn",
+            SimpleNamespace(run=lambda app, **kwargs: seen.update(kwargs)),
+        )
+        server_run.main(["--cwd", str(tmp_path), "--port", "8766"])
+        assert seen["ws_per_message_deflate"] is expected, value
+
+
+@pytest.mark.asyncio
+async def test_metrics_socket_actually_negotiates_deflate(tmp_path, monkeypatch):
+    """End-to-end: the config flag only matters if the extension really gets negotiated.
+
+    TestClient's WebSocket support bypasses uvicorn entirely, so asserting the flag is not
+    enough — this drives a real uvicorn server and reads the negotiated extension list off the
+    client handshake, then checks the frame really did travel compressed."""
+    import asyncio
+    import json
+
+    import uvicorn
+    import websockets
+
+    from coworker.server import run as server_run
+    from coworker.server.app import _WS_MAX_FRAME_BYTES
+
+    monkeypatch.delenv("COWORKER_WS_COMPRESSION", raising=False)  # exercise the default path
+
+    points = [
+        {"server_id": f"srv-{i:03d}", "cpu": 12.5, "memory": 61.2,
+         "disk": 44.0, "load_1m": 0.8, "net_rx": 1_000 + i, "net_tx": 2_000 + i}
+        for i in range(200)
+    ]
+    payload = {"type": "metrics_update", "ts": 1.0, "points": points}
+
+    app = FastAPI()
+
+    # `WebSocket` must be imported at module scope: this file has `from __future__ import
+    # annotations`, so FastAPI resolves the string annotation against the endpoint's module
+    # globals. A function-local import leaves it unresolvable and FastAPI silently demotes `ws`
+    # to a query parameter — the handshake then fails with 403, not an error you can read.
+    @app.websocket("/ws/metrics")
+    async def _metrics(ws: WebSocket) -> None:
+        await ws.accept()
+        for _ in range(5):
+            await ws.send_json(payload)
+        try:
+            while True:
+                await ws.receive_text()
+        except WebSocketDisconnect:
+            pass
+
+    config = uvicorn.Config(
+        app, host="127.0.0.1", port=0, log_level="warning",
+        lifespan="off", access_log=False,
+        ws_max_size=_WS_MAX_FRAME_BYTES,
+        ws_per_message_deflate=server_run._ws_compression_enabled(),
+    )
+    server = uvicorn.Server(config)
+    task = asyncio.create_task(server.serve())
+    try:
+        while not server.started:
+            await asyncio.sleep(0.01)
+        port = server.servers[0].sockets[0].getsockname()[1]
+
+        async with websockets.connect(f"ws://127.0.0.1:{port}/ws/metrics") as ws:
+            negotiated = [type(e).__name__ for e in ws.protocol.extensions]
+            assert any("Deflate" in name for name in negotiated), negotiated
+            first = await ws.recv()
+
+        # The frame decodes to the full payload — compression is transparent to the contract.
+        assert json.loads(first)["points"] == points
+        # ...and the uncompressed JSON is genuinely large enough that this matters.
+        assert len(json.dumps(payload)) > 20_000
+    finally:
+        server.should_exit = True
+        await task

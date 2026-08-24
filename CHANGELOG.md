@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Performance — WebSocket 압축 (성능개선 기획서 v2 Phase 2-3)
+- **`ws_per_message_deflate` 명시화** (`server/run.py`): permessage-deflate는 uvicorn 기본값이라 이미 켜져 있었으나, 그 사실이 코드 어디에도 없어 라이브러리 기본값에 암묵적으로 의존하고 있었다. 기본값이 바뀌어도 스트림은 계속 동작하되 조용히 커지기만 해서 아무도 눈치채지 못하므로 값을 명시적으로 전달한다
+- **`COWORKER_WS_COMPRESSION=0`**: 압축을 끄는 탈출구. 스트림을 실측하거나 패킷 캡처로 프레임을 읽을 때만 쓴다
+- **회귀 테스트 3종** (`tests/test_server_ws.py`): uvicorn에 플래그가 전달되는지, 환경변수 opt-out이 동작하는지, 그리고 **실제 서버에서 확장이 협상되는지**. 마지막 것이 핵심 — `TestClient`의 WebSocket은 uvicorn을 거치지 않으므로 설정값만 검증하면 실제 협상 여부는 확인되지 않는다
+- **측정** (200서버 `metrics_update` 10틱, TCP 레벨): 218,714 B → 20,615 B (**-90.6%**). 기획서 목표(60% 절감)를 이미 넘고 있었음
+
+### Rejected — 델타 전송 (기획서 2-3의 나머지 절반)
+- 기획서의 "대시보드 갱신 시 변경분만 전송"은 **실측 후 구현하지 않기로 했다.** 실제 수집 데이터(`metrics_raw` 7,316행)에서 연속 틱 쌍의 **100.0%**가 최소 한 필드 이상 변한다 — `net_rx`/`net_tx`가 스냅샷이 아니라 누적 카운터이고 수집 간격이 60초라, 수집기 자신의 SSH 접속만으로도 카운터가 움직인다. "변한 서버만 전송"이 곧 "전부 전송"이라 절감폭이 0%다
+- 추가로 `MonitoringView.tsx`가 수신 포인트를 서버별 링버퍼에 append해 차트를 그리므로, 델타로 빠진 서버는 시계열에 구멍이 생긴다. 클라이언트가 carry-forward를 합성해야 하고 그만큼 desync 버그 부류가 생긴다
+- 판단 근거는 기획서 §2-3에 측정치와 함께 기록했다
+
+### Fixed
+- `tests/test_server_ws.py`의 WebSocket 엔드포인트 애노테이션 함정: 이 파일은 `from __future__ import annotations`를 쓰므로 FastAPI가 문자열 애노테이션을 **엔드포인트 모듈의 전역**에서 해석한다. `WebSocket`을 함수 안에서 import하면 해석에 실패해 FastAPI가 `ws`를 조용히 쿼리 파라미터로 강등시키고, 핸드셰이크가 읽을 수 없는 403으로 실패한다. 모듈 레벨 import로 고정하고 주석으로 남김
+
+---
+
 ## [2.3.5] - 2026-08-24
 
 ### Performance — 배치 쓰기 (성능개선 기획서 v2 Phase 1-1)
