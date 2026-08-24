@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.3.5] - 2026-08-24
 
 ### Performance — 배치 쓰기 (성능개선 기획서 v2 Phase 1-1)
 - **`BatchWriter`** (신규 `monitoring/batch_writer.py`): 쓰기 레코드를 메모리 버퍼에 모아 일괄 처리. `flush_size`(기본 50) 또는 `flush_interval`(기본 0.1초) 중 먼저 도달한 조건에서 플러시, 데몬 타이머로 유휴 시에도 상한 보장. 플러시 실패 시 배치 폐기 + `dropped` 누적 (버퍼 무한 증가 방지)
@@ -49,6 +49,11 @@
 - **체인 앵커 도입**: 정리 시 남은 첫 기록의 `prev_hash`를 메타 테이블(`ops_audit_meta` / `audit_meta`)에 저장하고, 검증은 GENESIS 대신 이 앵커에서 시작. 전부 삭제된 경우 현재 head를 앵커로 삼아 이후 기록과 이어짐. 재기동 후에도 유지
 - `HashChain.verify_chain_streaming(start_hash=…)` 파라미터 추가 (기본값은 기존 GENESIS라 호출부 호환)
 - `chain_anchor()` 접근자 추가 (`AuditStore`, `OpsAuditStore`)
+
+### Fixed — 서비스 기동 스크립트 (`start.sh`)
+- **`--stop`이 무관한 프로세스를 종료하던 버그**: `lsof -ti :PORT`는 해당 포트를 LISTEN 중인 서버뿐 아니라 그 포트에 *접속한* 클라이언트(대시보드를 열어 둔 브라우저 등)의 PID까지 반환한다. 그대로 `kill -TERM`으로 넘기고 있어 서비스 중지 시 사용자 프로세스가 함께 죽을 수 있었다. `_port_pid()` 헬퍼로 `lsof -nP -tiTCP:PORT -sTCP:LISTEN`을 사용해 LISTEN 소켓만 대상으로 삼는다 (`_status`/`_stop`/`_start`의 모든 조회 경로에 적용)
+- **로그인 시 자동 시작이 조용히 실패하던 문제**: launchd는 최소 PATH(`/usr/bin:/bin:/usr/sbin:/sbin`)로 실행하므로 `brew`·`gitea-runner`·`npx`를 찾지 못한다. 스크립트 진입 시 Homebrew 경로(`/opt/homebrew/{bin,sbin}`, `/usr/local/bin`)를 PATH에 보강
+- **콜드 스타트를 기동 실패로 오판하던 문제**: 고정 `sleep 2/3/4` 후 포트를 1회 확인하던 방식 → `_wait_port()` 폴링(Gitea 15초, 백엔드·프론트엔드 각 30초 상한). 로그인 직후처럼 느린 환경에서 정상 기동을 실패로 보고하지 않으면서, 빠른 환경에서는 대기 시간이 오히려 줄어든다
 
 ### Performance — 디스크 관리 자동화 (성능개선 기획서 v2 Phase 6-2, 1-2 잔여)
 - **`DiskMaintenance`** (신규 `monitoring/maintenance.py`): 일 1회 주기를 스스로 판단해 다운샘플링 → 보관정책 정리 → 백업 정리 → WAL 체크포인트를 순서대로 실행. 각 단계는 독립 예외 처리라 저장소 하나가 실패해도 나머지가 진행되고, 실패는 `errors`에 모임

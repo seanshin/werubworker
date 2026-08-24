@@ -4,8 +4,8 @@
 
 서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다. Gitea + MCP를 통합하여 에이전트와 소스 리포지토리가 하나의 플랫폼으로 동작합니다.
 
-[![Version](https://img.shields.io/badge/version-2.3.4-blue)]()
-[![Tests](https://img.shields.io/badge/tests-1%2C352%20passed-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-2.3.5-blue)]()
+[![Tests](https://img.shields.io/badge/tests-1%2C430%20passed-brightgreen)]()
 [![Tools](https://img.shields.io/badge/tools-300%2B-orange)]()
 [![Capabilities](https://img.shields.io/badge/capabilities-28-purple)]()
 [![MCP](https://img.shields.io/badge/MCP-32%20tools-blueviolet)]()
@@ -285,7 +285,7 @@ werubworker/
 │   │   └── api.ts                #   REST/WebSocket API
 │   └── src-tauri/                #   Tauri 데스크톱 셸
 │
-├── tests/                         # 테스트 (1,226 passed)
+├── tests/                         # 테스트 (1,430 passed)
 │   ├── test_timeseries.py        #   시계열 저장소 (11)
 │   ├── test_collector.py         #   메트릭 수집기 (7)
 │   ├── test_healthcheck_mgr.py   #   헬스체크 매니저 (12)
@@ -641,7 +641,7 @@ cd surfaces/gui && VITE_COWORKER_API_TOKEN="$TOKEN" npx vite --host 0.0.0.0
 ```bash
 # 전체 테스트 실행
 .venv/bin/pytest tests/ -q
-# 1,161 passed, 74 skipped
+# 1,430 passed, 74 skipped
 
 # TypeScript 검증
 cd surfaces/gui && npx tsc --noEmit
@@ -671,7 +671,12 @@ cd surfaces/gui && npx tsc --noEmit
 | **test_wiki_resolver.py** | **6** | **서비스 리졸버** |
 | **test_e2e_monitoring.py** | **6** | **E2E 통합 시나리오** |
 | **test_performance.py** | **11** | **성능 부하 (100서버, 동시쓰기)** |
-| 기존 테스트 | 1,039 | 코어 기능 |
+| **test_batch_writer.py** | **19** | **배치 쓰기·해시체인 무결성** |
+| **test_metrics_cache.py** | **16** | **메트릭 조회 캐시 (TTL/LRU)** |
+| **test_collector_timeout.py** | **14** | **수집 병렬도·적응형 타임아웃** |
+| **test_maintenance.py** | **23** | **디스크 관리·체인 앵커** |
+| **test_performance_v2.py** | **6** | **성능 회귀 (배치·캐시)** |
+| 기존 테스트 | 1,145 | 코어 기능 |
 
 ---
 
@@ -685,7 +690,7 @@ cd surfaces/gui && npx tsc --noEmit
 | [**v2.0 아키텍처**](docs/v2-architecture.md) | 전체 시스템 구조, 모니터링/위키/도구 아키텍처, 데이터 저장소 |
 | [**v2.0 API 레퍼런스**](docs/v2-api-reference.md) | 대시보드/인프라/Wiki API 엔드포인트 전체 명세 |
 | [**MCP 서버 설정**](docs/mcp-setup.md) | Claude Desktop/Cursor/Claude Code MCP 연동 가이드 |
-| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.4 전체 변경 이력 |
+| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.5 전체 변경 이력 |
 | [**확장 설계서**](docs/cloud-server-ops-expansion-design.md) | 통합 모니터링, 알림, 인시던트, 서비스 위키 리포지토리 설계 |
 | [**개발팀 조율 가이드**](docs/dev-team/TEAM-COORDINATION.md) | 병렬 개발 규칙, 작업 분배, 충돌 방지 |
 
@@ -693,7 +698,8 @@ cd surfaces/gui && npx tsc --noEmit
 
 | 버전 | 날짜 | 주요 내용 |
 |------|------|----------|
-| **v2.3.4** | **2026-08-20** | **성능 최적화: 해시체인 메모리 캐시, 커넥션 풀링, 민감정보 필터 빠른 탈출, 알림 규칙 캐시, 체인 스트리밍 검증 (테스트 1,352개)** |
+| **v2.3.5** | **2026-08-24** | **성능 최적화 2차: 배치 쓰기(단건 7.6×), 메트릭 조회 캐시, 수집 병렬도 20+적응형 타임아웃, 디스크 관리 자동화, 정리 시 해시체인 단절 수정 (테스트 1,430개)** |
+| v2.3.4 | 2026-08-20 | 성능 최적화: 해시체인 메모리 캐시, 커넥션 풀링, 민감정보 필터 빠른 탈출, 알림 규칙 캐시, 체인 스트리밍 검증 (테스트 1,352개) |
 | v2.3.3 | 2026-08-20 | Sign 연동 보안 강화: 해시체인, TOTP 2FA, 봉투 암호화, HMAC 서명, MCP 보안 도구 5개 (테스트 1,343개) |
 | v2.3.0 | 2026-08-18 | Phase 1~6: 실시간 메트릭, AI 이상탐지/사후분석, GUI 4개 신규, 워크플로우, 보안/백업, Slack Bot, Gitea+ITMS MCP 통합 |
 | [v2.2.2](https://github.com/seanshin/werubworker/releases/tag/v2.2.2) | 2026-08-14 | 성능 부하 테스트 11개, 100서버 < 1초 검증 |
