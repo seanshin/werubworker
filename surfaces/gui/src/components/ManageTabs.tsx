@@ -212,7 +212,7 @@ function ComposerPickerCard({
                   type="checkbox"
                   checked
                   disabled={isDefault}
-                  title={isDefault ? "The default model is always shown — make another model default first" : "Remove from the picker"}
+                  title={isDefault ? t("settings:manageTabs.defaultAlwaysShown") : t("settings:manageTabs.removePickerTitle")}
                   onChange={() => removeModel(id).then((r) => r.ok && onChanged())}
                 />
                 <span className="mlist-name" title={id}>
@@ -278,8 +278,7 @@ export const McpTab = memo(function McpTab() {
   return (
     <div className="space-y-3">
       <p className="text-[12.5px] text-muted leading-relaxed">
-        External tool servers (stdio or HTTP), shared across all agents. Enabled servers' tools are
-        permission-gated. Changes apply to new sessions —{" "}
+        {t("settings:manageTabs.mcpDesc")}{" "}
         <button
           className="text-accent font-medium hover:underline"
           onClick={() => reloadMcp().then(refresh)}
@@ -483,7 +482,7 @@ function AddForm({
         ? Object.entries(map)
         : null;
     if (!entries || entries.length === 0) {
-      onError('Paste a `{ "<name>": { … } }` object (or a full mcpServers block).');
+      onError(t("settings:manageTabs.pasteObject"));
       return;
     }
     for (const [name, config] of entries) {
@@ -673,7 +672,7 @@ export function AllowlistBlock({
         <div className={SEC_H + " mb-2"}>{t("settings:manageTabs.allowedToMessage")}</div>
         <div className="flex flex-wrap gap-1.5">
           {allowedUsers.length === 0 && (
-            <span className="text-[12px] text-faint">nobody yet — Allow a recent sender →</span>
+            <span className="text-[12px] text-faint">{t("settings:manageTabs.nobodyYet")}</span>
           )}
           {allowedUsers.map((u) => (
             <span
@@ -761,7 +760,7 @@ export function ConnectorTools({ c, onChanged }: { c: Connector; onChanged: () =
             <span className="min-w-0">
               <span className="block text-[13px]">{tool.label}</span>
               <span className="block text-[11.5px] text-faint">
-                {tool.name} · {tool.kind} · asks approval
+                {tool.name} · {tool.kind} · {t("settings:manageTabs.asksApproval")}
               </span>
               <span className="block text-[11.5px] text-faint">{tool.description}</span>
             </span>
@@ -829,7 +828,7 @@ export function ConnectSetup({
             {waiting ? t("connectors:modal.checkBrowser") : t("settings:manageTabs.connectOneClick", { title: c.title })}
           </button>
           {c.fields.length > 0 && (
-            <div className="text-[11.5px] text-faint">or connect manually:</div>
+            <div className="text-[11.5px] text-faint">{t("settings:manageTabs.orManually")}</div>
           )}
         </div>
       )}
@@ -840,22 +839,22 @@ export function ConnectSetup({
             // a visibly-parked button, and the manual path below stays fully live.
             <>
               <button className={BTN_ACCENT + " opacity-50"} disabled data-testid="managed-coming-soon">
-                {`Connect ${c.title} with one click`}
+                {t("settings:manageTabs.connectOneClick", { title: c.title })}
                 <span className="ml-2 text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-white/25">
-                  Coming soon
+                  {t("settings:manageTabs.comingSoon")}
                 </span>
               </button>
               <div className="text-[11.5px] text-faint">
-                One-click sign-in is coming soon — connect manually below for now:
+                {t("settings:manageTabs.comingSoonDesc")}
               </div>
             </>
           ) : cloud?.signed_in ? (
             <button className={BTN_ACCENT} onClick={oneClick} disabled={waiting}>
-              {waiting ? "Check your browser…" : `Connect ${c.title} with one click`}
+              {waiting ? t("settings:manageTabs.waitingBrowser") : t("settings:manageTabs.connectOneClick", { title: c.title })}
             </button>
           ) : cloud ? (
             <CloudSignInInline
-              blurb={`Sign-in unlocks the one-click ${c.title} connect — or connect manually below.`}
+              blurb={t("settings:manageTabs.signInUnlocks", { title: c.title })}
             />
           ) : (
             // Status unknown (fetch pending/failed): never show the sign-in ask to a

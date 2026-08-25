@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed — `ManageTabs`의 나머지 i18n 누락 배선
+- **`ModelsTab`과 같은 결함이 같은 파일의 다른 탭에 남아 있었다**: `McpTab`·`AllowlistBlock`·`ConnectorTools`·`ConnectSetup`·`ComposerPickerCard`가 번역 키가 준비된 문자열을 하드코딩하고 있었다. 다섯 컴포넌트 모두 이미 `t`를 갖고 있었으므로 배선만 빠진 상태였다
+- **11곳 배선**: MCP 서버 설명 문단과 붙여넣기 오류 메시지, 허용 목록 빈 상태(`nobody yet — …`), 도구 메타의 `asks approval`, 원클릭 연결 버튼·`Coming soon` 배지와 그 설명, 수동 연결 안내, 클라우드 로그인 안내(`{{title}}` 보간), 모델 체크박스의 title 두 문구
+- **`settings:manageTabs` 미참조 키 9 → 0**. 전체 미참조는 189 → 179
+- 테스트 추가: 한국어로 전환하면 MCP 설명이 번역되는지. 하드코딩으로 되돌리면 실패하는 것을 확인
+
+---
+
 ## [2.3.7] - 2026-08-25
 
 > 프론트엔드 정비 릴리즈. 성능 작업(v2.3.5~v2.3.6)에서 프론트엔드를 건드리다 테스트 스위트가

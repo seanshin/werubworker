@@ -81,3 +81,28 @@ describe("ModelsTab i18n", () => {
     expect(container.textContent).not.toContain("Ticked models show in the composer");
   });
 });
+
+// McpTab의 설명 문단·붙여넣기 오류 메시지도 번역 키가 있는데 하드코딩돼 있었다.
+describe("McpTab i18n", () => {
+  it("한국어로 전환하면 MCP 설명이 번역된다", async () => {
+    const { McpTab } = await import("./ManageTabs");
+    i18n.addResourceBundle("ko", "settings", {
+      manageTabs: {
+        mcpDesc: "모든 에이전트가 공유하는 외부 도구 서버입니다.",
+        reloadNow: "지금 새로고침",
+        noMcpServers: "설정된 MCP 서버가 없습니다.",
+        addServer: "서버 추가",
+      },
+    });
+    await act(async () => {
+      await i18n.changeLanguage("ko");
+    });
+
+    const { container } = render(<McpTab />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain("모든 에이전트가 공유하는 외부 도구 서버입니다.");
+    expect(container.textContent).not.toContain("External tool servers");
+  });
+});
