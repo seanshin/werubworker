@@ -1,9 +1,10 @@
 // Auth-method segmented choice + show_when field visibility (Bedrock's "Connect with"):
 // only the selected method's fields render, and clicking a segment switches them.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProviderForm, type ProviderSetupState } from "./ProviderSetup";
 import type { ProviderInfo } from "../api";
+import i18n from "../i18n";
 
 vi.mock("../tauri", () => ({ openExternal: vi.fn() }));
 
@@ -92,5 +93,34 @@ describe("ProviderForm auth-method choice", () => {
     render(<ProviderForm ps={makePs({ auth_method: "iam" })} tp="t" />);
     expect(screen.getByTestId("t-field-aws_secret_access_key")).toBeTruthy();
     expect(screen.queryByTestId("t-field-bedrock_api_key")).toBeNull();
+  });
+});
+
+// 키 도움말 문단은 번역 키가 있는데 하드코딩돼 있었다 — 영어에서는 문구가 같아 아무 테스트도
+// 잡지 못한다. 한국어로 전환해 배선을 확인한다.
+describe("ProviderSetup i18n", () => {
+  afterEach(async () => {
+    cleanup();
+    await act(async () => {
+      await i18n.changeLanguage("en");
+    });
+  });
+
+  it("한국어로 전환하면 키 도움말이 번역된다", async () => {
+    i18n.addResourceBundle("ko", "settings", {
+      provider: {
+        noKeyYet: "아직 키가 없나요? ",
+        takesMinute: " — 1분이면 됩니다.",
+        testRuns: "읽기 전용 점검을 한 번 실행한 뒤 저장합니다.",
+      },
+    });
+    await act(async () => {
+      await i18n.changeLanguage("ko");
+    });
+
+    const { container } = render(<ProviderForm ps={makePs({ auth_method: "api_key" })} tp="t" />);
+    // 배선 전에는 영문 원문이 그대로 남았다.
+    expect(container.textContent).toContain("읽기 전용 점검을 한 번 실행한 뒤 저장합니다.");
+    expect(container.textContent).not.toContain("Runs one read-only check, then saves.");
   });
 });

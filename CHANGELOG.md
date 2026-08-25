@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed — 갤러리 안내와 프로바이더 키 도움말 배선
+- **`GalleryModal`**: 클라우드 갤러리가 "사용할 수 없음" 안내로 대체되면서 **그 대체 안내 자체가 하드코딩**으로 남아 있었다. 제목·설명 키를 추가하고 닫기 버튼은 `common:button.close`로 배선
+- **`ProviderSetup`**: 키 도움말 문단 전체(`No key yet?` / `Create one at {{label}} ↗` / `— takes about a minute.` / Ollama 안내)와 테스트·저장 UI(`✓ Tested & saved`, `✓ Detected`, `Test & save`, `Runs one read-only check…`)가 번역 키가 준비된 채 하드코딩돼 있었다. 9곳 배선
+- **미참조 키 179 → 170**
+
+### Changed — 미참조 키 분류 방식
+- 미참조 키를 **번역문이 소스에 하드코딩돼 있는지**로 대조해 성격을 갈랐다. 205개 중 살아있는 누락 67개, 죽은 키 108개, 판정 불가 30개
+- **`settings:gallery` 23개는 대부분 죽은 키다**: 클라우드 갤러리 UI가 통째로 제거되면서 남은 것으로, `settings:onboarding`·`session:wiki`·`session:quickstart`도 같은 성격이다. 기능이 돌아오면 필요한 번역이라 **삭제하지 않고 남겨 뒀다** — 지우는 건 되돌리기 어려운 결정이라 확인이 필요하다
+- 살아있는 누락이 가장 많이 몰린 곳은 `humanize.ts`(23개)인데, 이 모듈은 `t`가 없는 순수 함수라 배선하려면 호출부 전체에 `t`를 주입하는 설계 변경이 필요하다. 이번 범위에서 제외
+
 ### Fixed — `ManageTabs`의 나머지 i18n 누락 배선
 - **`ModelsTab`과 같은 결함이 같은 파일의 다른 탭에 남아 있었다**: `McpTab`·`AllowlistBlock`·`ConnectorTools`·`ConnectSetup`·`ComposerPickerCard`가 번역 키가 준비된 문자열을 하드코딩하고 있었다. 다섯 컴포넌트 모두 이미 `t`를 갖고 있었으므로 배선만 빠진 상태였다
 - **11곳 배선**: MCP 서버 설명 문단과 붙여넣기 오류 메시지, 허용 목록 빈 상태(`nobody yet — …`), 도구 메타의 `asks approval`, 원클릭 연결 버튼·`Coming soon` 배지와 그 설명, 수동 연결 안내, 클라우드 로그인 안내(`{{title}}` 보간), 모델 체크박스의 title 두 문구

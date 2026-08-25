@@ -46,17 +46,16 @@ export function GalleryModal({
         <div className="overflow-y-auto hairline-scroll p-5">
           <div className="rounded-xl border border-line bg-panel/60 p-5 text-center space-y-3">
             <div className="text-[14px] font-semibold">
-              Gallery is not available
+              {t("settings:gallery.unavailableTitle")}
             </div>
             <div className="text-[13px] text-muted leading-relaxed max-w-md mx-auto">
-              The cloud-hosted persona gallery is not configured. You can install
-              personas from a Git URL or a local folder on the Personas settings page.
+              {t("settings:gallery.unavailableDesc")}
             </div>
             <button
               className="text-[12.5px] px-4 py-2 rounded-lg border border-line text-muted hover:text-ink hover:border-lineStrong"
               onClick={onClose}
             >
-              Close
+              {t("common:button.close")}
             </button>
           </div>
         </div>

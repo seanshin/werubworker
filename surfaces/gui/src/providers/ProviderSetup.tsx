@@ -382,7 +382,7 @@ export function ProviderForm({
               className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-ok bg-okSoft rounded-full px-2 py-0.5 pointer-events-none"
               data-testid={`${tp}-saved-pill`}
             >
-              {info?.needs_key ? <>✓ Tested &amp; saved</> : <>✓ Detected</>}
+              {info?.needs_key ? t("settings:provider.testedSaved") : t("settings:provider.detected")}
             </span>
           )}
         </div>
@@ -479,10 +479,10 @@ export function ProviderForm({
             <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-line pt-3">
               {ps.savedState ? (
                 <span className="text-[11.5px] font-medium text-ok" data-testid={`${tp}-saved-pill`}>
-                  ✓ Tested &amp; saved
+                  {t("settings:provider.testedSaved")}
                 </span>
               ) : (
-                <span className="text-[11.5px] text-faint">Runs one read-only check, then saves.</span>
+                <span className="text-[11.5px] text-faint">{t("settings:provider.testRuns")}</span>
               )}
               <button
                 className="shrink-0 rounded-lg border border-accent bg-accent px-4 py-1.5 text-[13px] font-medium text-white hover:brightness-105 disabled:opacity-40"
@@ -490,7 +490,7 @@ export function ProviderForm({
                 disabled={ps.verify.state === "testing"}
                 data-testid={`${tp}-test`}
               >
-                {ps.verify.state === "testing" ? "…" : <>Test &amp; save</>}
+                {ps.verify.state === "testing" ? "…" : t("settings:provider.testAndSave")}
               </button>
             </div>
           </div>
@@ -499,24 +499,24 @@ export function ProviderForm({
 
       {info?.needs_key && KEY_HELP[sel] && (
         <p className="text-[11.5px] text-faint mt-2">
-          No key yet?{" "}
+          {t("settings:provider.noKeyYet")}
           <button
             className="text-muted underline decoration-line underline-offset-2 hover:text-ink"
             onClick={() => openExternal(KEY_HELP[sel].url)}
           >
-            Create one at {KEY_HELP[sel].label} ↗
+            {t("settings:provider.createAt", { label: KEY_HELP[sel].label })}
           </button>{" "}
-          — takes about a minute.
+          {t("settings:provider.takesMinute")}
         </p>
       )}
       {info && !info.needs_key && (
         <p className="text-[11.5px] text-faint mt-2">
-          No API key needed — Ollama runs models on this computer.{" "}
+          {t("settings:provider.noKeyOllama")}
           <button
             className="text-muted underline decoration-line underline-offset-2 hover:text-ink"
             onClick={() => openExternal("https://ollama.com/download")}
           >
-            Install Ollama ↗
+            {t("settings:provider.installOllama")}
           </button>
         </p>
       )}

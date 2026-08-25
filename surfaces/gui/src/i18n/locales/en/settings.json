@@ -279,7 +279,9 @@
     "mode": "mode",
     "canUseMessaging": " · can use messaging",
     "worksWithConnections": "Works with these connections:",
-    "connectYourself": "You connect these yourself (one click when signed in) — installing the coworker grants it nothing until you do."
+    "connectYourself": "You connect these yourself (one click when signed in) — installing the coworker grants it nothing until you do.",
+    "unavailableTitle": "Gallery is not available",
+    "unavailableDesc": "The cloud-hosted persona gallery is not configured. You can install personas from a Git URL or a local folder on the Personas settings page."
   },
   "provider": {
     "connected": "✓ Connected",

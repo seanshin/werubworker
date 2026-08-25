@@ -279,7 +279,9 @@
     "mode": "모드",
     "canUseMessaging": " · 메시징 사용 가능",
     "worksWithConnections": "이 연결과 함께 작동합니다:",
-    "connectYourself": "직접 연결하세요 (로그인하면 원클릭) — 코워커를 설치해도 연결하기 전에는 아무것도 부여되지 않습니다."
+    "connectYourself": "직접 연결하세요 (로그인하면 원클릭) — 코워커를 설치해도 연결하기 전에는 아무것도 부여되지 않습니다.",
+    "unavailableTitle": "갤러리를 사용할 수 없습니다",
+    "unavailableDesc": "클라우드 페르소나 갤러리가 설정되지 않았습니다. 페르소나 설정 페이지에서 Git URL이나 로컬 폴더로 설치할 수 있습니다."
   },
   "provider": {
     "connected": "✓ 연결됨",
