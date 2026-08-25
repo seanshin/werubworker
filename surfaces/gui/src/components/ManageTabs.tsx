@@ -816,7 +816,7 @@ export function ConnectSetup({
     // Completion likewise arrives via the poll — the sidecar flips the connector
     // to connected once the local OAuth flow lands.
     if (res.ok) setWaiting(true);
-    else setError(res.error || "could not start the connect");
+    else setError(res.error || t("connectors:modal.couldNotStartConnect"));
   };
 
   return (

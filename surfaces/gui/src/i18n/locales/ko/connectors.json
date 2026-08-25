@@ -178,7 +178,7 @@
     "close": "닫기",
     "connect": "연결",
     "couldNotConnect": "연결할 수 없습니다",
-    "couldNotStartConnect": "연결을 시작할 수 없습니다"
+    "couldNotStartConnect": "연결을 시작하지 못했습니다"
   },
   "shared": {
     "people": "사람",

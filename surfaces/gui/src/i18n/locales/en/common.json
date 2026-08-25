@@ -176,8 +176,8 @@
   "empty": {
     "noConversations": "No conversations yet",
     "noMatching": "No matching conversations",
-    "noProjects": "No projects yet — start one with the + above",
-    "noProjectConversations": "No conversations in this project yet"
+    "noProjects": "No projects yet — start one with the + above.",
+    "noProjectConversations": "No conversations in this project yet."
   },
   "error": {
     "somethingWrong": "Something went wrong.",

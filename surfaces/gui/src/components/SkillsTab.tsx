@@ -316,7 +316,7 @@ export function SkillsTab({
             className={`${INPUT} mt-1 mb-3`}
             value={editor.name}
             disabled={editor.mode === "edit"}
-            placeholder="weekly-report"
+            placeholder={t("skills:namePlaceholder")}
             onChange={(e) => setEditor({ ...editor, name: e.target.value })}
           />
           <label className={FIELD_LABEL} htmlFor="skill-desc">

@@ -85,7 +85,7 @@ function InboxRoutingCard() {
     const [platform, id] = addr.includes(":") ? addr.split(":", 2) : ["slack", addr];
     const result = await setInboxBinding("default", platform, id);
     if (!result.ok) {
-      setError(result.error || "Could not update Inbox routing.");
+      setError(result.error || t("session:inboxConfigure.couldNotUpdate"));
       return;
     }
     setError(null);
@@ -95,7 +95,7 @@ function InboxRoutingCard() {
   const clear = async () => {
     const result = await setInboxBinding("default", null, "");
     if (!result.ok) {
-      setError(result.error || "Could not clear Inbox routing.");
+      setError(result.error || t("session:inboxConfigure.couldNotClear"));
       return;
     }
     setError(null);
@@ -281,7 +281,7 @@ function SubscriptionsCard() {
                       className="ml-1.5 text-[11px] text-warnInk bg-warnSoft/70 border border-warnInk/15 rounded px-1.5 py-0.5"
                       title="This channel is also your Inbox-routing target — inbound and outbound on one channel conflate broadcast with request/reply."
                     >
-                      ⚠ collides
+                      {t("session:inboxConfigure.collides")}
                     </span>
                   )}
                 </td>

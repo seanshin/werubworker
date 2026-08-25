@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import i18n from "../i18n";
 import { Sidebar } from "./Sidebar";
 import type { SessionInfo } from "../types";
 
@@ -283,5 +284,26 @@ describe("New-session split button", () => {
     const menu = (await screen.findByText("Start a session as")).closest(".newsplit-menu") as HTMLElement;
     expect(within(menu).getByText("Ops")).toBeTruthy();
     expect(within(menu).queryByText("Manage personas…")).toBeNull();
+  });
+});
+
+// Sidebar의 빈 상태·메뉴 제목은 번역 키가 있는데 하드코딩돼 있었다. 영어에서는 문구가 같아
+// 위 테스트들이 그대로 통과하므로, 한국어로 전환해 배선을 확인한다.
+describe("Sidebar i18n", () => {
+  afterEach(async () => {
+    cleanup();
+    await i18n.changeLanguage("en");
+  });
+
+  it("한국어로 전환하면 페르소나 메뉴 제목이 번역된다", async () => {
+    i18n.addResourceBundle("ko", "session", { startAs: "세션을 시작할 대상" });
+    await i18n.changeLanguage("ko");
+
+    stubFetch([{ match: "/v1/personas", json: PERSONAS }]);
+    render(<Sidebar {...baseProps} />);
+
+    fireEvent.click(screen.getByLabelText("Choose a persona"));
+    expect(await screen.findByText("세션을 시작할 대상")).toBeTruthy();
+    expect(screen.queryByText("Start a session as")).toBeNull();
   });
 });

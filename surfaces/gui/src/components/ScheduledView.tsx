@@ -474,7 +474,7 @@ function TaskDetail({
         <div className="dim" style={{ marginBottom: 8, fontSize: 12.5 }}>
           Each run is a live conversation — open one to see what the agent did and ask a follow-up.
         </div>
-        {runs.length === 0 && <div className="dim">No runs yet.</div>}
+        {runs.length === 0 && <div className="dim">{t("session:automation.noRuns")}</div>}
         {runs.map((r) => (
           <div
             className="sched-run open"

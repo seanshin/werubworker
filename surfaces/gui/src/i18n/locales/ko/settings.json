@@ -214,7 +214,7 @@
     "modelsLabel": "모델",
     "defaultMode": "기본 모드",
     "workspace": "워크스페이스",
-    "couldNotLoad": "이 페르소나를 로드할 수 없습니다."
+    "couldNotLoad": "이 페르소나를 불러오지 못했습니다."
   },
   "personasTab": {
     "desc": "코워커를 활성화하고 새 세션 선택기에 표시할지 선택하세요. 별표가 있는 페르소나가 새 세션의 기본값입니다.",

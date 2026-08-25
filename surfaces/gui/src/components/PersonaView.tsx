@@ -53,7 +53,7 @@ export function PersonaView({
     setError(null);
     getPersonaDetail(personaId)
       .then((d) => live && setDetail(d))
-      .catch(() => live && setError("Could not load this persona."));
+      .catch(() => live && setError(t("settings:personaView.couldNotLoad")));
     getConnectors()
       .then((list) => live && setByName(indexConnectors(list)))
       .catch(() => {});

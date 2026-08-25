@@ -51,11 +51,12 @@ const surfaceFromPersona = (p: Persona) => ({
 // Attention = Inbox items awaiting a session (an accent count that bubbles session → persona →
 // footer Inbox — all views of the one Inbox queue, never a second list).
 function AttnBadge({ n }: { n: number }) {
+  const { t } = useTranslation(["session"]);
   if (!n) return null;
   return (
     <span
       className="text-[10px] font-semibold text-ink bg-faint/30 rounded-full px-1.5 leading-[15px] shrink-0"
-      title={`${n} awaiting your attention`}
+      title={t("session:awaitingAttention", { count: n })}
     >
       {n > 99 ? "99+" : n}
     </span>
@@ -739,7 +740,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
       </span>
       <button
         className="w-6 h-6 grid place-items-center rounded-md text-faint hover:text-ink hover:bg-paper -mr-1"
-        title="Group & filter conversations"
+        title={t("session:groupFilter")}
         aria-label="Group and filter conversations"
         onClick={() => setGroupMenuOpen((v) => !v)}
       >
@@ -804,7 +805,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                   })}
                 </div>
                 <div className="px-2 pt-1 pb-0.5 text-[11px] text-faint leading-snug">
-                  None checked shows all.
+                  {t("session:noneChecked")}
                 </div>
               </>
             )}
@@ -902,7 +903,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
             <div className="space-y-0.5">
               {projectOrder.length === 0 && (
                 <div className="px-2 py-1.5 text-[12px] text-faint leading-snug">
-                  No projects yet — start one with the + above.
+                  {t("common:empty.noProjects")}
                 </div>
               )}
               {projectOrder.map((proj) => {
@@ -958,7 +959,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                         </div>
                       ) : (
                         <div className="px-2 py-1.5 pl-[19px] text-[12px] text-faint leading-snug">
-                          No conversations in this project yet.
+                          {t("common:empty.noProjectConversations")}
                         </div>
                       ))}
                   </div>
@@ -1376,7 +1377,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                 data-testid="inbox-chip"
                 role="button"
                 aria-label={
-                  totalAttention > 0 ? `Inbox — ${totalAttention} items need you` : "Inbox"
+                  totalAttention > 0 ? t("session:inboxItems", { count: totalAttention }) : t("common:label.inbox")
                 }
                 title={totalAttention > 0 ? `Inbox — ${totalAttention} items need you` : "Inbox"}
                 onClick={(e) => {
@@ -1468,6 +1469,7 @@ function NewSessionSplit({
   onNew: (agent: string) => void;
   onManage: () => void;
 }) {
+  const { t } = useTranslation(["session"]);
   const [open, setOpen] = useState(false);
   const enabled = (personas || []).filter((p) => p.enabled);
   // With a single enabled persona there is nothing to pick — the split collapses to a plain
@@ -1502,7 +1504,7 @@ function NewSessionSplit({
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div className="newsplit-menu absolute left-3 right-3 mt-1 z-30 bg-panel border border-line rounded-xl2 shadow-xl p-1">
             <div className="px-2 py-1 text-[10.5px] uppercase tracking-[0.06em] text-faint font-semibold">
-              Start a session as
+              {t("session:startAs")}
             </div>
             {enabled.map((p) => (
               <button

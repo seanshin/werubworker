@@ -644,9 +644,9 @@ export const Composer = memo(function Composer(props: Props) {
                   ? "Stop recording and transcribe"
                   : voiceReady
                     ? "Start local voice dictation"
-                    : "Configure Voice Input in Settings")
+                    : t("session:composer.configureVoice"))
               }
-              aria-label={dictation?.recording ? "Stop dictation" : voiceReady ? "Start dictation" : "Configure Voice Input in Settings"}
+              aria-label={dictation?.recording ? "Stop dictation" : voiceReady ? "Start dictation" : t("session:composer.configureVoice")}
               aria-disabled={!voiceReady && !dictation?.recording}
             >
               <Icon name={dictation?.recording ? "stop" : "mic"} size={16} />
@@ -813,7 +813,7 @@ function UsageChip({
             </div>
             {model && !modelLabels?.[model] && contextWindow === undefined && (
               <div className="mt-1 text-[10.5px] text-faint leading-snug">
-                Context meter unavailable for custom models.
+                {t("session:composer.meterUnavailable")}
               </div>
             )}
           </div>
