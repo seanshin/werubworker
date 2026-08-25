@@ -110,28 +110,29 @@ export const ModelsTab = memo(function ModelsTab() {
               className="text-[12.5px] text-danger/80 hover:text-danger hover:underline underline-offset-2"
               data-testid="set-remove-key"
               onClick={() => {
-                if (window.confirm(`Remove the ${info?.title} key from this computer?`)) ps.removeKey();
+                if (window.confirm(t("settings:manageTabs.removeKeyConfirm", { title: info?.title }))) ps.removeKey();
               }}
             >
-              Remove key…
+              {t("settings:manageTabs.removeKey")}
             </button>
           ) : null
         }
       />
 
       {ps.sel === "openai" && settings.source === "env" && (
-        <p className="text-[12px] text-muted mt-3 leading-relaxed">
-          A key is set via <code>OPENAI_API_KEY</code> in this server’s environment. You can override
-          it above; the stored key is used only when the environment variable is absent.
-        </p>
+        <p
+          className="text-[12px] text-muted mt-3 leading-relaxed"
+          // The string carries a <code> tag; same idiom as AccessSection/AutomationQuickstart.
+          // The content is our own translation bundle, never user input.
+          dangerouslySetInnerHTML={{ __html: t("settings:manageTabs.envNote") }}
+        />
       )}
 
       {info?.configured ? (
         <div className="mt-6">
-          <div className={SEC_H + " mb-1.5"}>Models</div>
+          <div className={SEC_H + " mb-1.5"}>{t("settings:manageTabs.models")}</div>
           <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
-            Ticked models show in the composer’s picker; the black badge marks the default for new
-            sessions.
+            {t("settings:manageTabs.modelsDesc")}
           </p>
           <ModelChecklist
             provider={ps.sel}
@@ -148,9 +149,9 @@ export const ModelsTab = memo(function ModelsTab() {
         // key unlocks is part of deciding to get one at all (owner ask, 2026-07-04).
         (info?.suggested_models?.length || 0) > 0 && (
           <div className="mt-6" data-testid="model-preview">
-            <div className={SEC_H + " mb-1.5"}>Included models</div>
+            <div className={SEC_H + " mb-1.5"}>{t("settings:manageTabs.includedModels")}</div>
             <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
-              Curated, agent-capable models this provider serves — add your key above to enable them.
+              {t("settings:manageTabs.includedModelsDesc")}
             </p>
             <div className="space-y-1">
               {(info?.suggested_models || []).map((m) => {

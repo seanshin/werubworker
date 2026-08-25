@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed — `ModelsTab`이 번역을 쓰지 않던 문제
+- **번역은 이미 있는데 컴포넌트가 하드코딩된 영문을 쓰고 있었다** (`ManageTabs.tsx`의 `ModelsTab`): 7곳 — 섹션 제목 `Models`/`Included models`, 두 설명 문단, `Remove key…` 버튼과 그 확인 대화상자, `OPENAI_API_KEY` 환경변수 안내. 영문/한국어 번역이 `manageTabs.*`에 모두 준비돼 있었고 배선만 빠져 있었다. 한국어로 전환해도 이 문단들만 영어로 남았다
+- `envNote`는 `<code>` 태그를 품고 있어 `dangerouslySetInnerHTML`로 렌더한다 — `AccessSection`·`AutomationQuickstart`와 같은 관용구이고, 내용은 사용자 입력이 아니라 자체 번역 번들이다
+- **테스트 2개 추가** (`ManageTabs.i18n.test.tsx`): 영어 문구 유지 확인과, **한국어로 전환했을 때 실제로 번역되는지**. 후자가 핵심 — 영어에서는 하드코딩이든 아니든 문구가 같아서 어떤 테스트도 이 결함을 잡지 못했다. 하나를 하드코딩으로 되돌리면 실패하는 것을 확인
+- 이 저장소는 testing-library auto-cleanup이 꺼져 있어, 언어 전환 테스트는 `cleanup()`이 필요하다(이전 테스트의 트리가 남아 함께 다시 렌더되며 중복 매치를 만든다)
+
 ### Changed — 인용 표시·아포스트로피를 곡선으로 통일
 - `131d056`(OpenWorker → WeruBWorker 재빌드)이 인용 표시를 곡선(`“ ”`)에서 직선(`"`)으로 바꿔 놓은 곳을 되돌리고, 남아 있던 직선 따옴표까지 함께 통일했다. 코드 주석이 "the cozy inline quote"라 부르는 타이포그래피가 재빌드에서 조용히 사라진 게 발단이었다
 - **재빌드가 평평하게 만든 곳**: `ApprovalCard.tsx`의 인라인 메시지 인용과 standing approval 툴팁, `GithubDetail.tsx`의 인용 스팬(바로 옆 `SlackDetail.tsx`는 곡선을 유지하고 있어 둘이 어긋나 있었다), 영문 로케일 3곳(`ocw-agent` 라벨 / `Show archived` / 스킬 빈 상태 예시)
