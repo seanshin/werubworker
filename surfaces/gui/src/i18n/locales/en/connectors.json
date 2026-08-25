@@ -65,7 +65,7 @@
     "disconnectInstallation": "Disconnect installation",
     "disconnectTitle": "Stops relaying this installation to this computer. The App stays installed on GitHub.",
     "patToolsOnly": "Personal access token · tools only. Install the GitHub App to let @-mentions and the agent label reach this computer.",
-    "triggers": "Triggers: @ocw-agent mentions and the \"ocw-agent\" label. The agent replies as ocw-agent[bot].",
+    "triggers": "Triggers: @ocw-agent mentions and the \u201Cocw-agent\u201D label. The agent replies as ocw-agent[bot].",
     "addAnInstallation": "Add an installation",
     "opensGithub": "Opens GitHub in your browser — approve WeruBWorker there. An existing @ocw-agent App installation links right up; otherwise you'll pick an account and repos. No tokens typed; the agent acts as ocw-agent[bot].",
     "connectGithub": "Connect GitHub",

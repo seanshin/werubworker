@@ -32,7 +32,7 @@
   "deleteNote": "removed. If a conversation already used it, start a new one for a completely clean slate.",
   "instructionsPlaceholder": "1. Gather last week's updates\n2. Write the report, under 300 words",
   "emptyStatePrefix": "No skills yet —",
-  "emptyStateSuffix": "teaches your worker its first one, like \"prepare my Monday status report\".",
+  "emptyStateSuffix": "teaches your worker its first one, like \u201Cprepare my Monday status report\u201D.",
   "reusableDesc": "Reusable instructions the worker can follow in every conversation. Off here means off everywhere.",
   "createWithAgentDesc2": "Starts a conversation — the worker builds it and asks before adding it to your skills"
 }

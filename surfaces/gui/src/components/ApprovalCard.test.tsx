@@ -142,7 +142,7 @@ describe("ApprovalCard — §35 shapes", () => {
 
   it("short send_message text keeps the inline quote (no preview box)", () => {
     render(<ApprovalCard item={sendApproval()} onApprove={vi.fn()} />);
-    expect(screen.getByText(/"digest"/)).toBeTruthy();
+    expect(screen.getByText(/“digest”/)).toBeTruthy();
     expect(document.querySelector(".approval-prev")).toBeNull();
   });
 

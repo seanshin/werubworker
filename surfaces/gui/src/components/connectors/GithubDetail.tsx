@@ -285,7 +285,7 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
       <span className="min-w-0 flex-1">
         <span className="font-medium text-[13px]">@{m.user_name || m.user_id}</span>{" "}
         <span className="text-[12.5px] text-muted">{t("connectors:github.inRepo", { repo: m.chat_name || m.chat_id })}</span>
-        <span className="block text-[12.5px] text-muted truncate">{'"'}{m.text}{'"'}</span>
+        <span className="block text-[12.5px] text-muted truncate">{"\u201C"}{m.text}{"\u201D"}</span>
       </span>
       <button
         className={PILL_ACCENT + " !py-1"}

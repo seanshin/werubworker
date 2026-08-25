@@ -237,7 +237,7 @@
     "setDefault": "Set default",
     "builtIn": "built-in",
     "keep": "Keep",
-    "disableWarning": "Disabling archives its {{count}} conversation{{plural}} — they stay available under \"Show archived\".",
+    "disableWarning": "Disabling archives its {{count}} conversation{{plural}} — they stay available under \u201CShow archived\u201D.",
     "disable": "Disable",
     "keepEnabled": "Keep enabled",
     "addPersonas": "Add personas",

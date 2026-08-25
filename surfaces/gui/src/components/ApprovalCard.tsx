@@ -156,7 +156,7 @@ function MessagePreview({ text, label }: { text: string; label?: string }) {
   if (text.length <= 220 && !text.includes("\n")) {
     return (
       <div className="approval-with">
-        {label ? `${label}: ` : ""}"{text}"
+        {label ? `${label}: ` : ""}“{text}”
       </div>
     );
   }
@@ -189,7 +189,7 @@ function Buttons({
       {offerStanding && (
         <button
           className="btn"
-          title={`Always allow ${item.name} → ${item.standingTarget} for "${runTask?.title || "this automation"}" — revoke any time on its Automations page`}
+          title={`Always allow ${item.name} → ${item.standingTarget} for “${runTask?.title || "this automation"}” — revoke any time on its Automations page`}
           onClick={() => onApprove("always_task")}
         >
           {t("humanize:approval.allowEveryTime")}
