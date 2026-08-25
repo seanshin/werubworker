@@ -197,7 +197,7 @@ const StepRow = memo(function StepRow({ tool, approval }: { tool: ToolItem; appr
             // (SKILLS-SPEC §4.1 #4), so a blocked attempt gets honest wording instead.
             tool.name === "load_skill" && tool.preview?.includes('"error"')
               ? { pre: "Tried skill: ", obj: String(tool.args?.name ?? ""), post: " — not available" }
-              : humanizeTool(tool.name, tool.args)
+              : humanizeTool(tool.name, tool.args, t)
           }
         />
         {approval && approvalChip(approval.resolved)}
@@ -252,6 +252,7 @@ const TurnGroup = memo(function TurnGroup({
 }) {
   // Turns start COLLAPSED, running or not (owner call 2026-07-14) — the header's live
   // line is the pulse; expanding is opt-in.
+  const { t } = useTranslation(["session", "humanize"]);
   const rows = buildRows(items);
   const tools = items.filter((it): it is ToolItem => it.kind === "tool");
   const running = live || tools.some((t) => t.status === "…");
@@ -310,7 +311,7 @@ const TurnGroup = memo(function TurnGroup({
             ) : row.type === "ask" ? (
               <div className="flex items-baseline gap-2 px-2 py-0.5" key={i} data-testid="turn-ask">
                 <span className={"w-3.5 text-center text-[10px] shrink-0 " + (row.approval.resolved === "deny" ? "text-danger" : "text-ok")}>●</span>
-                <LineText line={humanizeAsk(row.approval.name, row.approval.args)} />
+                <LineText line={humanizeAsk(row.approval.name, row.approval.args, t)} />
                 {approvalChip(row.approval.resolved)}
               </div>
             ) : (

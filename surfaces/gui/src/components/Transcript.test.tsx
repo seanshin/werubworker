@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Transcript } from "./Transcript";
+import i18n from "../i18n";
 import { humanizeTool } from "../humanize";
+
+const tr = i18n.t.bind(i18n);
 import type { Item } from "../types";
 
 afterEach(cleanup);
@@ -182,27 +185,27 @@ describe("bubble hover affordances (FB-005)", () => {
 
 describe("humanizeTool", () => {
   it("prefers run_shell's model-written description and keeps the command as the object", () => {
-    const line = humanizeTool("run_shell", { command: "git log --since=yesterday", description: "List yesterday's merges" });
+    const line = humanizeTool("run_shell", { command: "git log --since=yesterday", description: "List yesterday's merges" }, tr);
     expect(line.pre).toBe("Ran ");
     expect(line.obj).toBe("git log --since=yesterday");
     expect(line.post).toContain("list yesterday's merges");
   });
 
   it("falls back to 'Used <tool> — <short args>' for unknown tools", () => {
-    const line = humanizeTool("gmail_search_messages", { query: "from:ci" });
+    const line = humanizeTool("gmail_search_messages", { query: "from:ci" }, tr);
     expect(line.pre).toBe("Used gmail_search_messages");
     expect(line.post).toContain("query=from:ci");
   });
 
   it("summarizes todo_write by its single item and status", () => {
-    const line = humanizeTool("todo_write", { todos: [{ content: "Post the digest", status: "in_progress" }] });
+    const line = humanizeTool("todo_write", { todos: [{ content: "Post the digest", status: "in_progress" }] }, tr);
     expect(line.pre).toBe("Updated the plan — ");
     expect(line.obj).toContain("Post the digest");
     expect(line.post).toBe(" → in progress");
   });
 
   it("still renders pre-rename todo_write histories (legacy `items` key)", () => {
-    const line = humanizeTool("todo_write", { items: [{ content: "Old plan", status: "pending" }] });
+    const line = humanizeTool("todo_write", { items: [{ content: "Old plan", status: "pending" }] }, tr);
     expect(line.obj).toContain("Old plan");
   });
 });

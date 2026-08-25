@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed — `humanize.ts` 번역 배선 (어순까지 번역이 통제)
+- **`t`가 없는 순수 모듈이라 영어 문장을 직접 조립하고 있었다**: 도구 호출 한 줄 요약(`Ran …`, `Read …`), 승인 카드 제목, 거절 줄이 모두 하드코딩이었다. 세 함수(`humanizeTool`·`humanizeApprovalTitle`·`humanizeAsk`)가 `t`를 인자로 받도록 바꾸고 호출부 4곳을 갱신
+- **어순 문제를 설계로 풀었다**: `HumanLine`은 `pre + <강조>obj</강조> + post` 세 조각인데, 조각을 각각 번역하면 영어 어순이 고정된다("읽음 runbook.md"). 대신 **번역문에 `{{obj}}` 자리를 두고 렌더된 문자열을 그 지점에서 쪼갠다** — 영어 `"Read {{obj}}"`는 `pre="Read "`, 한국어 `"{{obj}} 읽음"`은 `pre=""`·`post=" 읽음"`이 된다. 렌더러 두 곳은 그대로 두고 목적어 위치를 번역자가 정한다
+- **모델이 쓴 텍스트는 번역하지 않는다**: `run_shell`의 `description`, todo 상태, 파일명·명령어 같은 객체는 데이터라 그대로 붙인다
+- **키 25개 배선 + 대체된 옛 키 3개 제거**(`tool.updatedPlan`·`approval.toYourSkills`·`approval.use` — 새 형태에 흡수됨). `humanize` 네임스페이스 미참조 0
+- 기존 테스트가 `line.pre === "Ran "` 같은 **정확한 영문 출력을 단언하는데 그대로 통과**했다 — 번역이 원문을 정확히 재현한다는 증거다. 여기에 한국어 어순 테스트 5개를 더했고, 어순 처리를 없애면 3개가 실패하는 것을 확인
+- **미참조 키 170 → 142**
+
 ### Fixed — 갤러리 안내와 프로바이더 키 도움말 배선
 - **`GalleryModal`**: 클라우드 갤러리가 "사용할 수 없음" 안내로 대체되면서 **그 대체 안내 자체가 하드코딩**으로 남아 있었다. 제목·설명 키를 추가하고 닫기 버튼은 `common:button.close`로 배선
 - **`ProviderSetup`**: 키 도움말 문단 전체(`No key yet?` / `Create one at {{label}} ↗` / `— takes about a minute.` / Ollama 안내)와 테스트·저장 UI(`✓ Tested & saved`, `✓ Detected`, `Test & save`, `Runs one read-only check…`)가 번역 키가 준비된 채 하드코딩돼 있었다. 9곳 배선

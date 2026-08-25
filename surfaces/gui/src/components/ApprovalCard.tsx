@@ -240,7 +240,7 @@ export function ApprovalCard({
   const { t } = useTranslation(["humanize"]);
   const [peek, setPeek] = useState(false);
   const toolVerb = (name: string) => TOOL_VERB_KEYS[name] ? t(TOOL_VERB_KEYS[name]) : name;
-  const title = humanizeApprovalTitle(item.name, item.args);
+  const title = humanizeApprovalTitle(item.name, item.args, t);
   const scope = scopeNote(item.name, item.args, item.category);
   const grants = item.name === "create_scheduled_task" ? permissionLines(item.args) : [];
   // "requires approval" is the engine's default boilerplate — only surface a real reason.

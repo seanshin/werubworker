@@ -80,7 +80,7 @@ export function InboxItemCard({
           older rows fall back to the raw kind/title/body treatment below. */}
       {item.kind === "approval" && item.data?.tool ? (
         <div className="flex items-center justify-between gap-3">
-          <TitleText line={humanizeApprovalTitle(item.data.tool, item.data.arguments)} />
+          <TitleText line={humanizeApprovalTitle(item.data.tool, item.data.arguments, t)} />
           {(() => {
             const s = scopeNote(item.data.tool, item.data.arguments);
             return (
