@@ -31,7 +31,7 @@
     "revokeConfirm": "Revoke command trust for {{path}}?",
     "sidebar": "Sidebar",
     "conversationsPerCoworker": "Conversations shown per coworker",
-    "sidebarDesc": "Longer lists collapse behind \"Show more\". Applies per coworker and per project.",
+    "sidebarDesc": "Longer lists collapse behind \u201CShow more\u201D. Applies per coworker and per project.",
     "files": "Files",
     "filesDesc": "Each conversation gets its own folder under this location. Existing conversations keep their current folder; you can grant access to more folders inside any conversation.",
     "browse": "Browse",

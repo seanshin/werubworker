@@ -2,11 +2,12 @@
 
 ## [Unreleased]
 
-### Fixed — 재빌드에서 평평해진 곡선 따옴표 복원
-- `131d056`(OpenWorker → WeruBWorker 재빌드)이 인용 표시를 곡선(`“ ”`)에서 직선(`"`)으로 바꿔 놓은 곳을 되돌렸다. 코드 주석이 "the cozy inline quote"라 부르는 의도된 타이포그래피가 재빌드에서 조용히 사라진 것이라, **그 커밋이 평평하게 만든 곳만** 복원 대상으로 삼았다
-- 대상: `ApprovalCard.tsx`의 인라인 메시지 인용과 standing approval 툴팁, `GithubDetail.tsx`의 인용 스팬(바로 옆 `SlackDetail.tsx`는 곡선을 유지하고 있어 둘이 어긋나 있었다), 영문 로케일 3곳(`ocw-agent` 라벨 / `Show archived` / 스킬 빈 상태 예시)
-- **복원하지 않은 것**: `settings.json`의 `` `{ "<name>": { … } }` ``는 JSON 코드 예시라 직선이어야 한다. `noSearchResults`·`sidebarDesc`의 직선 따옴표는 원래부터 직선이라 이번 회귀와 무관하다 — 손대면 복원이 아니라 새로운 타이포그래피 결정이 된다
-- 한국어 로케일은 곡선 따옴표를 전혀 쓰지 않으므로 그대로 뒀다
+### Changed — 인용 표시를 곡선 따옴표로 통일
+- `131d056`(OpenWorker → WeruBWorker 재빌드)이 인용 표시를 곡선(`“ ”`)에서 직선(`"`)으로 바꿔 놓은 곳을 되돌리고, 남아 있던 직선 따옴표까지 함께 통일했다. 코드 주석이 "the cozy inline quote"라 부르는 타이포그래피가 재빌드에서 조용히 사라진 게 발단이었다
+- **재빌드가 평평하게 만든 곳**: `ApprovalCard.tsx`의 인라인 메시지 인용과 standing approval 툴팁, `GithubDetail.tsx`의 인용 스팬(바로 옆 `SlackDetail.tsx`는 곡선을 유지하고 있어 둘이 어긋나 있었다), 영문 로케일 3곳(`ocw-agent` 라벨 / `Show archived` / 스킬 빈 상태 예시)
+- **원래부터 직선이던 곳**: `session.json`의 `noSearchResults`, `settings.json`의 `sidebarDesc`. 이 둘은 회귀가 아니라 새로운 타이포그래피 결정이지만, 섞여 있으면 영문 UI에 두 가지 인용 표시가 공존하므로 함께 곡선으로 맞췄다
+- **바꾸지 않은 것**: `settings.json`의 `` `{ "<name>": { … } }` ``는 JSON 코드 예시다 — 곡선으로 바꾸면 붙여넣을 수 없는 예시가 된다. 이제 영문 로케일에서 직선 따옴표가 남은 곳은 여기 하나뿐이다
+- 한국어 로케일은 곡선 따옴표를 전혀 쓰지 않으므로 그대로 뒀다. 아포스트로피(`'`)도 영문 39개 문자열에서 일관되게 직선이라 손대지 않았다 — 인용 표시와는 별개의 결정이다
 
 ### Fixed — 프론트엔드 테스트 40건 실패 정리
 - **i18next가 테스트에서 초기화되지 않던 문제 (36건)**: `useTranslation`이 키 자체(`"settings:modelChecklist.modelFamily"`)를 반환해서, 실제 UI 텍스트를 찾는 테스트가 전부 실패했다. 텍스트가 없는 게 아니라 **해석되지 않은 상태**였다. `src/test-setup.ts`에서 앱의 i18n 모듈을 로드해 해결

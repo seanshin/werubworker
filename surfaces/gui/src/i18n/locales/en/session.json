@@ -491,7 +491,7 @@
     "backup": "Backup",
     "rotate": "Rotate",
     "searchResults": "Search Results",
-    "noSearchResults": "No results found for \"{{query}}\"",
+    "noSearchResults": "No results found for \u201C{{query}}\u201D",
     "noPages": "No wiki pages yet — create one to document your services.",
     "name": "Name",
     "category": "Category",
