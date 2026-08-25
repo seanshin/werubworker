@@ -3,13 +3,14 @@
 // A mid-session switch drops a persisted info marker into the transcript, and later
 // messages ride the new model.
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 test("mid-session model switch shows the marker and later turns use the new model", async ({
   page,
 }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("hello there");
   await box.press("Enter");

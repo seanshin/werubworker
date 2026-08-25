@@ -17,7 +17,11 @@ async function signIn(page) {
   await expect(page.getByTestId("account-row")).toContainText("Rohit", { timeout: 10_000 });
 }
 
-test("signed out: the account row is the sign-in home; managed connector still connects manually", async ({
+// SKIP: 커넥터 add-모달의 원클릭·수동 패널이 제거됐다 (2026-08-07 `131d056` 플랫폼 재구축).
+//       모달은 남아 있지만 내용이 "Add a workspace × Connect" 뿐이라 `modal-pane-manual`·
+//       `managed-connect`·`inline-cloud-sign-in`이 소스에 없다. 붙잡을 UI가 없어 셀렉터로는
+//       되살릴 수 없다 — 연결 흐름이 돌아오면 이 스펙을 그 모습에 맞춰 다시 쓸 것.
+test.skip("signed out: the account row is the sign-in home; managed connector still connects manually", async ({
   page,
 }) => {
   await page.goto("/");
@@ -27,7 +31,7 @@ test("signed out: the account row is the sign-in home; managed connector still c
   // The menu leads with the sign-in CTA and always lists Inbox + Connectors.
   await row.click();
   const menu = page.getByTestId("account-menu");
-  await expect(menu).toContainText("one-click connections need OpenWorker Cloud");
+  await expect(menu).toContainText("one-click connections need WeruBWorker Cloud");
   await expect(menu.getByTestId("account-sign-in")).toBeVisible();
   await expect(menu.getByRole("button", { name: "Inbox" })).toBeVisible();
   await menu.getByRole("button", { name: "Connectors", exact: true }).click();
@@ -36,7 +40,7 @@ test("signed out: the account row is the sign-in home; managed connector still c
   // one-click button while signed out.
   await page.getByTestId("connector-gmail").getByRole("button", { name: "Connect" }).click();
   const modal = page.getByTestId("add-connection-modal");
-  await expect(modal.getByTestId("managed-connect")).toContainText("Sign in to OpenWorker Cloud");
+  await expect(modal.getByTestId("managed-connect")).toContainText("Sign in to WeruBWorker Cloud");
   await expect(modal.locator("input[type=password]")).toBeVisible(); // manual field rendered
   await expect(modal.getByRole("button", { name: /one click/i })).toHaveCount(0);
 });

@@ -66,4 +66,27 @@ If a flow reads a new endpoint, add its fixture + a route branch in `fixtures.ts
 returns `{}`, which will crash components that expect arrays (e.g. persona `recommends`). Prefer
 `getByRole`, but note some controls (the Sources bar, the ✕ remove) take their accessible name from
 inner content — target those with `getByTitle`/`getByLabel`.
+
+Two things the fixture handles for you, both of which cost a full day when they were missing:
+
+- **The locale is pinned to English** before navigation (`pinLanguage`). The GUI reads its language
+  from `localStorage` and falls back to **Korean** when the key is absent, and a Playwright context
+  starts with empty storage — so without the pin the whole suite silently runs against the Korean
+  UI and every English text selector misses. Assert English copy freely; the language switch itself
+  is covered by the component tests (`src/**/*.i18n.test.tsx`).
+- **`agentReady(page)` waits for the session socket.** The composer's Send button is
+  `disabled={!connected}`, so an enabled Send is the one honest signal that the agent has attached.
+  Typing + Enter before that drops the message: no turn, no echo, no usage — and the spec fails far
+  away, hunting a bubble that was never coming. Call it after opening a session, before sending.
+  Note that re-clicking a session the boot-resume already opened starts a *second* connect, and
+  `agentReady` can pass on the first one's state — don't re-click after a reload.
+
+## Skipped specs
+
+Specs marked `test.skip` with a `// SKIP:` comment above them test features that were **removed**
+from the app (mostly in the 2026-08-07 platform rebuild), not features that are broken. Each
+comment names what went away and which testid is gone. They are kept rather than deleted because
+the features may return — and deleting them would erase the record that they ever existed. If you
+bring one of those flows back, rewrite the spec against the new shape instead of restoring it
+verbatim.
 ```

@@ -24,13 +24,17 @@ test("lists every connected workspace as its own group", async ({ page }) => {
   await expect(page.getByTestId("slack-workspace-T2AC")).toContainText("No one allowed yet");
 });
 
-test("Add workspace opens the modal; signed out shows the sign-in hint, signed in installs", async ({
+// SKIP: 커넥터 add-모달의 원클릭·수동 패널이 제거됐다 (2026-08-07 `131d056` 플랫폼 재구축).
+//       모달은 남아 있지만 내용이 "Add a workspace × Connect" 뿐이라 `modal-pane-manual`·
+//       `managed-connect`·`inline-cloud-sign-in`이 소스에 없다. 붙잡을 UI가 없어 셀렉터로는
+//       되살릴 수 없다 — 연결 흐름이 돌아오면 이 스펙을 그 모습에 맞춰 다시 쓸 것.
+test.skip("Add workspace opens the modal; signed out shows the sign-in hint, signed in installs", async ({
   page,
 }) => {
   await openSlackPage(page);
   await page.getByTestId("add-workspace-btn").click();
   const modal = page.getByTestId("add-connection-modal");
-  await expect(modal).toContainText("Sign in to OpenWorker Cloud"); // signed out
+  await expect(modal).toContainText("Sign in to WeruBWorker Cloud"); // signed out
   // Manual pane is right there too — both modes, one entry point
   await modal.getByTestId("modal-pane-manual").click();
   await expect(modal.getByPlaceholder("Bot token · xoxb-…")).toBeVisible();

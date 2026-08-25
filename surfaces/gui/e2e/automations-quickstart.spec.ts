@@ -9,7 +9,7 @@ async function openAutomations(page) {
   await page.goto("/");
   await page.getByTestId("account-row").click();
   await page.getByTestId("account-menu").getByRole("button", { name: "Automations", exact: true }).click();
-  await expect(page.getByText("Recurring tasks OpenWorker runs on a schedule.")).toBeVisible();
+  await expect(page.getByText("Recurring tasks WeruBWorker runs on a schedule.")).toBeVisible();
 }
 
 // The fixtures seed one task, so the quickstart isn't on the bare list — surface it via the
@@ -21,7 +21,9 @@ async function openQuickstart(page) {
   await expect(page.getByText("Start from a template")).toBeVisible();
 }
 
-test("role recipe: connect rows, lazy single sign-in, channel by name, consent mints the grant", async ({
+// SKIP: 온보딩의 도구(커넥터) 페이지가 제거됐다 (2026-08-07 `131d056`). `ob-tools-skip`·
+//       `ob-tool-google-soon`·`ob-connect-hubspot`이 소스에 없다.
+test.skip("role recipe: connect rows, lazy single sign-in, channel by name, consent mints the grant", async ({
   page,
 }) => {
   await openQuickstart(page);
@@ -62,7 +64,9 @@ test("role recipe: connect rows, lazy single sign-in, channel by name, consent m
   await expect(page.getByTestId("task-grants")).toContainText("send_message");
 });
 
-test("connect narrates itself: Opening browser → waiting strip → Cancel restores the button", async ({
+// SKIP: 온보딩의 도구(커넥터) 페이지가 제거됐다 (2026-08-07 `131d056`). `ob-tools-skip`·
+//       `ob-tool-google-soon`·`ob-connect-hubspot`이 소스에 없다.
+test.skip("connect narrates itself: Opening browser → waiting strip → Cancel restores the button", async ({
   page,
 }) => {
   await openQuickstart(page);

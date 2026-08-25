@@ -28,7 +28,11 @@ async function signInAndConnectFirstWorkspace(page) {
   });
 }
 
-test("one-click connect, add a second workspace from the page; first stays default", async ({
+// SKIP: 커넥터 add-모달의 원클릭·수동 패널이 제거됐다 (2026-08-07 `131d056` 플랫폼 재구축).
+//       모달은 남아 있지만 내용이 "Add a workspace × Connect" 뿐이라 `modal-pane-manual`·
+//       `managed-connect`·`inline-cloud-sign-in`이 소스에 없다. 붙잡을 UI가 없어 셀렉터로는
+//       되살릴 수 없다 — 연결 흐름이 돌아오면 이 스펙을 그 모습에 맞춰 다시 쓸 것.
+test.skip("one-click connect, add a second workspace from the page; first stays default", async ({
   page,
 }) => {
   await signInAndConnectFirstWorkspace(page);
@@ -47,7 +51,11 @@ test("one-click connect, add a second workspace from the page; first stays defau
   await expect(page.getByTestId("connector-notion")).toContainText("2 accounts");
 });
 
-test("Make default moves the badge; disconnecting the default repoints it", async ({
+// SKIP: 커넥터 add-모달의 원클릭·수동 패널이 제거됐다 (2026-08-07 `131d056` 플랫폼 재구축).
+//       모달은 남아 있지만 내용이 "Add a workspace × Connect" 뿐이라 `modal-pane-manual`·
+//       `managed-connect`·`inline-cloud-sign-in`이 소스에 없다. 붙잡을 UI가 없어 셀렉터로는
+//       되살릴 수 없다 — 연결 흐름이 돌아오면 이 스펙을 그 모습에 맞춰 다시 쓸 것.
+test.skip("Make default moves the badge; disconnecting the default repoints it", async ({
   page,
 }) => {
   await signInAndConnectFirstWorkspace(page);
@@ -64,7 +72,11 @@ test("Make default moves the badge; disconnecting the default repoints it", asyn
   await expect(page.getByTestId("account-ws-1")).toContainText("Default");
 });
 
-test("signed out: the modal's one-click pane offers inline cloud sign-in; manual pane has the token form", async ({
+// SKIP: 커넥터 add-모달의 원클릭·수동 패널이 제거됐다 (2026-08-07 `131d056` 플랫폼 재구축).
+//       모달은 남아 있지만 내용이 "Add a workspace × Connect" 뿐이라 `modal-pane-manual`·
+//       `managed-connect`·`inline-cloud-sign-in`이 소스에 없다. 붙잡을 UI가 없어 셀렉터로는
+//       되살릴 수 없다 — 연결 흐름이 돌아오면 이 스펙을 그 모습에 맞춰 다시 쓸 것.
+test.skip("signed out: the modal's one-click pane offers inline cloud sign-in; manual pane has the token form", async ({
   page,
 }) => {
   await openConnectors(page);

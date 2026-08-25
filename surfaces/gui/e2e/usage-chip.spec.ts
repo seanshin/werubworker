@@ -4,7 +4,7 @@
 // (input 1k / output 200 / cache_read 8k / cache_write 800 — 10k per turn), and the
 // settings fixture maps the default model to a 200k context window.
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 test("usage chip appears after a turn and opens the breakdown popover", async ({ page }) => {
   await page.goto("/");
@@ -13,6 +13,7 @@ test("usage chip appears after a turn and opens the breakdown popover", async ({
   // Fresh session: no usage yet — the chip is hidden entirely.
   await expect(page.getByTestId("usage-chip")).toHaveCount(0);
 
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("hello");
   await box.press("Enter");
@@ -56,6 +57,7 @@ test("usage chip appears after a turn and opens the breakdown popover", async ({
 test("usage resets on a new session", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("hello");
   await box.press("Enter");
@@ -69,9 +71,15 @@ test("usage resets on a new session", async ({ page }) => {
 test("Settings toggle turns the context bar on; default is the session total", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("hello");
   await box.press("Enter");
+  // 턴이 실제로 돌아온 뒤에 칩을 본다 — Enter 직후에는 세션 소켓이 아직 붙는 중이라
+  // 메시지가 흘러가고, 사용량이 없어 칩 자체가 렌더되지 않는다 (위 테스트와 같은 순서).
+  await expect(page.getByText("Echo: hello", { exact: false }).first()).toBeVisible({
+    timeout: 10_000,
+  });
   const chip = page.getByTestId("usage-chip");
   await expect(chip).toContainText("10k", { timeout: 10_000 }); // default: total, no bar
 
@@ -89,9 +97,15 @@ test("Settings toggle turns the context bar on; default is the session total", a
 
   // Reload so the app re-reads settings: the chip is now the fill bar, not a number.
   await page.goto("/");
-  await page.getByText("Draft the launch note").first().click();
+  // 재로드하면 부트 복구가 이 세션을 다시 연다 — 여기서 한 번 더 클릭하면 소켓이 새로 붙는데,
+  // agentReady는 그 직전 상태를 보고 통과해 버린다. 클릭 없이 복구된 세션에 그대로 보낸다.
+  await expect(page.getByText("Draft the launch note").first()).toBeVisible();
+  await agentReady(page);
   await page.getByPlaceholder(/Ask the coworker/).fill("hello");
   await page.getByPlaceholder(/Ask the coworker/).press("Enter");
+  await expect(page.getByText("Echo: hello", { exact: false }).first()).toBeVisible({
+    timeout: 10_000,
+  });
   const bar = page.getByTestId("usage-chip");
   await expect(bar).toBeVisible({ timeout: 10_000 });
   await expect(bar).not.toContainText("10k");

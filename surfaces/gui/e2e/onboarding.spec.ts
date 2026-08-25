@@ -47,7 +47,7 @@ test("key form: Test verifies, saves, and returns to the gallery with the ✓", 
 
   await page.getByTestId("ob-provider-zai").click();
   // The header stays put (§39 fixed frame): the welcome headline is still on screen.
-  await expect(page.getByRole("heading", { name: "Welcome to OpenWorker" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome to WeruBWorker" })).toBeVisible();
   // Optional endpoint is a quiet disclosure with no explainer copy (owner call 2026-07-18).
   await expect(page.getByTestId("ob-field-base_url")).toHaveCount(0);
   await page.getByTestId("ob-endpoint-link").click();
@@ -98,7 +98,9 @@ test("key form: revisiting a connected provider shows the in-field saved state; 
   await expect(page.getByTestId("ob-step-tools")).toBeVisible();
 });
 
-test("tools page: sign-in morphs the page into the connector gallery; a card connects one-click", async ({
+// SKIP: 온보딩의 도구(커넥터) 페이지가 제거됐다 (2026-08-07 `131d056`). `ob-tools-skip`·
+//       `ob-tool-google-soon`·`ob-connect-hubspot`이 소스에 없다.
+test.skip("tools page: sign-in morphs the page into the connector gallery; a card connects one-click", async ({
   page,
 }) => {
   await openOnboarding(page);
@@ -142,7 +144,9 @@ test("tools page: sign-in morphs the page into the connector gallery; a card con
   await expect(page.getByRole("heading", { name: "Automations" })).toBeVisible();
 });
 
-test("tools page skips cleanly; Start working lands in a session with the panel open", async ({
+// SKIP: 온보딩의 도구(커넥터) 페이지가 제거됐다 (2026-08-07 `131d056`). `ob-tools-skip`·
+//       `ob-tool-google-soon`·`ob-connect-hubspot`이 소스에 없다.
+test.skip("tools page skips cleanly; Start working lands in a session with the panel open", async ({
   page,
 }) => {
   await openOnboarding(page);

@@ -21,7 +21,9 @@ async function openGallery(page) {
   await expect(page.getByTestId("gallery-modal")).toBeVisible();
 }
 
-test("slow cloud: skeleton shows while the gallery loads, never a blank body", async ({
+// SKIP: 클라우드 스킬 갤러리가 제거됐다 (2026-08-07 `131d056`). `gallery-signin`·`gallery-loading`이
+//       소스에 없다. v2.3.9에서 `settings:gallery` 번역 키 18개를 지운 것과 같은 사건이다.
+test.skip("slow cloud: skeleton shows while the gallery loads, never a blank body", async ({
   page,
 }) => {
   // The real gallery is a cloud round-trip (Lambda + Dynamo) that can take seconds;
@@ -38,7 +40,9 @@ test("slow cloud: skeleton shows while the gallery loads, never a blank body", a
   await expect(page.getByTestId("gallery-loading")).toHaveCount(0);
 });
 
-test("signed out: modal prompts for sign-in, manual install path unaffected", async ({ page }) => {
+// SKIP: 클라우드 스킬 갤러리가 제거됐다 (2026-08-07 `131d056`). `gallery-signin`·`gallery-loading`이
+//       소스에 없다. v2.3.9에서 `settings:gallery` 번역 키 18개를 지운 것과 같은 사건이다.
+test.skip("signed out: modal prompts for sign-in, manual install path unaffected", async ({ page }) => {
   await openGallery(page);
   const prompt = page.getByTestId("gallery-signin");
   await expect(prompt).toContainText("needs a (free) cloud sign-in");
@@ -50,7 +54,9 @@ test("signed out: modal prompts for sign-in, manual install path unaffected", as
   await expect(page.getByRole("button", { name: "Install", exact: true })).toBeVisible();
 });
 
-test("signed in: featured carousel + list; solo page installs informed; Done returns", async ({
+// SKIP: 클라우드 스킬 갤러리가 제거됐다 (2026-08-07 `131d056`). `gallery-signin`·`gallery-loading`이
+//       소스에 없다. v2.3.9에서 `settings:gallery` 번역 키 18개를 지운 것과 같은 사건이다.
+test.skip("signed in: featured carousel + list; solo page installs informed; Done returns", async ({
   page,
 }) => {
   await openGallery(page);
@@ -88,7 +94,9 @@ test("signed in: featured carousel + list; solo page installs informed; Done ret
   await expect(page.getByTestId("gallery-link")).toBeVisible();
 });
 
-test("back link returns from the solo page to the catalog", async ({ page }) => {
+// SKIP: 클라우드 스킬 갤러리가 제거됐다 (2026-08-07 `131d056`). `gallery-signin`·`gallery-loading`이
+//       소스에 없다. v2.3.9에서 `settings:gallery` 번역 키 18개를 지운 것과 같은 사건이다.
+test.skip("back link returns from the solo page to the catalog", async ({ page }) => {
   await openGallery(page);
   await page.getByTestId("gallery-signin").getByRole("button", { name: "Sign in" }).click();
   await page.getByTestId("gallery-sales").click({ timeout: 10_000 });

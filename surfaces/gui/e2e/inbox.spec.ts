@@ -38,7 +38,8 @@ test("kind + persona filters narrow the pending list", async ({ page }) => {
 test("resolving an approval removes its card; question options resolve on click", async ({ page }) => {
   await openInbox(page);
 
-  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  // 승인 카드의 기본 버튼 문구가 "Approve" → "Allow"로 바뀌었다 (humanize:approval.allow).
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
   await expect(page.getByText("Approve: run_shell")).not.toBeVisible();
 
   // Single-select question: clicking an option resolves immediately.

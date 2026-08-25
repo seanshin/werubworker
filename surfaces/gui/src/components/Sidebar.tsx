@@ -5,6 +5,7 @@ import {
   announceCloudChanged,
   AUTOMATIONS_CHANGED,
   CLOUD_CHANGED,
+  cloudLogin,
   cloudLogout,
   getAutomations,
   getCloudStatus,
@@ -13,6 +14,7 @@ import {
   INBOX_UNLOCK,
   PERSONAS_CHANGED,
   setNavLayout,
+  waitForCloudSignIn,
   type Automation,
   type CloudStatus,
   type Persona,
@@ -1297,13 +1299,38 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                 data-testid="account-menu"
                 role="menu"
               >
-                {cloud?.signed_in && (
+                {cloud?.signed_in ? (
                   <div
                     className="px-3 py-1.5 mb-1 text-[11px] text-faint truncate border-b border-line"
                     title={`${accountEmail} · WeruBWorker Cloud`}
                   >
                     {accountEmail} · WeruBWorker Cloud
                   </div>
+                ) : (
+                  <>
+                    <div className="px-3 py-1.5 text-[11px] text-faint border-b border-line">
+                      {t("session:account.signedOutHint")}
+                    </div>
+                    <button
+                      className="w-full flex items-center gap-2.5 px-3 py-1.5 mb-1 text-[13px] text-left text-accent hover:bg-paper"
+                      data-testid="account-sign-in"
+                      onClick={async () => {
+                        setAppMenuOpen(false);
+                        // Opens the system browser server-side; completion lands out-of-band,
+                        // so poll until it flips (refocusing the window also refetches).
+                        await cloudLogin().catch(() => {});
+                        waitForCloudSignIn((st) => {
+                          if (st) setCloud(st);
+                          // Other always-mounted consumers (Settings' telemetry card,
+                          // connector panes) refetch on this.
+                          if (st?.signed_in) announceCloudChanged();
+                        });
+                      }}
+                    >
+                      <Icon name="plug" size={15} className="shrink-0" />
+                      {t("session:account.signIn")}
+                    </button>
+                  </>
                 )}
                 {appMenuItem(
                   "inbox",
@@ -1337,7 +1364,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
             </>
           )}
 
-          {cloud?.signed_in && <button
+          <button
             className={
               "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[13px] text-left " +
               (appMenuOpen ? "bg-paper text-ink" : "hover:bg-paper")
@@ -1349,16 +1376,21 @@ export const Sidebar = memo(function Sidebar(props: Props) {
             }}
             aria-haspopup="menu"
             aria-expanded={appMenuOpen}
-            aria-label={`Account: ${accountEmail}`}
+            aria-label={cloud?.signed_in ? `Account: ${accountEmail}` : t("session:account.ariaSignedOut")}
           >
             <span
-              className="w-6 h-6 rounded-full grid place-items-center text-[10.5px] font-semibold shrink-0 bg-accentSoft text-accent"
+              className={
+                "w-6 h-6 rounded-full grid place-items-center text-[10.5px] font-semibold shrink-0 " +
+                (cloud?.signed_in
+                  ? "bg-accentSoft text-accent"
+                  : "bg-paper text-faint border border-line")
+              }
               aria-hidden
             >
-              {accountName.slice(0, 1).toUpperCase()}
+              {cloud?.signed_in ? accountName.slice(0, 1).toUpperCase() : "?"}
             </span>
-            <span className="truncate">
-              {accountName}
+            <span className={"truncate " + (cloud?.signed_in ? "" : "text-muted")}>
+              {cloud?.signed_in ? accountName : t("session:account.notSignedIn")}
             </span>
             {cloud?.signed_in && (
               <span
@@ -1398,7 +1430,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
               size={14}
               className={"text-faint shrink-0 transition-transform " + (appMenuOpen ? "" : "rotate-180")}
             />
-          </button>}
+          </button>
         </div>
       </div>
 

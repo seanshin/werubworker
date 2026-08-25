@@ -3,7 +3,7 @@
 // a jump-to-latest pill; bubbles grow hover affordances (copy + timestamp) that reveal
 // without shifting layout. Driven against the fixtures' slow "stream the epic" turn.
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 // The copy test asserts real clipboard writes — grant instead of relying on defaults.
 test.use({ permissions: ["clipboard-write"] });
@@ -16,6 +16,7 @@ const scrollerState = `(() => {
 test("scrolling up mid-stream pins the viewport; jump-to-latest re-engages", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("stream the epic");
   await box.press("Enter");
@@ -65,6 +66,7 @@ test("scrolling up mid-stream pins the viewport; jump-to-latest re-engages", asy
 test("bubbles carry hover copy + timestamp without layout shift", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("hello meta");
   await box.press("Enter");

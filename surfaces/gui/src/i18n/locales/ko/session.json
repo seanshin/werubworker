@@ -731,5 +731,11 @@
       "unverified": "미확인",
       "unknown": "확인 불가"
     }
+  },
+  "account": {
+    "notSignedIn": "로그인하지 않음",
+    "signedOutHint": "로그인하지 않음 — 원클릭 연결에는 WeruBWorker Cloud가 필요합니다",
+    "signIn": "WeruBWorker Cloud에 로그인",
+    "ariaSignedOut": "계정: 로그인하지 않음"
   }
 }

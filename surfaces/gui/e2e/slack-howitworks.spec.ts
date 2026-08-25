@@ -16,9 +16,9 @@ test("post-connect card: personalized status line + the installer's 'you' chip",
 }) => {
   await openSlackPage(page);
   const card = page.getByTestId("slack-howitworks");
-  await expect(card).toContainText("Getting started with Slack & OpenWorker");
+  await expect(card).toContainText("Getting started with Slack & WeruBWorker");
   await expect(card).toContainText("deeplearning.ai connected");
-  await expect(card).toContainText("you're on the People list");
+  await expect(card).toContainText("you’re on the People list");
   // The pre-added installer renders as a named chip marked "you" in ITS workspace.
   const chip = page.getByTestId("slack-workspace-T1DL").getByTestId("people-chip-you");
   await expect(chip).toContainText("Rohit Prasad");
@@ -56,7 +56,7 @@ test("collapse hides the carousel, keeps the status line, and survives a reload"
 
   await card.getByTestId("hiw-collapse").click();
   await expect(card.getByTestId("hiw-tab-0")).toHaveCount(0);
-  await expect(card).toContainText("you're on the People list"); // status line stays
+  await expect(card).toContainText("you’re on the People list"); // status line stays
 
   await openSlackPage(page); // full re-navigation — the seen-state is local
   await expect(page.getByTestId("slack-howitworks")).toBeVisible();

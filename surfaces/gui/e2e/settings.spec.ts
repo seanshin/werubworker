@@ -53,7 +53,7 @@ test("Models: provider gallery states; vendor form previews models", async ({ pa
 
   // The composer-picker card lists the curated models with provider tags.
   const picker = page.getByTestId("composer-picker");
-  await expect(picker).toContainText("In the composer's picker");
+  await expect(picker).toContainText("In the composer’s picker");
 
   // Vendor form: blurb renders; the prefilled endpoint hides behind the disclosure.
   await page.getByTestId("set-provider-zai").click();

@@ -35,14 +35,18 @@ test("allow & deliver admits the sender into that installation's list", async ({
   await expect(page.getByTestId("waiting-gh-pk1")).toHaveCount(0);
 });
 
-test("add installation opens the modal; signed in installs a second org", async ({
+// SKIP: 커넥터 add-모달의 원클릭·수동 패널이 제거됐다 (2026-08-07 `131d056` 플랫폼 재구축).
+//       모달은 남아 있지만 내용이 "Add a workspace × Connect" 뿐이라 `modal-pane-manual`·
+//       `managed-connect`·`inline-cloud-sign-in`이 소스에 없다. 붙잡을 UI가 없어 셀렉터로는
+//       되살릴 수 없다 — 연결 흐름이 돌아오면 이 스펙을 그 모습에 맞춰 다시 쓸 것.
+test.skip("add installation opens the modal; signed in installs a second org", async ({
   page,
 }) => {
   await openGithubPage(page);
   await page.getByTestId("add-installation-btn").click();
   const modal = page.getByTestId("add-connection-modal");
   await expect(modal).toContainText("@ocw-agent App"); // one-click pane
-  await expect(modal).toContainText("Sign in to OpenWorker Cloud"); // signed out
+  await expect(modal).toContainText("Sign in to WeruBWorker Cloud"); // signed out
   // Manual PAT pane is right there too — both modes, one entry point
   await modal.getByTestId("modal-pane-manual").click();
   await expect(modal).toContainText("Personal access token");
@@ -64,7 +68,11 @@ test("add installation opens the modal; signed in installs a second org", async 
   await expect(page.getByTestId("github-install-101")).toBeVisible(); // existing stays
 });
 
-test("modal has ONE connect button and sends no flow — authorize-first lives in the broker", async ({
+// SKIP: 커넥터 add-모달의 원클릭·수동 패널이 제거됐다 (2026-08-07 `131d056` 플랫폼 재구축).
+//       모달은 남아 있지만 내용이 "Add a workspace × Connect" 뿐이라 `modal-pane-manual`·
+//       `managed-connect`·`inline-cloud-sign-in`이 소스에 없다. 붙잡을 UI가 없어 셀렉터로는
+//       되살릴 수 없다 — 연결 흐름이 돌아오면 이 스펙을 그 모습에 맞춰 다시 쓸 것.
+test.skip("modal has ONE connect button and sends no flow — authorize-first lives in the broker", async ({
   page,
 }) => {
   // The broker's default github flow user-authorizes first (links existing installations,
@@ -88,7 +96,11 @@ test("modal has ONE connect button and sends no flow — authorize-first lives i
   await expect.poll(() => flowSent).toBe("");
 });
 
-test("disconnect removes one installation and keeps the rest", async ({ page }) => {
+// SKIP: 커넥터 add-모달의 원클릭·수동 패널이 제거됐다 (2026-08-07 `131d056` 플랫폼 재구축).
+//       모달은 남아 있지만 내용이 "Add a workspace × Connect" 뿐이라 `modal-pane-manual`·
+//       `managed-connect`·`inline-cloud-sign-in`이 소스에 없다. 붙잡을 UI가 없어 셀렉터로는
+//       되살릴 수 없다 — 연결 흐름이 돌아오면 이 스펙을 그 모습에 맞춰 다시 쓸 것.
+test.skip("disconnect removes one installation and keeps the rest", async ({ page }) => {
   await openGithubPage(page);
   // add a second installation first (signed-in one-click)
   await page.getByTestId("connectors-breadcrumb").click();

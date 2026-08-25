@@ -319,10 +319,15 @@ function TaskDetail({
       .catch(() => {});
   useEffect(() => {
     setSeenMark(null);
-    refresh();
     // Opening the detail IS reading it: advance the seen mark and nudge the
     // sidebar so the badge clears immediately (UX-023).
-    markAutomationSeen(id)
+    //
+    // The read must LAND FIRST. Fired side by side, the mark-seen write can beat the read,
+    // and then the "as of opening" mark this component freezes is the one the write just
+    // advanced — every run looks already-seen and the "new" pills never render. Chaining
+    // costs one round-trip and is what "as of opening" actually means.
+    refresh()
+      .then(() => markAutomationSeen(id))
       .then(() => announceAutomationsChanged())
       .catch(() => {});
   }, [id]);

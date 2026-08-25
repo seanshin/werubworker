@@ -4,9 +4,10 @@
 
 서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다. Gitea + MCP를 통합하여 에이전트와 소스 리포지토리가 하나의 플랫폼으로 동작합니다.
 
-[![Version](https://img.shields.io/badge/version-2.3.11-blue)]()
+[![Version](https://img.shields.io/badge/version-2.3.12-blue)]()
 [![Tests](https://img.shields.io/badge/tests-1%2C448%20passed-brightgreen)]()
 [![UI Tests](https://img.shields.io/badge/ui%20tests-154%20passed-brightgreen)]()
+[![E2E](https://img.shields.io/badge/e2e-142%20passed-brightgreen)]()
 [![Tools](https://img.shields.io/badge/tools-300%2B-orange)]()
 [![Capabilities](https://img.shields.io/badge/capabilities-28-purple)]()
 [![MCP](https://img.shields.io/badge/MCP-32%20tools-blueviolet)]()
@@ -650,6 +651,10 @@ cd surfaces/gui && npx tsc --noEmit
 # 프론트엔드 테스트
 cd surfaces/gui && npx vitest run
 # 154 passed (32 files)
+
+# E2E (Playwright, 백엔드 없이 동작)
+cd surfaces/gui && npm run e2e
+# 142 passed, 23 skipped (제거된 기능 — 각 test.skip에 사유)
 ```
 
 | 테스트 파일 | 테스트 수 | 대상 |
@@ -695,7 +700,7 @@ cd surfaces/gui && npx vitest run
 | [**v2.0 아키텍처**](docs/v2-architecture.md) | 전체 시스템 구조, 모니터링/위키/도구 아키텍처, 데이터 저장소 |
 | [**v2.0 API 레퍼런스**](docs/v2-api-reference.md) | 대시보드/인프라/Wiki API 엔드포인트 전체 명세 |
 | [**MCP 서버 설정**](docs/mcp-setup.md) | Claude Desktop/Cursor/Claude Code MCP 연동 가이드 |
-| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.11 전체 변경 이력 |
+| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.12 전체 변경 이력 |
 | [**확장 설계서**](docs/cloud-server-ops-expansion-design.md) | 통합 모니터링, 알림, 인시던트, 서비스 위키 리포지토리 설계 |
 | [**개발팀 조율 가이드**](docs/dev-team/TEAM-COORDINATION.md) | 병렬 개발 규칙, 작업 분배, 충돌 방지 |
 
@@ -703,7 +708,8 @@ cd surfaces/gui && npx vitest run
 
 | 버전 | 날짜 | 주요 내용 |
 |------|------|----------|
-| **v2.3.11** | **2026-08-25** | **i18n 미이전 운영 뷰 완주: Dev·Topology·Wiki·Backup·Security·Database 6개 뷰 + 사이드바 내비 4개(번역 키 134개 추가), `security_score`가 한국어 status 대신 번역 가능한 `status_code`를 함께 반환 (테스트 1,448개 / 프론트엔드 154개)** |
+| **v2.3.12** | **2026-08-26** | **E2E 스위트 복구: 22 → 142 통과(전체 165개). 로케일 미고정으로 한국어 UI에서 돌던 것, 앱 이름 변경 잔재, 아포스트로피 통일 누락을 정리하고, 재구축 때 유실된 로그아웃 계정 행과 자동화 읽음 표시 경합을 수정** |
+| v2.3.11 | 2026-08-25 | i18n 미이전 운영 뷰 완주: Dev·Topology·Wiki·Backup·Security·Database 6개 뷰 + 사이드바 내비 4개(번역 키 134개 추가), `security_score`가 한국어 status 대신 번역 가능한 `status_code`를 함께 반환 (테스트 1,448개 / 프론트엔드 154개) |
 | v2.3.10 | 2026-08-25 | i18next v26 복수형 수정(`_plural`이 무시돼 `3 account`로 렌더되던 문제), 미참조 키 51 → 10 (프론트엔드 테스트 137개) |
 | v2.3.9 | 2026-08-25 | 번역 키 정리: 제거된 기능이 남긴 죽은 키 75개 삭제, 살아있는 누락 16곳 배선. 미참조 142 → 51 (프론트엔드 테스트 133개) |
 | v2.3.8 | 2026-08-25 | i18n 배선 완주: 미참조 번역 키 189 → 142, `humanize.ts`가 어순까지 번역이 통제하도록 재설계, ManageTabs·ProviderSetup·갤러리 안내 배선 (프론트엔드 테스트 132개) |

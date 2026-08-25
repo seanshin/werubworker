@@ -28,7 +28,11 @@ test("the account row is always visible and signs in from its menu", async ({ pa
   ).toBeVisible();
 });
 
-test("signed-out one-click pane signs in inline, then connects", async ({ page }) => {
+// SKIP: 커넥터 add-모달의 원클릭·수동 패널이 제거됐다 (2026-08-07 `131d056` 플랫폼 재구축).
+//       모달은 남아 있지만 내용이 "Add a workspace × Connect" 뿐이라 `modal-pane-manual`·
+//       `managed-connect`·`inline-cloud-sign-in`이 소스에 없다. 붙잡을 UI가 없어 셀렉터로는
+//       되살릴 수 없다 — 연결 흐름이 돌아오면 이 스펙을 그 모습에 맞춰 다시 쓸 것.
+test.skip("signed-out one-click pane signs in inline, then connects", async ({ page }) => {
   await openConnectors(page);
   // Fresh user path: Available → Connect → the pane must offer sign-in itself.
   await page

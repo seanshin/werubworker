@@ -14,7 +14,9 @@ const openGmailPane = async (page: import("@playwright/test").Page) => {
   await page.getByTestId("access-add-gmail").click();
 };
 
-test("pending status shows 'checking', never the sign-in ask; resolves to one-click", async ({
+// SKIP: 클라우드 상태 대기 UI가 제거됐다 (2026-08-07 `131d056`). `cloud-status-pending`·
+//       `inline-cloud-sign-in`이 소스에 없다.
+test.skip("pending status shows 'checking', never the sign-in ask; resolves to one-click", async ({
   page,
 }) => {
   // Hold every /v1/cloud/status response (test routes outrank the fixture's) — the user
@@ -37,7 +39,9 @@ test("pending status shows 'checking', never the sign-in ask; resolves to one-cl
   await expect(page.getByTestId("cloud-status-pending")).toHaveCount(0);
 });
 
-test("signing in from the rail prompt flips the pane to one-click", async ({ page }) => {
+// SKIP: 클라우드 상태 대기 UI가 제거됐다 (2026-08-07 `131d056`). `cloud-status-pending`·
+//       `inline-cloud-sign-in`이 소스에 없다.
+test.skip("signing in from the rail prompt flips the pane to one-click", async ({ page }) => {
   // Fixture default: signed out — the resolved signed-out state legitimately asks.
   await openGmailPane(page);
   const ask = page.getByTestId("inline-cloud-sign-in");

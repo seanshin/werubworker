@@ -1595,9 +1595,37 @@ export async function mockApi(page: import("@playwright/test").Page) {
   });
 }
 
-// A `test` whose page has the API mocked before navigation.
+// The GUI reads its language from localStorage on boot and falls back to **Korean** when the key
+// is missing. A Playwright context starts with empty storage, so without this the whole suite ran
+// against the Korean UI while every text selector here is written in English — 143 of 165 specs
+// failed for that one reason. Pinning the locale also keeps the suite stable when translations are
+// reworded in `ko`: these specs assert the English copy on purpose, and the language switch itself
+// is covered by the component tests (`*.i18n.test.tsx`).
+/** Wait until the session socket is up before sending.
+ *
+ * The composer's Send button is `disabled={!connected}`, so an enabled Send is the one honest
+ * signal that the agent socket has attached. Typing + Enter before that point drops the message
+ * on the floor: no turn, no echo, no usage — and the spec fails somewhere far away, looking for
+ * a chip or a bubble that was never going to arrive. Under `fullyParallel` the connect is slow
+ * enough to lose that race regularly (usage-chip, model-switch, transcript-scroll all hit it).
+ */
+export async function agentReady(page: import("@playwright/test").Page) {
+  await expect(page.getByRole("button", { name: "Send" })).toBeEnabled({ timeout: 10_000 });
+}
+
+export const LANGUAGE_KEY = "openworker-language";
+
+export async function pinLanguage(page: import("@playwright/test").Page, lng = "en") {
+  await page.addInitScript(
+    ([key, value]) => localStorage.setItem(key, value),
+    [LANGUAGE_KEY, lng] as const,
+  );
+}
+
+// A `test` whose page has the API mocked and the locale pinned before navigation.
 export const test = base.extend({
   page: async ({ page }, use) => {
+    await pinLanguage(page);
     await mockApi(page);
     await use(page);
   },

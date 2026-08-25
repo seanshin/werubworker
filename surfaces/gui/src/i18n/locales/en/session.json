@@ -731,5 +731,11 @@
       "unverified": "Not verified",
       "unknown": "Unknown"
     }
+  },
+  "account": {
+    "notSignedIn": "Not signed in",
+    "signedOutHint": "Not signed in — one-click connections need WeruBWorker Cloud",
+    "signIn": "Sign in to WeruBWorker Cloud",
+    "ariaSignedOut": "Account: not signed in"
   }
 }
