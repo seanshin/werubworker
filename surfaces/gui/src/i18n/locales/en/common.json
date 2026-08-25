@@ -84,7 +84,6 @@
       "active": "Active Alerts",
       "history": "Alert History",
       "rules": "Alert Rules",
-      "webhooks": "Webhooks",
       "noActive": "No active alerts.",
       "severity": "Severity",
       "server": "Server",

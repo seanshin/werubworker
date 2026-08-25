@@ -330,7 +330,6 @@
     "username": "사용자",
     "sortBy": "정렬",
     "diskPartitions": "디스크 파티션",
-    "deleteServer": "서버 삭제",
     "cpuPercent": "CPU %",
     "status": "상태",
     "totalSent": "총 송신",

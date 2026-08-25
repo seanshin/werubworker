@@ -330,7 +330,6 @@
     "username": "User",
     "sortBy": "Sort by",
     "diskPartitions": "Disk Partitions",
-    "deleteServer": "Delete server",
     "cpuPercent": "CPU %",
     "status": "Status",
     "totalSent": "Total Sent",

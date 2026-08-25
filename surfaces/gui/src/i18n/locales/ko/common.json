@@ -84,7 +84,6 @@
       "active": "활성 알림",
       "history": "알림 이력",
       "rules": "알림 규칙",
-      "webhooks": "Webhook",
       "noActive": "활성 알림이 없습니다.",
       "severity": "심각도",
       "server": "서버",
