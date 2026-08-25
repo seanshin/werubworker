@@ -17,15 +17,12 @@
   "newProject": "새 프로젝트",
   "showMore": "{{count}}개 더 보기",
   "showLess": "접기",
-  "filterByCoworker": "코워커별 필터",
   "groupFilter": "대화 묶기 및 필터",
   "noneChecked": "아무것도 선택하지 않으면 전체가 표시됩니다.",
   "fromSlack": "Slack에서",
-  "newRun": "새 실행",
   "newRuns": "{{count}}개 새 실행",
   "awaitingAttention": "{{count}}건이 확인을 기다리는 중",
   "inboxItems": "받은함 — {{count}}건이 확인을 기다립니다",
-  "openWorkerCloud": "WeruBWorker Cloud",
   "composer": {
     "placeholder": "코워커에게 물어보세요…  (파일 드롭 또는 붙여넣기)",
     "noModel": "모델이 연결되지 않음 — 모델을 연결하세요",
@@ -153,7 +150,6 @@
     "addSource": "+ 소스 추가…",
     "manageAll": "모든 커넥터 관리 (전역) →",
     "recommended": "추천",
-    "folders": "폴더",
     "addFolder": "+ 폴더 접근 권한 부여…",
     "backToSources": "소스로 돌아가기",
     "connectTitle": "{{title}} 연결",
@@ -164,9 +160,8 @@
     "addChannel": "채널 추가",
     "channelDesc": "에이전트가 이 채널에 게시된 메시지를 수신합니다. 제거하면 이 세션의 수신만 중지됩니다 — 커넥터는 연결된 상태로 유지됩니다.",
     "noSources": "소스 없음",
-    "folder": "{{count}}개 폴더",
-    "folders_plural": "{{count}}개 폴더",
-    "enabledForSession": "이 세션에 활성화됨 — 탭하여 여기서 끄기"
+    "enabledForSession": "이 세션에 활성화됨 — 탭하여 여기서 끄기",
+    "folders": "폴더"
   },
   "addFolder": {
     "giveAccess": "폴더 접근 권한 부여",
@@ -203,23 +198,22 @@
     "openInApp": "기본 앱에서 열기",
     "refreshArtifacts": "산출물 새로고침",
     "showFolder": "이 파일이 저장된 폴더 표시",
-    "workingWithTools": "지금까지 {{count}}개 도구 호출.",
-    "workingWithTools_plural": "지금까지 {{count}}개 도구 호출.",
     "working": "작업 중...",
     "workingOnTask": "이 작업을 수행하고 있습니다.",
-    "workingOnTaskWithTools": "지금까지 {{count}}개 도구 호출로 이 작업을 수행하고 있습니다.",
-    "workingOnTaskWithTools_plural": "지금까지 {{count}}개 도구 호출로 이 작업을 수행하고 있습니다.",
     "progressIdle": "더 긴 다단계 작업의 경우 WeruBWorker가 계획하고, 도구를 사용하고, 승인을 기다리고, 산출물을 생성하는 동안 여기에 진행 상황이 표시됩니다.",
     "parsingSheet": "스프레드시트 분석 중…",
     "sheetError": "스프레드시트를 분석할 수 없습니다: {{error}}",
-    "pdfError": "PDF를 렌더링할 수 없습니다: {{error}}"
+    "pdfError": "PDF를 렌더링할 수 없습니다: {{error}}",
+    "workingWithTools_other": "지금까지 {{count}}개 도구 호출.",
+    "workingWithTools_one": "지금까지 {{count}}개 도구 호출.",
+    "workingOnTaskWithTools_other": "지금까지 {{count}}개 도구 호출로 이 작업을 수행하고 있습니다.",
+    "workingOnTaskWithTools_one": "지금까지 {{count}}개 도구 호출로 이 작업을 수행하고 있습니다."
   },
   "quickstart": {
     "setUp": "설정",
     "connectionsDeliverySchedule": "연결, 전달 및 스케줄",
     "deliverySchedule": "전달 및 스케줄",
     "connectedCheck": "✓ 연결됨",
-    "connectBtn": "연결",
     "repository": "저장소",
     "repoPlaceholder": "owner/repo",
     "postToChannel": "채널에 게시",
@@ -256,7 +250,6 @@
     "title": "서버 모니터링",
     "sub": "서버 상태, 리소스 사용량, 시스템 건강 상태를 모니터링합니다.",
     "localStatus": "로컬 서버 상태",
-    "runCheck": "점검 실행",
     "memory": "메모리",
     "disk": "디스크",
     "clickToCheck": "첫 상태 폴링 대기 중...",
@@ -293,12 +286,8 @@
     "network": "네트워크",
     "noNetworkData": "네트워크 데이터가 없습니다.",
     "activeConnections": "활성 연결",
-    "networkInterface": "인터페이스",
     "bytesSent": "전송",
     "bytesRecv": "수신",
-    "packetsSent": "패킷 전송",
-    "packetsRecv": "패킷 수신",
-    "errors": "오류",
     "healthChecks": "상태 점검",
     "runChecks": "전체 실행",
     "noHealthChecks": "구성된 상태 점검이 없습니다.",
@@ -315,7 +304,6 @@
     "threads": "스레드",
     "command": "명령어",
     "username": "사용자",
-    "sortBy": "정렬",
     "diskPartitions": "디스크 파티션",
     "cpuPercent": "CPU %",
     "status": "상태",
@@ -432,8 +420,7 @@
     "erd": "ERD",
     "erdTitle": "엔터티 관계 다이어그램",
     "erdLoading": "ERD 생성 중...",
-    "addDatabase": "데이터베이스 추가",
-    "scanDatabases": "스캔"
+    "addDatabase": "데이터베이스 추가"
   },
   "serviceConfig": {
     "title": "서비스 설정",
@@ -484,14 +471,10 @@
     "folderCleanup": "폴더 정리",
     "folderCleanupDesc": "최근 다운로드를 유형별로 깔끔한 폴더로 정리합니다.",
     "noRuns": "아직 실행 기록이 없습니다.",
-    "lastRun": "마지막 실행",
-    "nextRun": "다음 실행",
-    "schedule": "스케줄",
     "enabled": "활성화됨",
     "disabled": "비활성화됨",
     "runNow": "지금 실행",
-    "editTask": "편집",
-    "deleteTask": "삭제"
+    "editTask": "편집"
   },
   "wiki": {
     "title": "서비스 위키",
@@ -612,5 +595,9 @@
     "noEvents": "아직 감사 이벤트가 없습니다.",
     "session": "세션",
     "resource": "리소스:"
-  }
+  },
+  "newRuns_one": "새 실행 {{count}}건",
+  "newRuns_other": "새 실행 {{count}}건",
+  "newRunsFailed_one": "새 실행 {{count}}건 — 최근 실행 실패",
+  "newRunsFailed_other": "새 실행 {{count}}건 — 최근 실행 실패"
 }

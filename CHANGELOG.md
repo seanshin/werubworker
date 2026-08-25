@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed — i18next v26에서 복수형이 동작하지 않던 문제
+- **로케일에 v20 형식(`_plural`) 키가 18개 남아 있었다.** i18next v21+는 `_one`/`_other`를 찾으므로 `_plural`은 조용히 무시되고 **단수형이 그대로 렌더된다** — `{{count}}=3`에서 `3 account`, `3 portal`처럼 화면에 나갔다. 실제로 재현해 확인한 뒤 전부 `_one`/`_other`로 변환
+- 대상: `gmail`/`calendar`/`accounts`의 `accountCount`, `hubspot.portalCount`, `list.workspaces`, `rail.workingWithTools`·`workingOnTaskWithTools`, `general.commandAllowances` (en/ko 각 9개)
+- **일괄 변환이 하나를 오인했다**: `session:access.folders`는 복수형이 아니라 `AccessSection`의 **섹션 제목**("Folders")인데 단수형으로 잡혔다. 되돌리고, 함께 있던 미사용 카운트 형태 3개는 제거
+- **회귀 테스트 추가** (`i18n/plural.test.ts`): 주요 복수형 키가 count=1/3에서 올바른 형태를 내는지, 로케일 파일에 `_plural`이 남아 있지 않은지
+
+### Fixed — 남은 미참조 키 정리 (51 → 10)
+- **12곳 배선**: `Sidebar` 6(새 실행 배지 복수형, `Show N more`, 프로젝트 버튼, Slack 출처, 세션 삭제, 페르소나 관리), `MonitoringView` 3(**CPU 게이지·차트 라벨 — 지난 이전에서 메모리·디스크만 옮기고 빠뜨린 것**), `ProviderSetup` 2(저장 표시, Test/Detect), `Composer` 1, `ScheduledView` 1
+- **28개 삭제**: `settings:gallery` 5, `session:ops` 6, `session:automation` 4, `connectors` 4 등 — UI가 없거나 다른 문구를 쓰는 기능별 잔해
+- **10개는 남겼다**: `common:button.*`(clear/confirm/disconnect/signIn/skip), `common:label.*`(on/projects/recent/archived), `common:status.connecting`. 특정 기능의 잔해가 아니라 **재사용 어휘 팔레트**라 성격이 다르다
+- 짧은 단어는 맥락이 달라도 문구가 일치하므로 대조 결과를 그대로 믿지 않고 각각의 실제 줄을 확인했다 — `Latency`가 `WikiPromptEditor`의 벤치마크 표에, `Connect`가 `PersonaView`의 커넥터 행에 있는 식이라 배선 대상이 아니었다
+
+---
+
 ## [2.3.9] - 2026-08-25
 
 > v2.3.8이 남긴 미참조 번역 키 142개를 정리했다. **전부 지우지는 않았다** — 분류를 다시 돌려

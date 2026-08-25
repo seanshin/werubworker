@@ -97,7 +97,6 @@
       "title": "Incidents",
       "severity": "Severity",
       "status": "Status",
-      "timeline": "Timeline",
       "emptyTimeline": "The timeline is empty.",
       "generatePostmortem": "Generate postmortem",
       "generating": "Generating…",
@@ -111,7 +110,6 @@
       "runNow": "Run Now",
       "running": "Running...",
       "status": "Status",
-      "latency": "Latency",
       "target": "Target",
       "consecutiveFailures": "{{n}} consecutive failures",
       "none": "No health checks registered."

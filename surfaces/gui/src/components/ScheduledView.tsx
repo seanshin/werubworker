@@ -396,7 +396,7 @@ function TaskDetail({
                 <button className="btn-primary sm" onClick={() => onRunNow(id, task.title)}>
                   ▶ {t("session:automation.runNow")}
                 </button>
-                <button className="btn sm" onClick={startEdit}>Edit</button>
+                <button className="btn sm" onClick={startEdit}>{t("session:automation.editTask")}</button>
                 <button className="btn sm danger-btn" onClick={remove}>
                   <Icon name="trash" size={14} /> Delete
                 </button>

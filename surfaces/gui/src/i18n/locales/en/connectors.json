@@ -88,10 +88,10 @@
     "signInAgain": "⚠ Sign in again",
     "disconnectMailbox": "Disconnect this mailbox",
     "notConnected": "Not connected",
-    "accountCount": "{{count}} account",
-    "accountCount_plural": "{{count}} accounts",
     "default": "Default",
-    "checkBrowser": "Check your browser…"
+    "checkBrowser": "Check your browser…",
+    "accountCount_other": "{{count}} accounts",
+    "accountCount_one": "{{count}} account"
   },
   "calendar": {
     "title": "Google Calendar",
@@ -99,12 +99,12 @@
     "approvalNote": "Creating, changing, or deleting events always asks for your approval first, and the approval names the account.",
     "disconnectAccount": "Disconnect this account",
     "notConnected": "Not connected",
-    "accountCount": "{{count}} account",
-    "accountCount_plural": "{{count}} accounts",
     "default": "Default",
     "checkBrowser": "Check your browser…",
     "requiresSignIn": " Requires cloud sign-in.",
-    "accounts": "Accounts"
+    "accounts": "Accounts",
+    "accountCount_other": "{{count}} accounts",
+    "accountCount_one": "{{count}} account"
   },
   "hubspot": {
     "title": "HubSpot",
@@ -120,14 +120,13 @@
     "strippedNote": "Stripped from every record agents read, across all portals.",
     "hiddenFieldsNote": "Hidden fields never reach an agent; stripped counts land in Activity. To limit what a HUMAN teammate could ask for, use HubSpot permission sets on the connected user.",
     "disconnectPortal": "Disconnect this portal",
-    "readOnlyLabel": "Read-only",
     "notConnected": "Not connected",
-    "portalCount": "{{count}} portal",
-    "portalCount_plural": "{{count}} portals",
     "default": "Default",
     "sandbox": "Sandbox",
     "makeDefault": "Make default",
-    "addAPortal": "Add a portal"
+    "addAPortal": "Add a portal",
+    "portalCount_other": "{{count}} portals",
+    "portalCount_one": "{{count}} portal"
   },
   "accounts": {
     "addAccount": "＋ Add account",
@@ -136,13 +135,13 @@
     "signInForOneClick": "Sign in to WeruBWorker Cloud for one-click — or add a token below",
     "accountsSeparate": "Each account stays separate — tool results and approvals name the account they used.",
     "notConnected": "Not connected",
-    "accountCount": "{{count}} account",
-    "accountCount_plural": "{{count}} accounts",
     "default": "Default",
     "makeDefault": "Make default",
     "checkBrowser": "Check your browser…",
     "disconnectAccount": "Disconnect this account",
-    "accounts": "Accounts"
+    "accounts": "Accounts",
+    "accountCount_other": "{{count}} accounts",
+    "accountCount_one": "{{count}} account"
   },
   "list": {
     "connected": "Connected",
@@ -151,8 +150,6 @@
     "more": "{{count}} more",
     "showAll": "show all",
     "builtIn": "Built in",
-    "workspaces": "{{count}} workspace",
-    "workspaces_plural": "{{count}} workspaces",
     "relay": "relay",
     "accountsCount": "{{count}} accounts",
     "portalsCount": "{{count}} portals",
@@ -164,7 +161,9 @@
     "token": "⚠ Token",
     "connect": "Connect",
     "search": "Search",
-    "connected_status": "Connected"
+    "connected_status": "Connected",
+    "workspaces_other": "{{count}} workspaces",
+    "workspaces_one": "{{count}} workspace"
   },
   "modal": {
     "oneClick": "One click",
@@ -174,9 +173,7 @@
     "opensInBrowser": "Opens {{title}} in your browser — sign in and approve access there. No tokens typed, and no WeruBWorker account needed: the sign-in runs entirely on this computer.",
     "connectTitle": "Connect {{title}}",
     "curatedTools": "agents get a curated set of {{title}} tools · tokens stay on this computer",
-    "comingSoon": "Coming soon",
     "close": "Close",
-    "connect": "Connect",
     "couldNotConnect": "could not connect",
     "couldNotStartConnect": "could not start the connect"
   },

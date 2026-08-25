@@ -669,7 +669,7 @@ export const Composer = memo(function Composer(props: Props) {
               onClick={submit}
               disabled={!props.connected || !!dictation?.recording || !!dictationBusy}
               title={needsModel ? t("session:composer.connectToSend") : undefined}
-              aria-label="Send"
+              aria-label={t("common:button.send")}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 19V5M5 12l7-7 7 7" />
@@ -857,7 +857,7 @@ function ModeMenu({
         aria-expanded={open}
         aria-label="Mode"
         title={
-          `Mode: ${current?.label || mode}` +
+          `${t("session:permission.mode")} ${current?.label || mode}` +
           (unattended ? " · approvals go to the Inbox" : "")
         }
       >

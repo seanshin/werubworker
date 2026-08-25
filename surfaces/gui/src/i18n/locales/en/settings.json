@@ -49,9 +49,9 @@
     "updateError": "Couldn’t check right now — try again later.",
     "downloading": "Downloading — WeruBWorker restarts by itself when it’s ready.",
     "updateTo": "Update to v{{version}} and restart",
-    "commandAllowances": "{{count}} project command allowance",
-    "commandAllowances_plural": "{{count}} project command allowances",
-    "noCommandAllowances": "No project command allowances currently declared"
+    "noCommandAllowances": "No project command allowances currently declared",
+    "commandAllowances_other": "{{count}} project command allowances",
+    "commandAllowances_one": "{{count}} project command allowance"
   },
   "models": {
     "title": "Models",
@@ -125,8 +125,6 @@
     "connectTools": "Connect your everyday tools",
     "connectToolsDesc": "Chat can only advise. Connected, your coworker does the actual work:",
     "connected": "✓ Connected",
-    "comingSoon": "Coming soon",
-    "waiting": "Waiting…",
     "moreTools": "30+ more tools on the Connectors page — add or remove anytime. Tokens stay on this computer.",
     "youreSetUp": "You’re set up",
     "twoWaysToStart": "Two good ways to start:",
@@ -240,13 +238,8 @@
     "closeGallery": "Close gallery",
     "all": "All",
     "unreachable": "The gallery is unreachable right now — try again in a moment.",
-    "featured": "Featured",
-    "installed": "Installed",
-    "backToGallery": "← Gallery",
-    "installBtn": "Install",
     "toolsLabel": "Tools: ",
     "riskLabel": "risk: ",
-    "mode": "mode",
     "canUseMessaging": " · can use messaging",
     "unavailableTitle": "Gallery is not available",
     "unavailableDesc": "The cloud-hosted persona gallery is not configured. You can install personas from a Git URL or a local folder on the Personas settings page."
@@ -269,7 +262,6 @@
     "takesMinute": " — takes about a minute.",
     "noKeyOllama": "No API key needed — Ollama runs models on this computer. ",
     "installOllama": "Install Ollama ↗",
-    "customEndpoint": "Custom endpoint ⌄",
     "used": "used"
   },
   "update": {
@@ -304,7 +296,6 @@
     "frontend": "Frontend",
     "desktop": "Desktop Shell",
     "stt": "Speech-to-Text",
-    "credits": "Credits",
     "creditsDesc": "Independently developed. Contributions welcome.",
     "privacy": "Privacy",
     "privacyDesc": "All data stays on your computer. API keys are stored locally. No telemetry.",

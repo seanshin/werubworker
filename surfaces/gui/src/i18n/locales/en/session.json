@@ -17,15 +17,12 @@
   "newProject": "New project",
   "showMore": "Show {{count}} more",
   "showLess": "Show less",
-  "filterByCoworker": "Filter by coworker",
   "groupFilter": "Group & filter conversations",
   "noneChecked": "None checked shows all.",
   "fromSlack": "From Slack",
-  "newRun": "new run",
   "newRuns": "{{count}} new runs",
   "awaitingAttention": "{{count}} awaiting your attention",
   "inboxItems": "Inbox — {{count}} items need you",
-  "openWorkerCloud": "WeruBWorker Cloud",
   "composer": {
     "placeholder": "Ask the coworker…  (drop or paste files)",
     "noModel": "No model connected — connect a model",
@@ -153,7 +150,6 @@
     "addSource": "+ Add a source…",
     "manageAll": "Manage all connectors (global) →",
     "recommended": "Recommended",
-    "folders": "Folders",
     "addFolder": "+ Give access to a folder…",
     "backToSources": "Back to sources",
     "connectTitle": "Connect {{title}}",
@@ -164,9 +160,8 @@
     "addChannel": "Add a channel",
     "channelDesc": "The agent receives messages posted to these channels. Removing one stops this session from listening — the connector stays connected.",
     "noSources": "no sources",
-    "folder": "{{count}} folder",
-    "folders_plural": "{{count}} folders",
-    "enabledForSession": "Enabled for this session — tap to mute here"
+    "enabledForSession": "Enabled for this session — tap to mute here",
+    "folders": "Folders"
   },
   "addFolder": {
     "giveAccess": "Give access to a folder",
@@ -203,23 +198,22 @@
     "openInApp": "Open in default app",
     "refreshArtifacts": "Refresh artifacts",
     "showFolder": "Show the folder where these files are saved",
-    "workingWithTools": "{{count}} tool call so far.",
-    "workingWithTools_plural": "{{count}} tool calls so far.",
     "working": "Working...",
     "workingOnTask": "Working on this task.",
-    "workingOnTaskWithTools": "Working on this task with {{count}} tool call so far.",
-    "workingOnTaskWithTools_plural": "Working on this task with {{count}} tool calls so far.",
     "progressIdle": "For longer multi-step tasks, progress will appear here while WeruBWorker plans, uses tools, waits for approval, and produces artifacts.",
     "parsingSheet": "Parsing spreadsheet…",
     "sheetError": "Could not parse spreadsheet: {{error}}",
-    "pdfError": "Could not render PDF: {{error}}"
+    "pdfError": "Could not render PDF: {{error}}",
+    "workingWithTools_other": "{{count}} tool calls so far.",
+    "workingWithTools_one": "{{count}} tool call so far.",
+    "workingOnTaskWithTools_other": "Working on this task with {{count}} tool calls so far.",
+    "workingOnTaskWithTools_one": "Working on this task with {{count}} tool call so far."
   },
   "quickstart": {
     "setUp": "Set up",
     "connectionsDeliverySchedule": "Connections, delivery & schedule",
     "deliverySchedule": "Delivery & schedule",
     "connectedCheck": "✓ Connected",
-    "connectBtn": "Connect",
     "repository": "Repository",
     "repoPlaceholder": "owner/repo",
     "postToChannel": "Post to channel",
@@ -256,7 +250,6 @@
     "title": "Server Monitoring",
     "sub": "Monitor server status, resource usage, and system health.",
     "localStatus": "Local Server Status",
-    "runCheck": "Run check",
     "memory": "Memory",
     "disk": "Disk",
     "clickToCheck": "Waiting for first status poll...",
@@ -293,12 +286,8 @@
     "network": "Network",
     "noNetworkData": "No network data available.",
     "activeConnections": "Active connections",
-    "networkInterface": "Interface",
     "bytesSent": "Sent",
     "bytesRecv": "Received",
-    "packetsSent": "Pkts Sent",
-    "packetsRecv": "Pkts Recv",
-    "errors": "Errors",
     "healthChecks": "Health Checks",
     "runChecks": "Run All",
     "noHealthChecks": "No health checks configured.",
@@ -315,7 +304,6 @@
     "threads": "Threads",
     "command": "Command",
     "username": "User",
-    "sortBy": "Sort by",
     "diskPartitions": "Disk Partitions",
     "cpuPercent": "CPU %",
     "status": "Status",
@@ -432,8 +420,7 @@
     "erd": "ERD",
     "erdTitle": "Entity Relationship Diagram",
     "erdLoading": "Generating ERD...",
-    "addDatabase": "Add Database",
-    "scanDatabases": "Scan"
+    "addDatabase": "Add Database"
   },
   "serviceConfig": {
     "title": "Service Configuration",
@@ -484,14 +471,10 @@
     "folderCleanup": "Folder cleanup",
     "folderCleanupDesc": "Sort recent Downloads into tidy folders by type.",
     "noRuns": "No runs yet.",
-    "lastRun": "Last run",
-    "nextRun": "Next run",
-    "schedule": "Schedule",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "runNow": "Run now",
-    "editTask": "Edit",
-    "deleteTask": "Delete"
+    "editTask": "Edit"
   },
   "wiki": {
     "title": "Service Wiki",
@@ -612,5 +595,9 @@
     "noEvents": "No audit events yet.",
     "session": "session",
     "resource": "resource:"
-  }
+  },
+  "newRuns_one": "{{count}} new run",
+  "newRuns_other": "{{count}} new runs",
+  "newRunsFailed_one": "{{count}} new run — the latest failed",
+  "newRunsFailed_other": "{{count}} new runs — the latest failed"
 }

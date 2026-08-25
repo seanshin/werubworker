@@ -88,10 +88,10 @@
     "signInAgain": "⚠ 다시 로그인",
     "disconnectMailbox": "이 메일함 연결 해제",
     "notConnected": "연결 안 됨",
-    "accountCount": "{{count}}개 계정",
-    "accountCount_plural": "{{count}}개 계정",
     "default": "기본값",
-    "checkBrowser": "브라우저를 확인하세요…"
+    "checkBrowser": "브라우저를 확인하세요…",
+    "accountCount_other": "{{count}}개 계정",
+    "accountCount_one": "{{count}}개 계정"
   },
   "calendar": {
     "title": "Google Calendar",
@@ -99,12 +99,12 @@
     "approvalNote": "이벤트 생성, 변경 또는 삭제는 항상 승인을 먼저 요청하며, 승인에 계정 이름이 표시됩니다.",
     "disconnectAccount": "이 계정 연결 해제",
     "notConnected": "연결 안 됨",
-    "accountCount": "{{count}}개 계정",
-    "accountCount_plural": "{{count}}개 계정",
     "default": "기본값",
     "checkBrowser": "브라우저를 확인하세요…",
     "requiresSignIn": " 클라우드 로그인이 필요합니다.",
-    "accounts": "계정"
+    "accounts": "계정",
+    "accountCount_other": "{{count}}개 계정",
+    "accountCount_one": "{{count}}개 계정"
   },
   "hubspot": {
     "title": "HubSpot",
@@ -120,14 +120,13 @@
     "strippedNote": "모든 포탈에서 에이전트가 읽는 모든 레코드에서 제거됩니다.",
     "hiddenFieldsNote": "숨겨진 필드는 에이전트에게 전달되지 않습니다. 제거된 수는 활동에 표시됩니다. 팀원이 요청할 수 있는 것을 제한하려면 연결된 사용자의 HubSpot 권한 세트를 사용하세요.",
     "disconnectPortal": "이 포탈 연결 해제",
-    "readOnlyLabel": "읽기 전용",
     "notConnected": "연결 안 됨",
-    "portalCount": "{{count}}개 포탈",
-    "portalCount_plural": "{{count}}개 포탈",
     "default": "기본값",
     "sandbox": "샌드박스",
     "makeDefault": "기본값으로 설정",
-    "addAPortal": "포탈 추가"
+    "addAPortal": "포탈 추가",
+    "portalCount_other": "{{count}}개 포탈",
+    "portalCount_one": "{{count}}개 포탈"
   },
   "accounts": {
     "addAccount": "＋ 계정 추가",
@@ -136,13 +135,13 @@
     "signInForOneClick": "원클릭을 위해 WeruBWorker Cloud에 로그인하세요 — 또는 아래에 토큰을 추가하세요",
     "accountsSeparate": "각 계정은 별도로 유지됩니다 — 도구 결과와 승인에 사용한 계정이 표시됩니다.",
     "notConnected": "연결 안 됨",
-    "accountCount": "{{count}}개 계정",
-    "accountCount_plural": "{{count}}개 계정",
     "default": "기본값",
     "makeDefault": "기본값으로 설정",
     "checkBrowser": "브라우저를 확인하세요…",
     "disconnectAccount": "이 계정 연결 해제",
-    "accounts": "계정"
+    "accounts": "계정",
+    "accountCount_other": "{{count}}개 계정",
+    "accountCount_one": "{{count}}개 계정"
   },
   "list": {
     "connected": "연결됨",
@@ -151,8 +150,6 @@
     "more": "{{count}}개 더",
     "showAll": "모두 보기",
     "builtIn": "기본 제공",
-    "workspaces": "{{count}}개 워크스페이스",
-    "workspaces_plural": "{{count}}개 워크스페이스",
     "relay": "릴레이",
     "accountsCount": "{{count}}개 계정",
     "portalsCount": "{{count}}개 포탈",
@@ -164,7 +161,9 @@
     "token": "⚠ 토큰",
     "connect": "연결",
     "search": "검색",
-    "connected_status": "연결됨"
+    "connected_status": "연결됨",
+    "workspaces_other": "{{count}}개 워크스페이스",
+    "workspaces_one": "{{count}}개 워크스페이스"
   },
   "modal": {
     "oneClick": "원클릭",
@@ -174,9 +173,7 @@
     "opensInBrowser": "브라우저에서 {{title}}을(를) 열어 로그인하고 접근을 승인합니다. 토큰 입력 불필요, WeruBWorker 계정도 필요 없습니다: 로그인은 이 컴퓨터에서만 실행됩니다.",
     "connectTitle": "{{title}} 연결",
     "curatedTools": "에이전트가 {{title}} 도구를 사용합니다 · 토큰은 이 컴퓨터에 보관됩니다",
-    "comingSoon": "곧 제공 예정",
     "close": "닫기",
-    "connect": "연결",
     "couldNotConnect": "연결할 수 없습니다",
     "couldNotStartConnect": "연결을 시작하지 못했습니다"
   },

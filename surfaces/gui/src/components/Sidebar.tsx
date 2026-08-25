@@ -67,11 +67,12 @@ function AttnBadge({ n }: { n: number }) {
 // treatment as the attention badge; failure only colors the tooltip's words, not the
 // sidebar (owner call 2026-07-20: no color, and the entry alone carries the count).
 function UnseenBadge({ n, failed }: { n: number; failed?: boolean }) {
+  const { t } = useTranslation(["session"]);
   if (!n) return null;
   return (
     <span
       className="text-[10px] font-semibold text-ink bg-faint/30 rounded-full px-1.5 leading-[15px] shrink-0"
-      title={failed ? `${n} new run${n > 1 ? "s" : ""} — the latest failed` : `${n} new run${n > 1 ? "s" : ""}`}
+      title={t(failed ? "session:newRunsFailed" : "session:newRuns", { count: n })}
     >
       {n > 99 ? "99+" : n}
     </span>
@@ -95,12 +96,13 @@ function LiveDot({ state }: { state?: "working" | "sleeping" | "idle" }) {
 // §31: a session spawned by a platform mention wears its platform's logo, right-aligned beside
 // the title cluster (owner call 2026-07-13). Slack today; the origin key is the platform id.
 function OriginIcon({ s }: { s: SessionInfo }) {
+  const { t } = useTranslation(["session"]);
   if (s.origin !== "slack") return null;
   return (
     <ConnectorIcon
       connector={{ logo: "slack", brand_color: "#611f69" }}
       size={12}
-      title={s.origin_label || "From Slack"}
+      title={s.origin_label || t("session:fromSlack")}
     />
   );
 }
@@ -537,7 +539,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                   onClick={() => setConfirmDelId(s.session_id)}
                 >
                   <Icon name="trash" size={13} className="shrink-0" />
-                  <span className="flex-1">Delete</span>
+                  <span className="flex-1">{t("common:button.delete")}</span>
                 </button>
               )}
             </div>
@@ -893,8 +895,8 @@ export const Sidebar = memo(function Sidebar(props: Props) {
               </span>
               <button
                 className="w-5 h-5 grid place-items-center rounded text-faint hover:text-ink hover:bg-panel"
-                title="New project"
-                aria-label="New project"
+                title={t("session:newProject")}
+                aria-label={t("session:newProject")}
                 onClick={() => props.onNewProject(browseKey)}
               >
                 <Icon name="folderPlus" size={14} />
@@ -1270,8 +1272,8 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                       onClick={() => setRecentExpanded((v) => !v)}
                     >
                       {recentExpanded
-                        ? "Show less"
-                        : `Show ${recentSessions.length - RECENT_PEEK} more`}
+                        ? t("session:showLess")
+                        : t("session:showMore", { count: recentSessions.length - RECENT_PEEK })}
                     </button>
                   )}
                 </>
@@ -1537,7 +1539,7 @@ function NewSessionSplit({
                     onManage();
                   }}
                 >
-                  Manage personas…
+                  {t("session:managePersonas")}
                 </button>
               </div>
             )}

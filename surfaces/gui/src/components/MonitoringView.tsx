@@ -501,7 +501,7 @@ export function MonitoringView() {
                 <div key={s.server_id} className={CARD + " p-4"}>
                   <h4 className="text-xs font-medium text-muted mb-3">{s.name || s.server_id}</h4>
                   <div className="flex gap-4 justify-center">
-                    <GaugeWidget label="CPU" value={s.cpu_percent ?? 0} color="var(--accent)" />
+                    <GaugeWidget label={t("common:monitoring.server.cpu")} value={s.cpu_percent ?? 0} color="var(--accent)" />
                     <GaugeWidget label="MEM" value={s.memory_percent ?? 0} color="var(--warn)" />
                     <GaugeWidget label="DISK" value={s.disk_percent ?? 0} color="var(--danger)" />
                   </div>
@@ -703,7 +703,7 @@ function OverviewPanel({
                 </div>
                 <div className="space-y-2">
                   <ProgressBar
-                    label="CPU"
+                    label={t("common:monitoring.server.cpu")}
                     value={srv.cpu_percent ?? 0}
                   />
                   <ProgressBar
@@ -717,7 +717,7 @@ function OverviewPanel({
                 </div>
                 {cpuData.length > 0 && (
                   <div className="flex gap-4 mt-3">
-                    <MiniChart data={cpuData} color="var(--accent)" label="CPU" height={32} width={140} />
+                    <MiniChart data={cpuData} color="var(--accent)" label={t("common:monitoring.server.cpu")} height={32} width={140} />
                     <MiniChart data={memData} color="var(--warn)" label="MEM" height={32} width={140} />
                   </div>
                 )}

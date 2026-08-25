@@ -373,7 +373,7 @@ export function ProviderForm({
               className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-ok bg-okSoft rounded-full px-2 py-0.5 pointer-events-none"
               data-testid={`${tp}-field-saved-${f.key}`}
             >
-              ✓ Saved
+              {t("settings:provider.saved")}
             </span>
           )}
           {/* §39: state lives IN the field — no status lines below. */}
@@ -393,7 +393,7 @@ export function ProviderForm({
             disabled={ps.verify.state === "testing" || (!ps.secretFilled && !ps.credentialed)}
             data-testid={`${tp}-test`}
           >
-            {ps.verify.state === "testing" ? "…" : info?.needs_key ? "Test" : "Detect"}
+            {ps.verify.state === "testing" ? "…" : info?.needs_key ? t("settings:provider.test") : t("settings:provider.detect")}
           </button>
         )}
       </div>

@@ -97,7 +97,6 @@
       "title": "인시던트",
       "severity": "심각도",
       "status": "상태",
-      "timeline": "타임라인",
       "emptyTimeline": "타임라인이 비어 있습니다.",
       "generatePostmortem": "사후분석 생성",
       "generating": "생성 중...",
@@ -111,7 +110,6 @@
       "runNow": "지금 실행",
       "running": "실행 중...",
       "status": "상태",
-      "latency": "응답 시간",
       "target": "대상",
       "consecutiveFailures": "연속 {{n}}회 실패",
       "none": "등록된 헬스체크가 없습니다."
