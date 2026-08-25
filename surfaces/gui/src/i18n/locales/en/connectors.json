@@ -32,9 +32,6 @@
     "disconnectWorkspace": "Disconnect workspace",
     "disconnecting": "Disconnecting…",
     "disconnectTitle": "Stops relaying this workspace to this computer. The app stays installed in Slack.",
-    "opensSlack": "Opens Slack in your browser — approve @ocw for the workspace. No tokens; works for any number of workspaces.",
-    "addToSlack": "Add to Slack",
-    "recommendedRelay": "relay · tokens stay on this computer",
     "manualSteps1": "Create an app at api.slack.com/apps",
     "manualSteps2": "Enable Socket Mode, add bot scopes, install it to your workspace",
     "manualSteps3": "Paste both tokens",
@@ -67,9 +64,6 @@
     "patToolsOnly": "Personal access token · tools only. Install the GitHub App to let @-mentions and the agent label reach this computer.",
     "triggers": "Triggers: @ocw-agent mentions and the “ocw-agent” label. The agent replies as ocw-agent[bot].",
     "addAnInstallation": "Add an installation",
-    "opensGithub": "Opens GitHub in your browser — approve WeruBWorker there. An existing @ocw-agent App installation links right up; otherwise you’ll pick an account and repos. No tokens typed; the agent acts as ocw-agent[bot].",
-    "connectGithub": "Connect GitHub",
-    "recommendedRelay": "relay · short-lived tokens, never stored",
     "disconnecting": "Disconnecting…",
     "listening": "Listening",
     "inRepo": "in {{repo}}"
@@ -126,13 +120,7 @@
     "strippedNote": "Stripped from every record agents read, across all portals.",
     "hiddenFieldsNote": "Hidden fields never reach an agent; stripped counts land in Activity. To limit what a HUMAN teammate could ask for, use HubSpot permission sets on the connected user.",
     "disconnectPortal": "Disconnect this portal",
-    "opensHubSpot": "Opens HubSpot in your browser — pick the portal there. What agents may do is chosen NOW, at consent:",
     "readOnlyLabel": "Read-only",
-    "readOnlyBlurb": "search and read contacts, companies, deals, tickets",
-    "readWriteLabel": "Read & write",
-    "readWriteBlurb": "adds: log notes and tasks, update records, create contacts — never delete",
-    "connectHubSpot": "Connect HubSpot",
-    "portalsTokens": "Works for any number of portals · tokens stay on this computer",
     "notConnected": "Not connected",
     "portalCount": "{{count}} portal",
     "portalCount_plural": "{{count}} portals",
@@ -182,18 +170,15 @@
     "oneClick": "One click",
     "manual": "Manual",
     "recommended": "Recommended",
-    "tokensStay": "tokens stay on this computer",
     "checkBrowser": "Check your browser…",
     "opensInBrowser": "Opens {{title}} in your browser — sign in and approve access there. No tokens typed, and no WeruBWorker account needed: the sign-in runs entirely on this computer.",
     "connectTitle": "Connect {{title}}",
     "curatedTools": "agents get a curated set of {{title}} tools · tokens stay on this computer",
-    "opensGeneric": "Opens {{title}} in your browser — approve access there. No tokens typed; connect again with another account to add it alongside.",
     "comingSoon": "Coming soon",
     "close": "Close",
     "connect": "Connect",
     "couldNotConnect": "could not connect",
-    "couldNotStartConnect": "could not start the connect",
-    "couldNotStartInstall": "could not start the install"
+    "couldNotStartConnect": "could not start the connect"
   },
   "shared": {
     "people": "People",
@@ -232,9 +217,5 @@
     "enabledCount": "{{enabled}} of {{total}} enabled",
     "asksFirst": "asks first",
     "read": "read"
-  },
-  "cloud": {
-    "signInUnlocks": "Sign-in unlocks one-click connects — or switch to Manual, which works without it.",
-    "checkingSignIn": "Checking WeruBWorker Cloud sign-in…"
   }
 }

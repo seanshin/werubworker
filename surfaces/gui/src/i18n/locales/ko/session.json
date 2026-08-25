@@ -25,9 +25,6 @@
   "newRuns": "{{count}}개 새 실행",
   "awaitingAttention": "확인이 필요합니다",
   "inboxItems": "인박스 — {{count}}개 항목 대기 중",
-  "notSignedIn": "로그인 안 됨",
-  "notSignedInHint": "로그인 안 됨 — 원클릭 연결에는 WeruBWorker Cloud가 필요합니다",
-  "signInCloud": "WeruBWorker Cloud 로그인",
   "openWorkerCloud": "WeruBWorker Cloud",
   "composer": {
     "placeholder": "코워커에게 물어보세요…  (파일 드롭 또는 붙여넣기)",
@@ -44,8 +41,7 @@
     "attachOther": "기타 파일",
     "transcribing": "변환 중…",
     "configureVoice": "설정에서 음성 입력 구성",
-    "sendToInbox": "승인을 인박스로 전송",
-    "inboxHint": "승인 및 질문이 인박스로 이동하며, 에이전트는 계속 작업합니다"
+    "sendToInbox": "승인을 인박스로 전송"
   },
   "permission": {
     "discuss": "대화",
@@ -224,14 +220,6 @@
     "deliverySchedule": "전달 및 스케줄",
     "connectedCheck": "✓ 연결됨",
     "connectBtn": "연결",
-    "openingBrowser": "브라우저 여는 중…",
-    "waitingFor": "{{name}} 대기 중…",
-    "finishConnecting": "브라우저에서 {{name}} 연결을 완료하세요.",
-    "approveComeback": "브라우저에서 승인한 후 돌아오세요 — 이 페이지가 자동으로 업데이트됩니다.",
-    "oneSignIn": "한 번 로그인으로 모든 원클릭 연결 해제",
-    "brokerDesc": "연결은 WeruBWorker Cloud를 통해 중개됩니다 — 토큰은 이 컴퓨터에 보관됩니다.",
-    "waitingSignIn": "로그인 대기 중…",
-    "finishSignIn": "브라우저에서 로그인을 완료하세요 — 이 페이지가 자동으로 업데이트됩니다.",
     "repository": "저장소",
     "repoPlaceholder": "owner/repo",
     "postToChannel": "채널에 게시",
@@ -324,7 +312,6 @@
     "available": "가용",
     "used": "사용",
     "total": "전체",
-    "systemInfo": "시스템 정보",
     "threads": "스레드",
     "command": "명령어",
     "username": "사용자",
@@ -445,7 +432,6 @@
     "erd": "ERD",
     "erdTitle": "엔터티 관계 다이어그램",
     "erdLoading": "ERD 생성 중...",
-    "erdError": "ERD 생성 실패",
     "addDatabase": "데이터베이스 추가",
     "scanDatabases": "스캔"
   },
@@ -458,7 +444,6 @@
     "noItems": "구성된 항목이 없습니다.",
     "exportConfig": "내보내기",
     "importConfig": "가져오기",
-    "exportSuccess": "설정이 내보내졌습니다",
     "importSuccess": "{{count}}개 항목을 가져왔습니다",
     "addProvider": "클라우드 제공업체 추가",
     "providerName": "이름",
@@ -498,7 +483,6 @@
     "inboxDigestDesc": "읽지 않은 이메일의 짧은 요약입니다.",
     "folderCleanup": "폴더 정리",
     "folderCleanupDesc": "최근 다운로드를 유형별로 깔끔한 폴더로 정리합니다.",
-    "runHistory": "실행 이력",
     "noRuns": "실행 이력이 없습니다.",
     "lastRun": "마지막 실행",
     "nextRun": "다음 실행",
@@ -507,8 +491,7 @@
     "disabled": "비활성화됨",
     "runNow": "지금 실행",
     "editTask": "편집",
-    "deleteTask": "삭제",
-    "deleteConfirm": "이 자동화를 삭제할까요?"
+    "deleteTask": "삭제"
   },
   "wiki": {
     "title": "서비스 위키",

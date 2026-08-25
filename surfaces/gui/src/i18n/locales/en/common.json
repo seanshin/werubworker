@@ -29,7 +29,6 @@
     "loading": "Loading…",
     "connecting": "Connecting…",
     "connected": "Connected",
-    "disconnected": "Disconnected",
     "notSetUp": "Not set up",
     "running": "Running",
     "idle": "Idle",
@@ -83,7 +82,6 @@
     "alert": {
       "active": "Active Alerts",
       "history": "Alert History",
-      "rules": "Alert Rules",
       "noActive": "No active alerts.",
       "severity": "Severity",
       "server": "Server",
@@ -100,7 +98,6 @@
       "severity": "Severity",
       "status": "Status",
       "timeline": "Timeline",
-      "noIncidents": "No incidents",
       "emptyTimeline": "The timeline is empty.",
       "generatePostmortem": "Generate postmortem",
       "generating": "Generating…",
@@ -126,7 +123,6 @@
       "action": "Action",
       "target": "Target",
       "result": "Result",
-      "noEntries": "No audit entries",
       "dailyActivity": "Daily Activity",
       "userActivity": "Activity by User",
       "flagged": "Risky actions ({{count}})",
@@ -182,10 +178,6 @@
     "noMatching": "No matching conversations",
     "noProjects": "No projects yet — start one with the + above",
     "noProjectConversations": "No conversations in this project yet"
-  },
-  "confirm": {
-    "deleteTitle": "Delete this conversation?",
-    "deleteMessage": "This cannot be undone."
   },
   "error": {
     "somethingWrong": "Something went wrong.",

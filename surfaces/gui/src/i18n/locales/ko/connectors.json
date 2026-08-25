@@ -32,9 +32,6 @@
     "disconnectWorkspace": "워크스페이스 연결 해제",
     "disconnecting": "연결 해제 중…",
     "disconnectTitle": "이 컴퓨터로의 릴레이를 중지합니다. 앱은 Slack에 설치된 상태로 유지됩니다.",
-    "opensSlack": "브라우저에서 Slack을 열어 워크스페이스에 @ocw를 승인합니다. 토큰 불필요; 여러 워크스페이스에서 작동합니다.",
-    "addToSlack": "Slack에 추가",
-    "recommendedRelay": "릴레이 · 토큰은 이 컴퓨터에 보관됩니다",
     "manualSteps1": "api.slack.com/apps에서 앱 생성",
     "manualSteps2": "Socket Mode 활성화, 봇 스코프 추가, 워크스페이스에 설치",
     "manualSteps3": "두 토큰을 붙여넣기",
@@ -67,9 +64,6 @@
     "patToolsOnly": "개인 액세스 토큰 · 도구만 사용. @멘션과 에이전트 라벨이 이 컴퓨터에 도달하려면 GitHub 앱을 설치하세요.",
     "triggers": "트리거: @ocw-agent 멘션과 \"ocw-agent\" 라벨. 에이전트는 ocw-agent[bot]으로 응답합니다.",
     "addAnInstallation": "설치 추가",
-    "opensGithub": "브라우저에서 GitHub을 열어 WeruBWorker를 승인합니다. 기존 @ocw-agent 앱 설치가 바로 연결됩니다. 토큰 입력 불필요; 에이전트는 ocw-agent[bot]으로 동작합니다.",
-    "connectGithub": "GitHub 연결",
-    "recommendedRelay": "릴레이 · 단기 토큰, 저장 안 됨",
     "disconnecting": "연결 해제 중…",
     "listening": "수신 중",
     "inRepo": "{{repo}}에서"
@@ -126,13 +120,7 @@
     "strippedNote": "모든 포탈에서 에이전트가 읽는 모든 레코드에서 제거됩니다.",
     "hiddenFieldsNote": "숨겨진 필드는 에이전트에게 전달되지 않습니다. 제거된 수는 활동에 표시됩니다. 팀원이 요청할 수 있는 것을 제한하려면 연결된 사용자의 HubSpot 권한 세트를 사용하세요.",
     "disconnectPortal": "이 포탈 연결 해제",
-    "opensHubSpot": "브라우저에서 HubSpot을 열어 포탈을 선택합니다. 에이전트가 할 수 있는 작업은 지금, 동의 시 선택됩니다:",
     "readOnlyLabel": "읽기 전용",
-    "readOnlyBlurb": "연락처, 회사, 거래, 티켓 검색 및 읽기",
-    "readWriteLabel": "읽기 및 쓰기",
-    "readWriteBlurb": "추가: 노트 및 작업 기록, 레코드 업데이트, 연락처 생성 — 삭제 안 함",
-    "connectHubSpot": "HubSpot 연결",
-    "portalsTokens": "여러 포탈에서 작동합니다 · 토큰은 이 컴퓨터에 보관됩니다",
     "notConnected": "연결 안 됨",
     "portalCount": "{{count}}개 포탈",
     "portalCount_plural": "{{count}}개 포탈",
@@ -182,18 +170,15 @@
     "oneClick": "원클릭",
     "manual": "수동",
     "recommended": "추천",
-    "tokensStay": "토큰은 이 컴퓨터에 보관됩니다",
     "checkBrowser": "브라우저를 확인하세요…",
     "opensInBrowser": "브라우저에서 {{title}}을(를) 열어 로그인하고 접근을 승인합니다. 토큰 입력 불필요, WeruBWorker 계정도 필요 없습니다: 로그인은 이 컴퓨터에서만 실행됩니다.",
     "connectTitle": "{{title}} 연결",
     "curatedTools": "에이전트가 {{title}} 도구를 사용합니다 · 토큰은 이 컴퓨터에 보관됩니다",
-    "opensGeneric": "브라우저에서 {{title}}을(를) 열어 접근을 승인합니다. 토큰 입력 불필요; 다른 계정으로 다시 연결하여 추가할 수 있습니다.",
     "comingSoon": "곧 제공 예정",
     "close": "닫기",
     "connect": "연결",
     "couldNotConnect": "연결할 수 없습니다",
-    "couldNotStartConnect": "연결을 시작할 수 없습니다",
-    "couldNotStartInstall": "설치를 시작할 수 없습니다"
+    "couldNotStartConnect": "연결을 시작할 수 없습니다"
   },
   "shared": {
     "people": "사람",
@@ -232,9 +217,5 @@
     "enabledCount": "{{total}}개 중 {{enabled}}개 활성",
     "asksFirst": "승인 필요",
     "read": "읽기"
-  },
-  "cloud": {
-    "signInUnlocks": "로그인하면 원클릭 연결이 가능합니다 — 또는 수동 모드로 전환하세요. 로그인 없이 작동합니다.",
-    "checkingSignIn": "WeruBWorker Cloud 로그인 확인 중…"
   }
 }

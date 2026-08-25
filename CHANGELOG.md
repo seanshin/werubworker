@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed — 제거된 기능이 남긴 죽은 번역 키 75개
+- **142개 전부가 아니라 75개만 지웠다.** 분류를 더 엄격하게 다시 돌린 결과: 확실히 죽은 키 75, **아직 배선 안 된 살아있는 누락 26**, 문구가 짧아 판정 불가 41. 뒤의 둘은 삭제 대상이 아니다
+- 지운 것은 UI가 소스에 존재하지 않는 키들이다 — `settings:gallery` 18(클라우드 갤러리 제거), `settings:onboarding` 10, `session:quickstart` 8, `connectors:hubspot`/`slack`/`github` 12(원클릭 연결 흐름), 그 외 27
+- **표본을 손으로 검증했다**: `Delete this conversation?`, `Add to Slack`, `No skills yet`, `Show the context window bar` 모두 소스에 대응 UI가 없다. `skills:emptyState`는 `emptyStatePrefix`/`Suffix`로 쪼개지며 대체된 것이었다
+- 삭제 후 en/ko 키 구조가 동일한지, 빈 부모 객체가 남지 않는지 검증. 전체 키 1,369 → 1,294, 미참조 142 → 67
+
+### Note — 남은 미참조 67개
+- **살아있는 누락 26개**가 아직 남아 있다: `Sidebar.tsx` 7, `InboxConfigure.tsx` 3, `ProviderSetup.tsx`·`Composer.tsx`·`ScheduledView.tsx` 등. 배선하면 되는 것들이라 다음 작업 대상이다
+- 나머지 41개는 `On`/`Off`/`Total` 같은 짧은 문구라 하드코딩 대조로는 판정할 수 없다. 지우려면 사람이 확인해야 한다
+
+---
+
 ## [2.3.8] - 2026-08-25
 
 > v2.3.7의 후속. 세 뷰를 번역 키로 옮긴 뒤 "번역은 있는데 코드가 안 쓰는 키"를 전수 측정해

@@ -25,9 +25,6 @@
   "newRuns": "{{count}} new runs",
   "awaitingAttention": "awaiting your attention",
   "inboxItems": "Inbox — {{count}} items need you",
-  "notSignedIn": "Not signed in",
-  "notSignedInHint": "Not signed in — one-click connections need WeruBWorker Cloud",
-  "signInCloud": "Sign in to WeruBWorker Cloud",
   "openWorkerCloud": "WeruBWorker Cloud",
   "composer": {
     "placeholder": "Ask the coworker…  (drop or paste files)",
@@ -44,8 +41,7 @@
     "attachOther": "Other files",
     "transcribing": "Transcribing…",
     "configureVoice": "Configure Voice Input in Settings",
-    "sendToInbox": "Send approvals to Inbox",
-    "inboxHint": "Approvals & questions go to the Inbox; the agent keeps working"
+    "sendToInbox": "Send approvals to Inbox"
   },
   "permission": {
     "discuss": "Discuss",
@@ -224,14 +220,6 @@
     "deliverySchedule": "Delivery & schedule",
     "connectedCheck": "✓ Connected",
     "connectBtn": "Connect",
-    "openingBrowser": "Opening browser…",
-    "waitingFor": "Waiting for {{name}}…",
-    "finishConnecting": "Finish connecting {{name}} in your browser.",
-    "approveComeback": "Approve it there, then come back — this page updates by itself.",
-    "oneSignIn": "One sign-in unlocks every one-click connection",
-    "brokerDesc": "Connections are brokered by WeruBWorker Cloud — your tokens stay on this computer.",
-    "waitingSignIn": "Waiting for sign-in…",
-    "finishSignIn": "Finish signing in in your browser — this page updates by itself.",
     "repository": "Repository",
     "repoPlaceholder": "owner/repo",
     "postToChannel": "Post to channel",
@@ -324,7 +312,6 @@
     "available": "Available",
     "used": "Used",
     "total": "Total",
-    "systemInfo": "System Info",
     "threads": "Threads",
     "command": "Command",
     "username": "User",
@@ -445,7 +432,6 @@
     "erd": "ERD",
     "erdTitle": "Entity Relationship Diagram",
     "erdLoading": "Generating ERD...",
-    "erdError": "Failed to generate ERD",
     "addDatabase": "Add Database",
     "scanDatabases": "Scan"
   },
@@ -458,7 +444,6 @@
     "noItems": "No items configured yet.",
     "exportConfig": "Export",
     "importConfig": "Import",
-    "exportSuccess": "Configuration exported",
     "importSuccess": "Imported {{count}} items",
     "addProvider": "Add Cloud Provider",
     "providerName": "Name",
@@ -498,7 +483,6 @@
     "inboxDigestDesc": "One short digest of your unread email.",
     "folderCleanup": "Folder cleanup",
     "folderCleanupDesc": "Sort recent Downloads into tidy folders by type.",
-    "runHistory": "Run history",
     "noRuns": "No runs yet.",
     "lastRun": "Last run",
     "nextRun": "Next run",
@@ -507,8 +491,7 @@
     "disabled": "Disabled",
     "runNow": "Run now",
     "editTask": "Edit",
-    "deleteTask": "Delete",
-    "deleteConfirm": "Delete this automation?"
+    "deleteTask": "Delete"
   },
   "wiki": {
     "title": "Service Wiki",
