@@ -164,6 +164,18 @@
       "title": "에스컬레이션 정책",
       "level": "L{{level}}: {{minutes}}분 → {{channels}}",
       "noChannels": "없음"
+    },
+    "log": {
+      "title": "로그 뷰어",
+      "autoScroll": "자동 스크롤",
+      "loading": "로딩...",
+      "refresh": "새로고침",
+      "allServers": "전체 서버",
+      "allSeverities": "전체 심각도",
+      "searchPlaceholder": "검색 패턴...",
+      "loadingEntries": "로그 로딩 중...",
+      "noEntries": "로그 데이터가 없습니다",
+      "shown": "{{count}}건 표시"
     }
   },
   "empty": {

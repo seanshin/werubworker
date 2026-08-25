@@ -164,6 +164,18 @@
       "title": "Escalation Policies",
       "level": "L{{level}}: {{minutes}} min → {{channels}}",
       "noChannels": "none"
+    },
+    "log": {
+      "title": "Log Viewer",
+      "autoScroll": "Auto-scroll",
+      "loading": "Loading…",
+      "refresh": "Refresh",
+      "allServers": "All servers",
+      "allSeverities": "All severities",
+      "searchPlaceholder": "Search pattern…",
+      "loadingEntries": "Loading logs…",
+      "noEntries": "No log data",
+      "shown": "{{count}} shown"
     }
   },
   "empty": {

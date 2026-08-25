@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { List, useDynamicRowHeight, useListRef, type RowComponentProps } from "react-window";
 
 const CARD = "rounded-xl2 border border-line bg-panel";
@@ -30,13 +31,17 @@ const SEVERITY_COLORS: Record<string, string> = {
   debug: "#6b7280",
 };
 
-function formatTs(epoch: number): string {
+function formatTs(epoch: number, locale: string): string {
   if (!epoch) return "";
   const d = new Date(epoch * 1000);
-  return d.toLocaleTimeString("ko-KR", { hour12: false });
+  // The locale follows the UI language: hardcoding "ko-KR" rendered "7시 13분 20초" in the
+  // English UI. `hour12: false` stays — a log console wants a fixed-width 24h clock whatever
+  // the locale's default is.
+  return d.toLocaleTimeString(locale, { hour12: false });
 }
 
 export function LogView() {
+  const { t, i18n } = useTranslation(["common"]);
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [serverFilter, setServerFilter] = useState("");
@@ -100,7 +105,7 @@ export function LogView() {
   return (
     <div className="flex flex-col h-full gap-3 p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">로그 뷰어</h2>
+        <h2 className="text-lg font-semibold">{t("common:monitoring.log.title")}</h2>
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1 text-xs text-muted">
             <input
@@ -108,14 +113,14 @@ export function LogView() {
               checked={autoScroll}
               onChange={(e) => setAutoScroll(e.target.checked)}
             />
-            자동 스크롤
+            {t("common:monitoring.log.autoScroll")}
           </label>
           <button
             onClick={fetchLogs}
             disabled={loading}
             className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50"
           >
-            {loading ? "로딩..." : "새로고침"}
+            {loading ? t("common:monitoring.log.loading") : t("common:monitoring.log.refresh")}
           </button>
         </div>
       </div>
@@ -127,7 +132,7 @@ export function LogView() {
           onChange={(e) => setServerFilter(e.target.value)}
           className="text-xs px-2 py-1 rounded border border-line bg-panel"
         >
-          <option value="">전체 서버</option>
+          <option value="">{t("common:monitoring.log.allServers")}</option>
           {servers.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
@@ -138,14 +143,14 @@ export function LogView() {
           className="text-xs px-2 py-1 rounded border border-line bg-panel"
         >
           {severities.map((s) => (
-            <option key={s} value={s}>{s || "전체 심각도"}</option>
+            <option key={s} value={s}>{s || t("common:monitoring.log.allSeverities")}</option>
           ))}
         </select>
         <input
           type="text"
           value={searchPattern}
           onChange={(e) => setSearchPattern(e.target.value)}
-          placeholder="검색 패턴..."
+          placeholder={t("common:monitoring.log.searchPlaceholder")}
           className="text-xs px-2 py-1 rounded border border-line bg-panel flex-1 min-w-[150px]"
           onKeyDown={(e) => e.key === "Enter" && fetchLogs()}
         />
@@ -158,25 +163,25 @@ export function LogView() {
       >
         {entries.length === 0 ? (
           <div className="text-center text-muted py-8">
-            {loading ? "로그 로딩 중..." : "로그 데이터가 없습니다"}
+            {loading ? t("common:monitoring.log.loadingEntries") : t("common:monitoring.log.noEntries")}
           </div>
         ) : entries.length > VIRTUAL_THRESHOLD ? (
           <List
             listRef={listRef}
             rowComponent={VirtualLogRow}
-            rowProps={{ entries }}
+            rowProps={{ entries, locale: i18n.language }}
             rowCount={entries.length}
             rowHeight={rowHeight}
             overscanCount={10}
             style={{ height: "100%" }}
           />
         ) : (
-          entries.map((e, i) => <LogRow key={i} entry={e} />)
+          entries.map((e, i) => <LogRow key={i} entry={e} locale={i18n.language} />)
         )}
       </div>
 
       <div className="text-xs text-muted text-right">
-        {entries.length}건 표시
+        {t("common:monitoring.log.shown", { count: entries.length })}
       </div>
     </div>
   );
@@ -184,13 +189,21 @@ export function LogView() {
 
 // One log line. Shared by both paths so the virtualized list can never drift from the plain
 // one — a difference between them would only ever show up past 60 entries.
-function LogRow({ entry, style }: { entry: LogEntry; style?: React.CSSProperties }) {
+function LogRow({
+  entry,
+  locale,
+  style,
+}: {
+  entry: LogEntry;
+  locale: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <div
       style={{ ...style, borderLeft: `3px solid ${SEVERITY_COLORS[entry.severity] || "#6b7280"}` }}
       className="flex gap-2 hover:bg-paper/50 px-1 rounded"
     >
-      <span className="text-muted whitespace-nowrap">{formatTs(entry.ts)}</span>
+      <span className="text-muted whitespace-nowrap">{formatTs(entry.ts, locale)}</span>
       <span className="text-muted whitespace-nowrap">[{entry.server_id}]</span>
       <span
         className="font-medium whitespace-nowrap"
@@ -203,6 +216,11 @@ function LogRow({ entry, style }: { entry: LogEntry; style?: React.CSSProperties
   );
 }
 
-function VirtualLogRow({ index, style, entries }: RowComponentProps<{ entries: LogEntry[] }>) {
-  return <LogRow entry={entries[index]} style={style} />;
+function VirtualLogRow({
+  index,
+  style,
+  entries,
+  locale,
+}: RowComponentProps<{ entries: LogEntry[]; locale: string }>) {
+  return <LogRow entry={entries[index]} locale={locale} style={style} />;
 }
