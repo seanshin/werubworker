@@ -4,8 +4,9 @@
 
 서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다. Gitea + MCP를 통합하여 에이전트와 소스 리포지토리가 하나의 플랫폼으로 동작합니다.
 
-[![Version](https://img.shields.io/badge/version-2.3.6-blue)]()
+[![Version](https://img.shields.io/badge/version-2.3.7-blue)]()
 [![Tests](https://img.shields.io/badge/tests-1%2C446%20passed-brightgreen)]()
+[![UI Tests](https://img.shields.io/badge/ui%20tests-123%20passed-brightgreen)]()
 [![Tools](https://img.shields.io/badge/tools-300%2B-orange)]()
 [![Capabilities](https://img.shields.io/badge/capabilities-28-purple)]()
 [![MCP](https://img.shields.io/badge/MCP-32%20tools-blueviolet)]()
@@ -648,7 +649,7 @@ cd surfaces/gui && npx tsc --noEmit
 
 # 프론트엔드 테스트
 cd surfaces/gui && npx vitest run
-# 115 passed (20 files)
+# 123 passed (23 files)
 ```
 
 | 테스트 파일 | 테스트 수 | 대상 |
@@ -694,7 +695,7 @@ cd surfaces/gui && npx vitest run
 | [**v2.0 아키텍처**](docs/v2-architecture.md) | 전체 시스템 구조, 모니터링/위키/도구 아키텍처, 데이터 저장소 |
 | [**v2.0 API 레퍼런스**](docs/v2-api-reference.md) | 대시보드/인프라/Wiki API 엔드포인트 전체 명세 |
 | [**MCP 서버 설정**](docs/mcp-setup.md) | Claude Desktop/Cursor/Claude Code MCP 연동 가이드 |
-| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.6 전체 변경 이력 |
+| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.7 전체 변경 이력 |
 | [**확장 설계서**](docs/cloud-server-ops-expansion-design.md) | 통합 모니터링, 알림, 인시던트, 서비스 위키 리포지토리 설계 |
 | [**개발팀 조율 가이드**](docs/dev-team/TEAM-COORDINATION.md) | 병렬 개발 규칙, 작업 분배, 충돌 방지 |
 
@@ -702,7 +703,8 @@ cd surfaces/gui && npx vitest run
 
 | 버전 | 날짜 | 주요 내용 |
 |------|------|----------|
-| **v2.3.6** | **2026-08-25** | **성능개선 기획서 v2 완주: WebSocket 압축 명시화(-90.6%), 백그라운드 셸 버퍼 누수 수정(15.8MB→0.2MB), 대시보드 가상 스크롤(2,501→78 노드), 인시던트 페이지네이션 (테스트 1,446개)** |
+| **v2.3.7** | **2026-08-25** | **프론트엔드 정비: 테스트 실패 40건 정리(i18n 초기화), 모니터링·로그·운영 3개 뷰를 번역 키로 이전(하드코딩 124곳), 인용 표시·아포스트로피 곡선 통일 (프론트엔드 테스트 123개)** |
+| v2.3.6 | 2026-08-25 | 성능개선 기획서 v2 완주: WebSocket 압축 명시화(-90.6%), 백그라운드 셸 버퍼 누수 수정(15.8MB→0.2MB), 대시보드 가상 스크롤(2,501→78 노드), 인시던트 페이지네이션 (테스트 1,446개) |
 | v2.3.5 | 2026-08-24 | 성능 최적화 2차: 배치 쓰기(단건 7.6×), 메트릭 조회 캐시, 수집 병렬도 20+적응형 타임아웃, 디스크 관리 자동화, 정리 시 해시체인 단절 수정 (테스트 1,430개) |
 | v2.3.4 | 2026-08-20 | 성능 최적화: 해시체인 메모리 캐시, 커넥션 풀링, 민감정보 필터 빠른 탈출, 알림 규칙 캐시, 체인 스트리밍 검증 (테스트 1,352개) |
 | v2.3.3 | 2026-08-20 | Sign 연동 보안 강화: 해시체인, TOTP 2FA, 봉투 암호화, HMAC 서명, MCP 보안 도구 5개 (테스트 1,343개) |
