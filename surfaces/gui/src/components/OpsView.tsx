@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { PanelHead } from "./IntegrationsView";
 import { Icon } from "./Icon";
 import { MiniChart } from "./MiniChart";
@@ -297,13 +297,22 @@ function Field({ label, value, onChange, placeholder, type }: {
 function DeleteConfirm({ name, onConfirm, onCancel }: {
   name: string; onConfirm: () => void; onCancel: () => void;
 }) {
+  const { t } = useTranslation(["session", "common"]);
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={onCancel}>
       <div className="bg-panel rounded-xl2 border border-line p-5 w-[340px]" onClick={(e) => e.stopPropagation()}>
-        <p className="text-[14px] text-ink mb-4">Delete server <strong>{name}</strong>?</p>
+        <p className="text-[14px] text-ink mb-4">
+          {/* `name` is user data, so it must not reach dangerouslySetInnerHTML. <Trans>
+              interpolates it as a child node — escaped — while keeping the <strong>. */}
+          <Trans
+            i18nKey="session:ops.deleteServerConfirm"
+            values={{ name }}
+            components={{ strong: <strong /> }}
+          />
+        </p>
         <div className="flex justify-end gap-2">
-          <button className="text-[13px] px-3 py-1.5 rounded-lg border border-line text-muted" onClick={onCancel}>Cancel</button>
-          <button className="text-[13px] px-3 py-1.5 rounded-lg bg-err text-white font-medium" onClick={onConfirm}>Delete</button>
+          <button className="text-[13px] px-3 py-1.5 rounded-lg border border-line text-muted" onClick={onCancel}>{t("common:button.cancel")}</button>
+          <button className="text-[13px] px-3 py-1.5 rounded-lg bg-err text-white font-medium" onClick={onConfirm}>{t("common:button.delete")}</button>
         </div>
       </div>
     </div>
@@ -869,7 +878,7 @@ export function OpsView() {
                   <div className="space-y-3">
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11.5px] text-muted">CPU %</span>
+                        <span className="text-[11.5px] text-muted">{t("session:ops.cpuPercent")}</span>
                         <span className="text-[11px] text-faint">{metricsHistory[metricsHistory.length - 1]?.cpu?.toFixed(1)}%</span>
                       </div>
                       <MiniChart data={metricsHistory.map((m) => m.cpu)} type="line" height={40} width={800} color="var(--accent)" />
@@ -889,7 +898,7 @@ export function OpsView() {
                       <MiniChart data={metricsHistory.map((m) => m.disk)} type="line" height={40} width={800} color="#8b5cf6" />
                     </div>
                     <div className="text-[11px] text-faint">
-                      {metricsHistory.length} {t("session:ops.dataPoints")} · 30초마다 갱신
+                      {metricsHistory.length} {t("session:ops.dataPoints")} · {t("session:ops.refreshInterval", { seconds: 30 })}
                     </div>
                   </div>
                 ) : (
@@ -911,7 +920,7 @@ export function OpsView() {
                 {showAlertSettings && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <label className="text-[12.5px] text-muted w-24">CPU %</label>
+                      <label className="text-[12.5px] text-muted w-24">{t("session:ops.cpuPercent")}</label>
                       <input
                         type="number"
                         min={1}
@@ -1025,7 +1034,7 @@ export function OpsView() {
                           MEM% {procSortKey === "memory_percent" ? (procSortAsc ? "▲" : "▼") : ""}
                         </th>
                         <th className="pb-2 pr-4">{t("session:ops.threads")}</th>
-                        <th className="pb-2 pr-4">Status</th>
+                        <th className="pb-2 pr-4">{t("session:ops.status")}</th>
                         <th className="pb-2 pr-4">{t("session:ops.command")}</th>
                         <th className="pb-2"></th>
                       </tr>
@@ -1201,11 +1210,11 @@ export function OpsView() {
                     {networkStats.total && (
                       <>
                         <div className="flex-1 rounded-lg bg-paper border border-line p-3 text-center">
-                          <div className="text-faint mb-1">Total Sent</div>
+                          <div className="text-faint mb-1">{t("session:ops.totalSent")}</div>
                           <div className="text-ink font-semibold text-[14px]">{formatBytes(networkStats.total.bytes_sent)}</div>
                         </div>
                         <div className="flex-1 rounded-lg bg-paper border border-line p-3 text-center">
-                          <div className="text-faint mb-1">Total Received</div>
+                          <div className="text-faint mb-1">{t("session:ops.totalReceived")}</div>
                           <div className="text-ink font-semibold text-[14px]">{formatBytes(networkStats.total.bytes_recv)}</div>
                         </div>
                         <div className="flex-1 rounded-lg bg-paper border border-line p-3 text-center">
@@ -1237,19 +1246,19 @@ export function OpsView() {
                         </div>
                         <div className="grid grid-cols-4 gap-3 text-[11.5px]">
                           <div>
-                            <div className="text-faint">Sent</div>
+                            <div className="text-faint">{t("session:ops.bytesSent")}</div>
                             <div className="text-ink font-medium">{formatBytes(s.bytes_sent)}</div>
                           </div>
                           <div>
-                            <div className="text-faint">Received</div>
+                            <div className="text-faint">{t("session:ops.bytesRecv")}</div>
                             <div className="text-ink font-medium">{formatBytes(s.bytes_recv)}</div>
                           </div>
                           <div>
-                            <div className="text-faint">Packets ↑/↓</div>
+                            <div className="text-faint">{t("session:ops.packetsUpDown")}</div>
                             <div className="text-ink font-medium">{s.packets_sent.toLocaleString()} / {s.packets_recv.toLocaleString()}</div>
                           </div>
                           <div>
-                            <div className="text-faint">Errors / Drops</div>
+                            <div className="text-faint">{t("session:ops.errorsDrops")}</div>
                             <div className={"font-medium " + ((s.errin + s.errout + (s.dropin || 0) + (s.dropout || 0)) > 0 ? "text-err" : "text-ink")}>
                               {s.errin + s.errout} / {(s.dropin || 0) + (s.dropout || 0)}
                             </div>
@@ -1271,19 +1280,19 @@ export function OpsView() {
                 <div className="flex gap-3 mb-4">
                   <div className="flex-1 rounded-lg bg-ok/10 border border-ok/20 p-3 text-center">
                     <div className="text-[20px] font-bold text-ok">{healthChecks.filter(c => c.last_status === "ok").length}</div>
-                    <div className="text-[11px] text-ok/80">Healthy</div>
+                    <div className="text-[11px] text-ok/80">{t("session:ops.healthy")}</div>
                   </div>
                   <div className="flex-1 rounded-lg bg-warn/10 border border-warn/20 p-3 text-center">
                     <div className="text-[20px] font-bold text-warn">{healthChecks.filter(c => c.last_status === "warn").length}</div>
-                    <div className="text-[11px] text-warn/80">Warning</div>
+                    <div className="text-[11px] text-warn/80">{t("session:ops.warning")}</div>
                   </div>
                   <div className="flex-1 rounded-lg bg-err/10 border border-err/20 p-3 text-center">
                     <div className="text-[20px] font-bold text-err">{healthChecks.filter(c => c.last_status === "fail").length}</div>
-                    <div className="text-[11px] text-err/80">Failed</div>
+                    <div className="text-[11px] text-err/80">{t("session:ops.failed")}</div>
                   </div>
                   <div className="flex-1 rounded-lg bg-faint/10 border border-line p-3 text-center">
                     <div className="text-[20px] font-bold text-faint">{healthChecks.filter(c => c.last_status === "unknown").length}</div>
-                    <div className="text-[11px] text-faint">Pending</div>
+                    <div className="text-[11px] text-faint">{t("session:ops.pending")}</div>
                   </div>
                 </div>
               )}
@@ -1328,11 +1337,11 @@ export function OpsView() {
                           <button className="text-[11px] text-err hover:underline" onClick={async () => {
                             await fetch(`/v1/ops/healthcheck/${i}`, { method: "DELETE" });
                             fetchHealthChecks();
-                          }}>Remove</button>
+                          }}>{t("common:button.remove")}</button>
                         </div>
                         <div className="grid grid-cols-5 gap-2 text-[11px]">
                           <div>
-                            <div className="text-faint">Status</div>
+                            <div className="text-faint">{t("session:ops.status")}</div>
                             <div className={"font-semibold " +
                               (c.last_status === "ok" ? "text-ok" :
                                c.last_status === "fail" ? "text-err" :
@@ -1341,23 +1350,23 @@ export function OpsView() {
                             </div>
                           </div>
                           <div>
-                            <div className="text-faint">Latency</div>
+                            <div className="text-faint">{t("session:ops.latency")}</div>
                             <div className="text-ink font-medium">{c.last_latency_ms > 0 ? `${c.last_latency_ms}ms` : "—"}</div>
                           </div>
                           <div>
-                            <div className="text-faint">Uptime</div>
+                            <div className="text-faint">{t("session:ops.uptime")}</div>
                             <div className="text-ink font-medium">
                               {c.total_checks > 0 ? `${Math.round(((c.total_checks - c.total_failures) / c.total_checks) * 100)}%` : "—"}
                             </div>
                           </div>
                           <div>
-                            <div className="text-faint">Failures</div>
+                            <div className="text-faint">{t("session:ops.failures")}</div>
                             <div className={"font-medium " + (c.consecutive_failures > 0 ? "text-err" : "text-ink")}>
                               {c.consecutive_failures > 0 ? `${c.consecutive_failures} consecutive` : `${c.total_failures} total`}
                             </div>
                           </div>
                           <div>
-                            <div className="text-faint">Last Check</div>
+                            <div className="text-faint">{t("session:ops.lastCheck")}</div>
                             <div className="text-ink font-medium">
                               {c.last_check > 0 ? new Date(c.last_check * 1000).toLocaleTimeString() : "Never"}
                             </div>
@@ -1388,8 +1397,8 @@ export function OpsView() {
                         <option value="tcp">TCP</option>
                         <option value="dns">DNS</option>
                         <option value="ping">Ping</option>
-                        <option value="disk">Disk Usage</option>
-                        <option value="memory">Memory</option>
+                        <option value="disk">{t("session:ops.checkDiskUsage")}</option>
+                        <option value="memory">{t("session:ops.checkMemory")}</option>
                       </select>
                     </div>
                     <div className="flex-1 min-w-[200px]">
@@ -1432,7 +1441,7 @@ export function OpsView() {
                   onClick={() => setShowOnboard(!showOnboard)}
                   className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20"
                 >
-                  서버 온보딩
+                  {t("session:ops.onboard.title")}
                 </button>
                 <button
                   className="text-[12.5px] text-accent font-medium"
@@ -1469,13 +1478,13 @@ export function OpsView() {
                       className="text-[11.5px] text-accent hover:underline"
                       onClick={() => setSshModal({ open: true, server: s })}
                     >
-                      Edit
+                      {t("common:button.edit")}
                     </button>
                     <button
                       className="text-[11.5px] text-err hover:underline"
                       onClick={() => setDeleteTarget(s)}
                     >
-                      Delete
+                      {t("common:button.delete")}
                     </button>
                     <span
                       className={
@@ -1493,31 +1502,31 @@ export function OpsView() {
             {/* Server Onboarding Form */}
             {showOnboard && (
               <div className={CARD + " p-4 mt-3"}>
-                <h3 className="font-semibold text-sm mb-3">서버 온보딩</h3>
+                <h3 className="font-semibold text-sm mb-3">{t("session:ops.onboard.title")}</h3>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <input placeholder="서버 ID *" value={onboardForm.server_id} onChange={(e) => setOnboardForm((p) => ({ ...p, server_id: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
-                  <input placeholder="호스트(IP) *" value={onboardForm.host} onChange={(e) => setOnboardForm((p) => ({ ...p, host: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
-                  <input placeholder="포트" type="number" value={onboardForm.port} onChange={(e) => setOnboardForm((p) => ({ ...p, port: Number(e.target.value) }))} className="px-2 py-1 rounded border border-line bg-panel" />
-                  <input placeholder="사용자명" value={onboardForm.username} onChange={(e) => setOnboardForm((p) => ({ ...p, username: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
-                  <input placeholder="키 경로" value={onboardForm.key_path} onChange={(e) => setOnboardForm((p) => ({ ...p, key_path: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
-                  <input placeholder="라벨" value={onboardForm.label} onChange={(e) => setOnboardForm((p) => ({ ...p, label: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
-                  <input placeholder="태그 (쉼표 구분)" value={onboardForm.tags} onChange={(e) => setOnboardForm((p) => ({ ...p, tags: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel col-span-2" />
+                  <input placeholder={t("session:ops.onboard.serverId")} value={onboardForm.server_id} onChange={(e) => setOnboardForm((p) => ({ ...p, server_id: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder={t("session:ops.onboard.host")} value={onboardForm.host} onChange={(e) => setOnboardForm((p) => ({ ...p, host: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder={t("session:ops.onboard.port")} type="number" value={onboardForm.port} onChange={(e) => setOnboardForm((p) => ({ ...p, port: Number(e.target.value) }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder={t("session:ops.onboard.username")} value={onboardForm.username} onChange={(e) => setOnboardForm((p) => ({ ...p, username: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder={t("session:ops.onboard.keyPath")} value={onboardForm.key_path} onChange={(e) => setOnboardForm((p) => ({ ...p, key_path: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder={t("session:ops.onboard.label")} value={onboardForm.label} onChange={(e) => setOnboardForm((p) => ({ ...p, label: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel" />
+                  <input placeholder={t("session:ops.onboard.tags")} value={onboardForm.tags} onChange={(e) => setOnboardForm((p) => ({ ...p, tags: e.target.value }))} className="px-2 py-1 rounded border border-line bg-panel col-span-2" />
                 </div>
                 <button onClick={handleOnboard} disabled={onboarding || !onboardForm.server_id || !onboardForm.host}
                   className="mt-3 text-xs px-3 py-1.5 rounded bg-accent text-white hover:bg-accent/90 disabled:opacity-50">
-                  {onboarding ? "온보딩 중..." : "온보딩 시작"}
+                  {onboarding ? t("session:ops.onboard.running") : t("session:ops.onboard.start")}
                 </button>
                 {onboardResult && (
                   <div className="mt-3 p-3 rounded-lg bg-paper text-xs">
                     <div className={onboardResult.ok ? "text-green-400" : "text-yellow-400"}>
-                      {onboardResult.ok ? "온보딩 완료" : "일부 실패"}
+                      {onboardResult.ok ? t("session:ops.onboard.done") : t("session:ops.onboard.partial")}
                     </div>
                     <div className="mt-1 text-muted">
-                      완료: {onboardResult.steps_completed?.join(", ") || "없음"}
+                      {t("session:ops.onboard.completed")}: {onboardResult.steps_completed?.join(", ") || t("session:ops.onboard.none")}
                     </div>
                     {onboardResult.steps_failed?.length > 0 && (
                       <div className="mt-1 text-red-400">
-                        실패: {onboardResult.steps_failed.join(", ")}
+                        {t("session:ops.onboard.failed")}: {onboardResult.steps_failed.join(", ")}
                       </div>
                     )}
                     {onboardResult.system_info?.os && (
@@ -1533,34 +1542,46 @@ export function OpsView() {
 
       {/* Batch Command */}
       <div className={CARD + " p-4 mt-4"}>
-        <h3 className="font-semibold text-sm mb-3">일괄 명령 실행</h3>
+        <h3 className="font-semibold text-sm mb-3">{t("session:ops.batch.title")}</h3>
         <div className="flex gap-2 mb-2">
           <select value={batchMode} onChange={(e) => setBatchMode(e.target.value as any)}
             className="text-xs px-2 py-1 rounded border border-line bg-panel">
-            <option value="parallel">병렬 실행</option>
-            <option value="rolling">롤링 실행</option>
+            <option value="parallel">{t("session:ops.batch.parallel")}</option>
+            <option value="rolling">{t("session:ops.batch.rolling")}</option>
           </select>
           {serverTags.length > 0 && (
             <select value={batchTag} onChange={(e) => setBatchTag(e.target.value)}
               className="text-xs px-2 py-1 rounded border border-line bg-panel">
-              <option value="">전체 서버</option>
+              <option value="">{t("session:ops.batch.allServers")}</option>
               {serverTags.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           )}
         </div>
         <div className="flex gap-2">
           <input value={batchCmd} onChange={(e) => setBatchCmd(e.target.value)}
-            placeholder="실행할 명령어..." className="flex-1 text-xs px-2 py-1.5 rounded border border-line bg-panel font-mono"
+            placeholder={t("session:ops.batch.commandPlaceholder")} className="flex-1 text-xs px-2 py-1.5 rounded border border-line bg-panel font-mono"
             onKeyDown={(e) => e.key === "Enter" && handleBatchExecute()} />
           <button onClick={handleBatchExecute} disabled={batchRunning || !batchCmd.trim()}
             className="text-xs px-3 py-1.5 rounded bg-accent text-white hover:bg-accent/90 disabled:opacity-50">
-            {batchRunning ? "실행 중..." : "실행"}
+            {batchRunning ? t("session:ops.batch.running") : t("session:ops.batch.run")}
           </button>
         </div>
         {batchResults && (
           <div className="mt-3 space-y-1">
             <div className="text-xs text-muted">
-              전체 {batchResults.total} | 성공 <span className="text-green-400">{batchResults.succeeded}</span> | 실패 <span className="text-red-400">{batchResults.failed}</span> | {batchResults.duration_ms}ms
+              <Trans
+                i18nKey="session:ops.batch.summary"
+                values={{
+                  total: batchResults.total,
+                  succeeded: batchResults.succeeded,
+                  failed: batchResults.failed,
+                }}
+                components={{
+                  ok: <span className="text-green-400" />,
+                  bad: <span className="text-red-400" />,
+                }}
+              />{" "}
+              | {batchResults.duration_ms}ms
             </div>
             {batchResults.results?.map((r: any, i: number) => (
               <div key={i} className={`text-xs p-2 rounded ${r.ok ? "bg-green-500/5" : "bg-red-500/5"}`}>

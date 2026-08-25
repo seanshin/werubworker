@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed — `OpsView`를 번역 키로 이전
+- **이 파일은 양방향으로 새고 있었다**: 서버 온보딩·일괄 명령 패널은 **한국어**를(나중에 추가되며 i18n을 건너뛴 것으로 보인다), 네트워크·헬스체크 표는 **영어**를 하드코딩했다. 언어를 어느 쪽으로 맞춰도 화면 일부가 반대 언어로 남았다
+- **하드코딩 49곳 이전**: 한국어 21곳(온보딩 폼 7개 placeholder, 결과 문구, 일괄 실행 옵션·버튼·요약)과 영문 28곳(`CPU %`, `Total Sent/Received`, `Packets ↑/↓`, `Errors / Drops`, `Healthy`/`Warning`/`Failed`/`Pending`, `Latency`, `Failures`, `Last Check` 등). `session:ops.*`에 이미 있던 키는 재사용하고 40개를 추가해 en/ko 각 105개로 맞췄다
+- **마크업이 섞인 문자열은 `<Trans>`로 처리**: 삭제 확인(`Delete server <strong>{{name}}</strong>?`)과 일괄 실행 요약(성공/실패 숫자에 색상 `<span>`). 특히 삭제 확인의 `name`은 **사용자 데이터**라 `dangerouslySetInnerHTML`에 넣으면 안 된다 — `<Trans>`는 값을 자식 노드로 이스케이프해 넘기면서 마크업을 보존한다
+- **번역하지 않은 것**: `HTTP`/`HTTPS`/`Ping`/`Port`는 헬스체크 유형 식별자, `PID:`는 기술 약어, placeholder의 예시값(`192.168.1.10`, `web-01`, `~/.ssh/id_ed25519`, `Production Web`, `deploy`)은 입력 형식을 보여주는 샘플이다
+- **테스트 2개 추가**: 영어에서 한글이 새어 나오지 않는지, 한국어에서 영문 하드코딩이 남지 않는지. 온보딩·일괄 패널 각각을 하드코딩으로 되돌리면 실패하는 것을 확인
+
 ### Fixed — `LogView`를 번역 키로 이전
 - **여기도 `useTranslation`을 쓰지 않고 한국어를 하드코딩하고 있었다**: 문자열 8곳(제목, 자동 스크롤 라벨, 새로고침 버튼, 필터 드롭다운의 `전체 서버`/`전체 심각도`, 검색 placeholder, 빈 상태 2종, 건수 표시)을 `common:monitoring.log.*`로 옮겼다
 - **`formatTs()`가 `toLocaleTimeString("ko-KR")`로 고정돼 있던 문제**: 영어 UI에서도 타임스탬프가 `7시 13분 20초`로 렌더됐다. UI 언어를 따르도록 `locale`을 인자로 받는다. `hour12: false`는 유지 — 로그 콘솔은 로케일 기본값과 무관하게 고정폭 24시간 표기가 낫다. 이건 짚어서 고친 게 아니라 "영어에서 한글이 새어 나오지 않는다" 테스트가 잡아냈다
