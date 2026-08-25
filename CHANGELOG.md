@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed — `MonitoringView`를 번역 키로 이전
+- **`useTranslation`을 전혀 쓰지 않고 한국어를 하드코딩하고 있었다**: 영어로 전환해도 모니터링 화면만 한국어로 남았다. `common:monitoring.*`에 번역 뼈대가 이미 있었는데도 배선이 없었다
+- **하드코딩 문자열 68곳 → 0곳**: 탭 라벨, 카드 제목, 테이블 헤더, 빈 상태 문구, 버튼, 배지(`활성`/`비활성`), 임계값·에스컬레이션·이상 건수 같은 보간 문자열까지. 6개 컴포넌트(`MonitoringView`·`OverviewPanel`·`AlertsPanel`·`IncidentsPanel`·`HealthChecksPanel`·`AuditPanel`)에 `useTranslation` 배선
+- **`relativeTime()`이 `t`를 인자로 받는다**: `"3분 전"`을 만들던 순수 함수라 번역이 필요한데, 호출부 9곳이 모두 `t`를 가진 컴포넌트 안이다. i18n 싱글턴을 끌어오는 것보다 명시적으로 넘기는 편이 테스트하기 쉽다
+- **`toLocaleTimeString("ko-KR")` 하드코딩 제거**: 마지막 갱신 시각이 언어와 무관하게 항상 한국 형식이었다 → `i18n.language`를 따른다
+- 기존 `common:monitoring.*` 뼈대를 확장해 en/ko 각 83개 키로 맞췄다. 컴포넌트가 참조하는 71개 키가 양쪽 로케일에 모두 존재하는 것을 확인
+- **테스트 2개 추가** (`MonitoringView.i18n.test.tsx`): 영어에서 한글이 새어 나오지 않는지(`not.toMatch(/[가-힣]/)`), 한국어로 전환하면 실제로 한국어가 나오는지. 하나를 하드코딩으로 되돌리면 실패하는 것을 확인
+
 ### Fixed — `ModelsTab`이 번역을 쓰지 않던 문제
 - **번역은 이미 있는데 컴포넌트가 하드코딩된 영문을 쓰고 있었다** (`ManageTabs.tsx`의 `ModelsTab`): 7곳 — 섹션 제목 `Models`/`Included models`, 두 설명 문단, `Remove key…` 버튼과 그 확인 대화상자, `OPENAI_API_KEY` 환경변수 안내. 영문/한국어 번역이 `manageTabs.*`에 모두 준비돼 있었고 배선만 빠져 있었다. 한국어로 전환해도 이 문단들만 영어로 남았다
 - `envNote`는 `<code>` 태그를 품고 있어 `dangerouslySetInnerHTML`로 렌더한다 — `AccessSection`·`AutomationQuickstart`와 같은 관용구이고, 내용은 사용자 입력이 아니라 자체 번역 번들이다

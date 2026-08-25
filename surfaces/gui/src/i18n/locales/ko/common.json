@@ -66,7 +66,8 @@
       "alerts": "알림",
       "incidents": "인시던트",
       "healthchecks": "헬스체크",
-      "audit": "감사 로그"
+      "audit": "감사 로그",
+      "dashboard": "대시보드"
     },
     "card": {
       "servers": "서버",
@@ -84,17 +85,30 @@
       "history": "알림 이력",
       "rules": "알림 규칙",
       "webhooks": "Webhook",
-      "noActive": "활성 알림 없음",
+      "noActive": "활성 알림이 없습니다.",
       "severity": "심각도",
       "server": "서버",
-      "time": "시각"
+      "time": "시각",
+      "message": "메시지",
+      "firedAt": "발생",
+      "resolvedAt": "해소",
+      "unresolved": "미해소",
+      "noHistory": "히스토리가 없습니다.",
+      "threshold": "{{metric}}: {{value}} (임계값 {{threshold}})"
     },
     "incident": {
       "title": "인시던트",
       "severity": "심각도",
       "status": "상태",
       "timeline": "타임라인",
-      "noIncidents": "인시던트 없음"
+      "noIncidents": "인시던트 없음",
+      "emptyTimeline": "타임라인이 비어 있습니다.",
+      "generatePostmortem": "사후분석 생성",
+      "generating": "생성 중...",
+      "aiPostmortem": "AI 사후분석",
+      "none": "인시던트가 없습니다.",
+      "loadMore": "이전 인시던트 {{count}}건 더 보기",
+      "loadingMore": "불러오는 중..."
     },
     "healthcheck": {
       "title": "헬스체크",
@@ -102,7 +116,9 @@
       "running": "실행 중...",
       "status": "상태",
       "latency": "응답 시간",
-      "target": "대상"
+      "target": "대상",
+      "consecutiveFailures": "연속 {{n}}회 실패",
+      "none": "등록된 헬스체크가 없습니다."
     },
     "audit": {
       "title": "운영 감사 로그",
@@ -111,9 +127,44 @@
       "action": "액션",
       "target": "대상",
       "result": "결과",
-      "noEntries": "감사 로그 없음"
+      "noEntries": "감사 로그 없음",
+      "dailyActivity": "일별 활동",
+      "userActivity": "사용자별 활동",
+      "flagged": "위험 행동 ({{count}}건)",
+      "exportCsv": "CSV 내보내기 (30일)",
+      "none": "감사 로그가 없습니다."
     },
-    "lastUpdated": "마지막 갱신"
+    "lastUpdated": "마지막 갱신",
+    "loading": "데이터를 불러오는 중...",
+    "serverStatus": "서버 현황",
+    "noServers": "등록된 서버가 없습니다.",
+    "recentAlerts": "최근 알림",
+    "recentIncidents": "최근 인시던트",
+    "noActiveIncidents": "활성 인시던트가 없습니다.",
+    "enabled": "활성",
+    "disabled": "비활성",
+    "relative": {
+      "seconds": "{{n}}초 전",
+      "minutes": "{{n}}분 전",
+      "hours": "{{n}}시간 전",
+      "days": "{{n}}일 전"
+    },
+    "anomaly": {
+      "title": "이상 탐지",
+      "analyze": "AI 분석",
+      "analyzing": "분석 중...",
+      "count": "이상 {{n}}건"
+    },
+    "webhook": {
+      "title": "Webhook 목록",
+      "events": "이벤트",
+      "none": "등록된 웹훅이 없습니다."
+    },
+    "escalation": {
+      "title": "에스컬레이션 정책",
+      "level": "L{{level}}: {{minutes}}분 → {{channels}}",
+      "noChannels": "없음"
+    }
   },
   "empty": {
     "noConversations": "대화가 없습니다",

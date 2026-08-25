@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { connectMetrics, fetchAnomalies, analyzeAnomalies, generatePostmortem, fetchEscalationPolicies } from "../api";
 import { MiniChart } from "./MiniChart";
 import { ProgressBar } from "./ProgressBar";
@@ -116,13 +118,13 @@ interface OverviewData {
 
 /* ── Helpers ───────────────────────────────────────────── */
 
-function relativeTime(epoch: number): string {
+function relativeTime(epoch: number, t: TFunction): string {
   if (!epoch) return "—";
   const diff = Math.floor(Date.now() / 1000 - epoch);
-  if (diff < 60) return `${diff}초 전`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-  return `${Math.floor(diff / 86400)}일 전`;
+  if (diff < 60) return t("common:monitoring.relative.seconds", { n: diff });
+  if (diff < 3600) return t("common:monitoring.relative.minutes", { n: Math.floor(diff / 60) });
+  if (diff < 86400) return t("common:monitoring.relative.hours", { n: Math.floor(diff / 3600) });
+  return t("common:monitoring.relative.days", { n: Math.floor(diff / 86400) });
 }
 
 function severityColor(sev: string): string {
@@ -199,6 +201,7 @@ function TabButton({
 type TabId = "dashboard" | "overview" | "alerts" | "incidents" | "healthchecks" | "audit";
 
 export function MonitoringView() {
+  const { t, i18n } = useTranslation(["common"]);
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -457,12 +460,12 @@ export function MonitoringView() {
   }, [overview, fetchServerMetrics]);
 
   const tabs: { id: TabId; label: string }[] = [
-    { id: "dashboard", label: "대시보드" },
-    { id: "overview", label: "개요" },
-    { id: "alerts", label: "알림" },
-    { id: "incidents", label: "인시던트" },
-    { id: "healthchecks", label: "헬스체크" },
-    { id: "audit", label: "감사 로그" },
+    { id: "dashboard", label: t("common:monitoring.tab.dashboard") },
+    { id: "overview", label: t("common:monitoring.tab.overview") },
+    { id: "alerts", label: t("common:monitoring.tab.alerts") },
+    { id: "incidents", label: t("common:monitoring.tab.incidents") },
+    { id: "healthchecks", label: t("common:monitoring.tab.healthchecks") },
+    { id: "audit", label: t("common:monitoring.tab.audit") },
   ];
 
   return (
@@ -470,10 +473,10 @@ export function MonitoringView() {
       {/* Header */}
       <div className="px-6 py-4 border-b border-subtle">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-ink">모니터링 대시보드</h1>
+          <h1 className="text-lg font-semibold text-ink">{t("common:monitoring.title")}</h1>
           {lastRefresh && (
             <span className="text-[11px] text-faint">
-              마지막 갱신: {lastRefresh.toLocaleTimeString("ko-KR")}
+              {t("common:monitoring.lastUpdated")}: {lastRefresh.toLocaleTimeString(i18n.language)}
             </span>
           )}
         </div>
@@ -513,14 +516,14 @@ export function MonitoringView() {
 
             {overview?.active_alerts?.length ? (
               <div className={CARD + " p-4 mt-4"}>
-                <h3 className="text-sm font-semibold mb-2">활성 알림 ({overview.active_alerts.length})</h3>
+                <h3 className="text-sm font-semibold mb-2">{t("common:monitoring.alert.active")} ({overview.active_alerts.length})</h3>
                 <div className="space-y-1">
                   {overview.active_alerts.slice(0, 5).map((a, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs">
                       <SeverityBadge severity={a.severity} />
                       <span className="text-muted">{a.server_name || a.server_id}</span>
                       <span>{a.message}</span>
-                      {a.fired_at && <span className="text-muted ml-auto">{relativeTime(a.fired_at)}</span>}
+                      {a.fired_at && <span className="text-muted ml-auto">{relativeTime(a.fired_at, t)}</span>}
                     </div>
                   ))}
                 </div>
@@ -634,15 +637,16 @@ function OverviewPanel({
   analyzingAnomalies: boolean;
   onAnalyzeAnomalies: () => void;
 }) {
+  const { t } = useTranslation(["common"]);
   if (!overview) {
-    return <p className="text-muted text-sm">데이터를 불러오는 중...</p>;
+    return <p className="text-muted text-sm">{t("common:monitoring.loading")}</p>;
   }
 
   const cards = [
-    { label: "서버", value: overview.server_count, icon: "gear" as const },
-    { label: "활성 알림", value: overview.alert_count, icon: "shield" as const },
-    { label: "헬스체크", value: overview.health_checks?.length ?? 0, icon: "refresh" as const },
-    { label: "인시던트", value: overview.incident_count, icon: "info" as const },
+    { label: t("common:monitoring.card.servers"), value: overview.server_count, icon: "gear" as const },
+    { label: t("common:monitoring.card.activeAlerts"), value: overview.alert_count, icon: "shield" as const },
+    { label: t("common:monitoring.card.healthChecks"), value: overview.health_checks?.length ?? 0, icon: "refresh" as const },
+    { label: t("common:monitoring.card.incidents"), value: overview.incident_count, icon: "info" as const },
   ];
 
   return (
@@ -667,7 +671,7 @@ function OverviewPanel({
 
       {/* Server list */}
       <div>
-        <h2 className="text-sm font-semibold text-ink mb-3">서버 현황</h2>
+        <h2 className="text-sm font-semibold text-ink mb-3">{t("common:monitoring.serverStatus")}</h2>
         <div className="space-y-3">
           {overview.servers.map((srv) => {
             const metrics = serverMetrics[srv.server_id] || [];
@@ -691,7 +695,7 @@ function OverviewPanel({
                   <div className="flex items-center gap-2">
                     {anomalies[srv.server_id]?.length ? (
                       <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 font-medium">
-                        이상 {anomalies[srv.server_id].length}건
+                        {t("common:monitoring.anomaly.count", { n: anomalies[srv.server_id].length })}
                       </span>
                     ) : null}
                     <span className="text-[11px] text-faint">{srv.host}</span>
@@ -703,11 +707,11 @@ function OverviewPanel({
                     value={srv.cpu_percent ?? 0}
                   />
                   <ProgressBar
-                    label="메모리"
+                    label={t("common:monitoring.server.memory")}
                     value={srv.memory_percent ?? 0}
                   />
                   <ProgressBar
-                    label="디스크"
+                    label={t("common:monitoring.server.disk")}
                     value={srv.disk_percent ?? 0}
                   />
                 </div>
@@ -721,7 +725,7 @@ function OverviewPanel({
             );
           })}
           {overview.servers.length === 0 && (
-            <p className="text-sm text-muted">등록된 서버가 없습니다.</p>
+            <p className="text-sm text-muted">{t("common:monitoring.noServers")}</p>
           )}
         </div>
       </div>
@@ -730,7 +734,7 @@ function OverviewPanel({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Recent alerts */}
         <div>
-          <h2 className="text-sm font-semibold text-ink mb-3">최근 알림</h2>
+          <h2 className="text-sm font-semibold text-ink mb-3">{t("common:monitoring.recentAlerts")}</h2>
           <div className="space-y-2">
             {overview.active_alerts.slice(0, 3).map((a, i) => (
               <div key={i} className={`${CARD} p-3 flex items-start gap-2`}>
@@ -739,20 +743,20 @@ function OverviewPanel({
                   <p className="text-sm text-ink truncate">{a.message}</p>
                   <p className="text-[11px] text-faint">
                     {a.server_name && `${a.server_name} · `}
-                    {a.fired_at ? relativeTime(a.fired_at) : ""}
+                    {a.fired_at ? relativeTime(a.fired_at, t) : ""}
                   </p>
                 </div>
               </div>
             ))}
             {overview.active_alerts.length === 0 && (
-              <p className="text-sm text-muted">활성 알림이 없습니다.</p>
+              <p className="text-sm text-muted">{t("common:monitoring.alert.noActive")}</p>
             )}
           </div>
         </div>
 
         {/* Recent incidents */}
         <div>
-          <h2 className="text-sm font-semibold text-ink mb-3">최근 인시던트</h2>
+          <h2 className="text-sm font-semibold text-ink mb-3">{t("common:monitoring.recentIncidents")}</h2>
           <div className="space-y-2">
             {overview.active_incidents.slice(0, 3).map((inc) => (
               <div key={inc.id} className={`${CARD} p-3 flex items-start gap-2`}>
@@ -762,14 +766,14 @@ function OverviewPanel({
                   <div className="flex items-center gap-2 mt-1">
                     <StatusBadge status={inc.status} />
                     <span className="text-[11px] text-faint">
-                      {inc.created_at ? relativeTime(inc.created_at) : ""}
+                      {inc.created_at ? relativeTime(inc.created_at, t) : ""}
                     </span>
                   </div>
                 </div>
               </div>
             ))}
             {overview.active_incidents.length === 0 && (
-              <p className="text-sm text-muted">활성 인시던트가 없습니다.</p>
+              <p className="text-sm text-muted">{t("common:monitoring.noActiveIncidents")}</p>
             )}
           </div>
         </div>
@@ -779,13 +783,13 @@ function OverviewPanel({
       {Object.keys(anomalies).length > 0 && (
         <div className={CARD + " p-4 mt-4"}>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">이상 탐지</h3>
+            <h3 className="font-semibold text-sm">{t("common:monitoring.anomaly.title")}</h3>
             <button
               onClick={onAnalyzeAnomalies}
               disabled={analyzingAnomalies}
               className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50"
             >
-              {analyzingAnomalies ? "분석 중..." : "AI 분석"}
+              {analyzingAnomalies ? t("common:monitoring.anomaly.analyzing") : t("common:monitoring.anomaly.analyze")}
             </button>
           </div>
           <div className="space-y-2">
@@ -823,12 +827,13 @@ function AlertsPanel({
   webhooks: Webhook[];
   escalationPolicies: EscalationPolicy[];
 }) {
+  const { t } = useTranslation(["common"]);
   return (
     <div className="space-y-6">
       {/* Active alerts */}
       <div>
         <h2 className="text-sm font-semibold text-ink mb-3">
-          활성 알림 ({active.length})
+          {t("common:monitoring.alert.active")} ({active.length})
         </h2>
         <div className="space-y-2">
           {active.map((a, i) => (
@@ -837,31 +842,31 @@ function AlertsPanel({
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-ink">{a.message}</p>
                 <p className="text-[11px] text-faint">
-                  {a.metric && `${a.metric}: ${a.value} (임계값 ${a.threshold})`}
+                  {a.metric && t("common:monitoring.alert.threshold", { metric: a.metric, value: a.value, threshold: a.threshold })}
                   {a.server_name && ` · ${a.server_name}`}
-                  {a.fired_at ? ` · ${relativeTime(a.fired_at)}` : ""}
+                  {a.fired_at ? ` · ${relativeTime(a.fired_at, t)}` : ""}
                 </p>
               </div>
             </div>
           ))}
           {active.length === 0 && (
-            <p className="text-sm text-muted">활성 알림이 없습니다.</p>
+            <p className="text-sm text-muted">{t("common:monitoring.alert.noActive")}</p>
           )}
         </div>
       </div>
 
       {/* Alert history */}
       <div>
-        <h2 className="text-sm font-semibold text-ink mb-3">알림 히스토리</h2>
+        <h2 className="text-sm font-semibold text-ink mb-3">{t("common:monitoring.alert.history")}</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-muted text-[12px] border-b border-subtle">
-                <th className="pb-2 pr-4">심각도</th>
-                <th className="pb-2 pr-4">메시지</th>
-                <th className="pb-2 pr-4">서버</th>
-                <th className="pb-2 pr-4">발생</th>
-                <th className="pb-2">해소</th>
+                <th className="pb-2 pr-4">{t("common:monitoring.alert.severity")}</th>
+                <th className="pb-2 pr-4">{t("common:monitoring.alert.message")}</th>
+                <th className="pb-2 pr-4">{t("common:monitoring.alert.server")}</th>
+                <th className="pb-2 pr-4">{t("common:monitoring.alert.firedAt")}</th>
+                <th className="pb-2">{t("common:monitoring.alert.resolvedAt")}</th>
               </tr>
             </thead>
             <tbody>
@@ -873,24 +878,24 @@ function AlertsPanel({
                   <td className="py-2 pr-4 text-ink">{a.message}</td>
                   <td className="py-2 pr-4 text-muted">{a.server_name || "—"}</td>
                   <td className="py-2 pr-4 text-faint text-[12px]">
-                    {a.fired_at ? relativeTime(a.fired_at) : "—"}
+                    {a.fired_at ? relativeTime(a.fired_at, t) : "—"}
                   </td>
                   <td className="py-2 text-faint text-[12px]">
-                    {a.resolved_at ? relativeTime(a.resolved_at) : "미해소"}
+                    {a.resolved_at ? relativeTime(a.resolved_at, t) : t("common:monitoring.alert.unresolved")}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {history.length === 0 && (
-            <p className="text-sm text-muted mt-2">히스토리가 없습니다.</p>
+            <p className="text-sm text-muted mt-2">{t("common:monitoring.alert.noHistory")}</p>
           )}
         </div>
       </div>
 
       {/* Webhooks */}
       <div>
-        <h2 className="text-sm font-semibold text-ink mb-3">Webhook 목록</h2>
+        <h2 className="text-sm font-semibold text-ink mb-3">{t("common:monitoring.webhook.title")}</h2>
         <div className="space-y-2">
           {webhooks.map((wh) => (
             <div key={wh.id} className={`${CARD} p-3 flex items-center gap-3`}>
@@ -901,16 +906,16 @@ function AlertsPanel({
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-ink truncate font-mono">{wh.url}</p>
                 <p className="text-[11px] text-faint">
-                  이벤트: {wh.events.join(", ")}
+                  {t("common:monitoring.webhook.events")}: {wh.events.join(", ")}
                 </p>
               </div>
               <span className="text-[11px] text-muted">
-                {wh.enabled ? "활성" : "비활성"}
+                {wh.enabled ? t("common:monitoring.enabled") : t("common:monitoring.disabled")}
               </span>
             </div>
           ))}
           {webhooks.length === 0 && (
-            <p className="text-sm text-muted">등록된 웹훅이 없습니다.</p>
+            <p className="text-sm text-muted">{t("common:monitoring.webhook.none")}</p>
           )}
         </div>
       </div>
@@ -918,20 +923,20 @@ function AlertsPanel({
       {/* Escalation Policies */}
       {escalationPolicies.length > 0 && (
         <div className={CARD + " p-4 mt-4"}>
-          <h3 className="font-semibold text-sm mb-3">에스컬레이션 정책</h3>
+          <h3 className="font-semibold text-sm mb-3">{t("common:monitoring.escalation.title")}</h3>
           <div className="space-y-2">
             {escalationPolicies.map((p) => (
               <div key={p.id} className="p-2 rounded-lg bg-paper text-xs">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-medium">{p.name}</span>
                   <span className={`px-1.5 py-0.5 rounded text-[10px] ${p.enabled ? "bg-green-500/15 text-green-400" : "bg-gray-500/15 text-gray-400"}`}>
-                    {p.enabled ? "활성" : "비활성"}
+                    {p.enabled ? t("common:monitoring.enabled") : t("common:monitoring.disabled")}
                   </span>
                 </div>
                 <div className="text-muted">
                   {p.levels.map((l, i) => (
                     <span key={i}>
-                      L{i + 1}: {l.delay_minutes}분 → {l.channels.join(", ") || "없음"}
+                      {t("common:monitoring.escalation.level", { level: i + 1, minutes: l.delay_minutes, channels: l.channels.join(", ") || t("common:monitoring.escalation.noChannels") })}
                       {l.assignee && ` (${l.assignee})`}
                       {i < p.levels.length - 1 && " → "}
                     </span>
@@ -969,10 +974,11 @@ function IncidentsPanel({
   postmortemResult: Record<string, string>;
   onPostmortem: (id: string, useLlm?: boolean) => void;
 }) {
+  const { t } = useTranslation(["common"]);
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-semibold text-ink mb-3">
-        인시던트 ({incidents.length}
+        {t("common:monitoring.incident.title")} ({incidents.length}
         {total > incidents.length ? ` / ${total}` : ""})
       </h2>
       {incidents.map((inc) => (
@@ -990,7 +996,7 @@ function IncidentsPanel({
             <span className="flex-1 text-sm text-ink truncate">{inc.title}</span>
             <StatusBadge status={inc.status} />
             <span className="text-[11px] text-faint shrink-0">
-              {inc.created_at ? relativeTime(inc.created_at) : ""}
+              {inc.created_at ? relativeTime(inc.created_at, t) : ""}
             </span>
           </button>
           {expandedId === inc.id && inc.timeline && (
@@ -1008,7 +1014,7 @@ function IncidentsPanel({
                   </div>
                 ))}
                 {inc.timeline.length === 0 && (
-                  <p className="text-sm text-muted">타임라인이 비어 있습니다.</p>
+                  <p className="text-sm text-muted">{t("common:monitoring.incident.emptyTimeline")}</p>
                 )}
               </div>
               {/* Postmortem */}
@@ -1018,14 +1024,14 @@ function IncidentsPanel({
                   disabled={postmortemLoading === inc.id}
                   className="text-xs px-2 py-1 rounded bg-paper hover:bg-accent/10"
                 >
-                  {postmortemLoading === inc.id ? "생성 중..." : "사후분석 생성"}
+                  {postmortemLoading === inc.id ? t("common:monitoring.incident.generating") : t("common:monitoring.incident.generatePostmortem")}
                 </button>
                 <button
                   onClick={() => onPostmortem(inc.id, true)}
                   disabled={postmortemLoading === inc.id}
                   className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20"
                 >
-                  AI 사후분석
+                  {t("common:monitoring.incident.aiPostmortem")}
                 </button>
               </div>
               {postmortemResult[inc.id] && (
@@ -1038,7 +1044,7 @@ function IncidentsPanel({
         </div>
       ))}
       {incidents.length === 0 && (
-        <p className="text-sm text-muted">인시던트가 없습니다.</p>
+        <p className="text-sm text-muted">{t("common:monitoring.incident.none")}</p>
       )}
       {total > incidents.length && (
         <button
@@ -1046,7 +1052,7 @@ function IncidentsPanel({
           disabled={loadingMore}
           className="w-full py-2 rounded-lg border border-line text-sm text-muted hover:text-ink hover:bg-paper disabled:opacity-50 transition-colors"
         >
-          {loadingMore ? "불러오는 중..." : `이전 인시던트 ${total - incidents.length}건 더 보기`}
+          {loadingMore ? t("common:monitoring.incident.loadingMore") : t("common:monitoring.incident.loadMore", { count: total - incidents.length })}
         </button>
       )}
     </div>
@@ -1064,18 +1070,19 @@ function HealthChecksPanel({
   running: boolean;
   onRunAll: () => void;
 }) {
+  const { t } = useTranslation(["common"]);
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink">
-          헬스체크 ({checks.length})
+          {t("common:monitoring.healthcheck.title")} ({checks.length})
         </h2>
         <button
           onClick={onRunAll}
           disabled={running}
           className="px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-accent hover:opacity-90 disabled:opacity-50 transition-opacity"
         >
-          {running ? "실행 중..." : "지금 실행"}
+          {running ? t("common:monitoring.healthcheck.running") : t("common:monitoring.healthcheck.runNow")}
         </button>
       </div>
 
@@ -1098,19 +1105,19 @@ function HealthChecksPanel({
                     : "—"}
                 </p>
                 <p className="text-[11px] text-faint">
-                  {hc.last_check ? relativeTime(hc.last_check) : "—"}
+                  {hc.last_check ? relativeTime(hc.last_check, t) : "—"}
                 </p>
               </div>
               {hc.consecutive_failures > 0 && (
                 <span className="text-[11px] text-white px-2 py-0.5 rounded" style={{ background: "var(--danger)" }}>
-                  연속 {hc.consecutive_failures}회 실패
+                  {t("common:monitoring.healthcheck.consecutiveFailures", { n: hc.consecutive_failures })}
                 </span>
               )}
             </div>
           );
         })}
         {checks.length === 0 && (
-          <p className="text-sm text-muted">등록된 헬스체크가 없습니다.</p>
+          <p className="text-sm text-muted">{t("common:monitoring.healthcheck.none")}</p>
         )}
       </div>
     </div>
@@ -1130,13 +1137,14 @@ function AuditPanel({
   auditUsers: { user: string; total: number; risky: number }[];
   flaggedActions: AuditEntry[];
 }) {
+  const { t } = useTranslation(["common"]);
   return (
     <div>
       {/* Audit Stats */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         {/* Daily chart */}
         <div className={CARD + " p-4"}>
-          <h3 className="text-sm font-semibold mb-2">일별 활동</h3>
+          <h3 className="text-sm font-semibold mb-2">{t("common:monitoring.audit.dailyActivity")}</h3>
           <div className="flex items-end gap-1 h-24">
             {auditStats?.daily?.map((d, i) => {
               const maxVal = Math.max(...(auditStats.daily.map((x) => x.total)), 1);
@@ -1157,7 +1165,7 @@ function AuditPanel({
 
         {/* User stats */}
         <div className={CARD + " p-4"}>
-          <h3 className="text-sm font-semibold mb-2">사용자별 활동</h3>
+          <h3 className="text-sm font-semibold mb-2">{t("common:monitoring.audit.userActivity")}</h3>
           <div className="space-y-1 max-h-24 overflow-auto">
             {auditUsers.map((u, i) => (
               <div key={i} className="flex items-center gap-2 text-xs">
@@ -1176,11 +1184,11 @@ function AuditPanel({
       {/* Flagged Actions */}
       {flaggedActions.length > 0 && (
         <div className={CARD + " p-4 mb-4"}>
-          <h3 className="text-sm font-semibold mb-2 text-red-400">위험 행동 ({flaggedActions.length}건)</h3>
+          <h3 className="text-sm font-semibold mb-2 text-red-400">{t("common:monitoring.audit.flagged", { count: flaggedActions.length })}</h3>
           <div className="space-y-1 max-h-40 overflow-auto">
             {flaggedActions.map((e, i) => (
               <div key={i} className="flex items-center gap-2 text-xs">
-                <span className="text-muted">{relativeTime(e.ts)}</span>
+                <span className="text-muted">{relativeTime(e.ts, t)}</span>
                 <span className="font-medium">{e.user || "system"}</span>
                 <span className="text-red-400">{e.action}</span>
                 <span className="text-muted truncate">{e.target}</span>
@@ -1193,22 +1201,22 @@ function AuditPanel({
       {/* CSV Export */}
       <div className="flex justify-end mb-2">
         <a href="/v1/dashboard/audit/export?days=30" download className="text-xs px-2 py-1 rounded bg-paper hover:bg-accent/10">
-          CSV 내보내기 (30일)
+          {t("common:monitoring.audit.exportCsv")}
         </a>
       </div>
 
       <h2 className="text-sm font-semibold text-ink mb-3">
-        감사 로그 ({entries.length})
+        {t("common:monitoring.audit.title")} ({entries.length})
       </h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-muted text-[12px] border-b border-subtle">
-              <th className="pb-2 pr-4">시간</th>
-              <th className="pb-2 pr-4">사용자</th>
-              <th className="pb-2 pr-4">액션</th>
-              <th className="pb-2 pr-4">대상</th>
-              <th className="pb-2">결과</th>
+              <th className="pb-2 pr-4">{t("common:monitoring.audit.time")}</th>
+              <th className="pb-2 pr-4">{t("common:monitoring.audit.user")}</th>
+              <th className="pb-2 pr-4">{t("common:monitoring.audit.action")}</th>
+              <th className="pb-2 pr-4">{t("common:monitoring.audit.target")}</th>
+              <th className="pb-2">{t("common:monitoring.audit.result")}</th>
             </tr>
           </thead>
           <tbody>
@@ -1244,7 +1252,7 @@ function AuditPanel({
           </tbody>
         </table>
         {entries.length === 0 && (
-          <p className="text-sm text-muted mt-2">감사 로그가 없습니다.</p>
+          <p className="text-sm text-muted mt-2">{t("common:monitoring.audit.none")}</p>
         )}
       </div>
     </div>

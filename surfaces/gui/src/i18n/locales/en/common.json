@@ -66,7 +66,8 @@
       "alerts": "Alerts",
       "incidents": "Incidents",
       "healthchecks": "Health Checks",
-      "audit": "Audit Log"
+      "audit": "Audit Log",
+      "dashboard": "Dashboard"
     },
     "card": {
       "servers": "Servers",
@@ -84,17 +85,30 @@
       "history": "Alert History",
       "rules": "Alert Rules",
       "webhooks": "Webhooks",
-      "noActive": "No active alerts",
+      "noActive": "No active alerts.",
       "severity": "Severity",
       "server": "Server",
-      "time": "Time"
+      "time": "Time",
+      "message": "Message",
+      "firedAt": "Fired",
+      "resolvedAt": "Resolved",
+      "unresolved": "unresolved",
+      "noHistory": "No history.",
+      "threshold": "{{metric}}: {{value}} (threshold {{threshold}})"
     },
     "incident": {
       "title": "Incidents",
       "severity": "Severity",
       "status": "Status",
       "timeline": "Timeline",
-      "noIncidents": "No incidents"
+      "noIncidents": "No incidents",
+      "emptyTimeline": "The timeline is empty.",
+      "generatePostmortem": "Generate postmortem",
+      "generating": "Generating…",
+      "aiPostmortem": "AI postmortem",
+      "none": "No incidents.",
+      "loadMore": "Load {{count}} earlier incidents",
+      "loadingMore": "Loading…"
     },
     "healthcheck": {
       "title": "Health Checks",
@@ -102,7 +116,9 @@
       "running": "Running...",
       "status": "Status",
       "latency": "Latency",
-      "target": "Target"
+      "target": "Target",
+      "consecutiveFailures": "{{n}} consecutive failures",
+      "none": "No health checks registered."
     },
     "audit": {
       "title": "Operational Audit Log",
@@ -111,9 +127,44 @@
       "action": "Action",
       "target": "Target",
       "result": "Result",
-      "noEntries": "No audit entries"
+      "noEntries": "No audit entries",
+      "dailyActivity": "Daily Activity",
+      "userActivity": "Activity by User",
+      "flagged": "Risky actions ({{count}})",
+      "exportCsv": "Export CSV (30 days)",
+      "none": "No audit entries."
     },
-    "lastUpdated": "Last updated"
+    "lastUpdated": "Last updated",
+    "loading": "Loading data…",
+    "serverStatus": "Server Status",
+    "noServers": "No servers registered.",
+    "recentAlerts": "Recent Alerts",
+    "recentIncidents": "Recent Incidents",
+    "noActiveIncidents": "No active incidents.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "relative": {
+      "seconds": "{{n}}s ago",
+      "minutes": "{{n}}m ago",
+      "hours": "{{n}}h ago",
+      "days": "{{n}}d ago"
+    },
+    "anomaly": {
+      "title": "Anomaly Detection",
+      "analyze": "AI analysis",
+      "analyzing": "Analyzing…",
+      "count": "{{n}} anomalies"
+    },
+    "webhook": {
+      "title": "Webhooks",
+      "events": "Events",
+      "none": "No webhooks registered."
+    },
+    "escalation": {
+      "title": "Escalation Policies",
+      "level": "L{{level}}: {{minutes}} min → {{channels}}",
+      "noChannels": "none"
+    }
   },
   "empty": {
     "noConversations": "No conversations yet",
