@@ -56,7 +56,11 @@
     "database": "Database",
     "serviceConfig": "Service Config",
     "serviceWiki": "Service Wiki",
-    "monitoring": "Monitoring"
+    "monitoring": "Monitoring",
+    "logs": "Logs",
+    "topology": "Topology",
+    "security": "Security",
+    "backup": "Backup"
   },
   "monitoring": {
     "title": "Monitoring Dashboard",

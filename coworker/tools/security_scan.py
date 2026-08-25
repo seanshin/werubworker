@@ -712,13 +712,13 @@ def security_scan_tools(context: Any = None) -> list:
         if ssl_result.get("ok"):
             status = ssl_result.get("status", "")
             if status == "valid":
-                scores["ssl"] = {"score": 25, "max": 25, "status": "양호"}
+                scores["ssl"] = {"score": 25, "max": 25, "status": "양호", "status_code": "good"}
             elif status == "warning":
-                scores["ssl"] = {"score": 15, "max": 25, "status": "주의"}
+                scores["ssl"] = {"score": 15, "max": 25, "status": "주의", "status_code": "caution"}
             else:
-                scores["ssl"] = {"score": 0, "max": 25, "status": "위험"}
+                scores["ssl"] = {"score": 0, "max": 25, "status": "위험", "status_code": "risk"}
         else:
-            scores["ssl"] = {"score": 15, "max": 25, "status": "확인 불가"}
+            scores["ssl"] = {"score": 15, "max": 25, "status": "확인 불가", "status_code": "unknown"}
         total += scores["ssl"]["score"]
 
         # 2. 포트 노출 (25점)
@@ -730,21 +730,21 @@ def security_scan_tools(context: Any = None) -> list:
                 if p.get("status") == "open" and p.get("port") in [3306, 5432, 6379, 27017]
             )
             if open_risky == 0:
-                scores["ports"] = {"score": 25, "max": 25, "status": "양호"}
+                scores["ports"] = {"score": 25, "max": 25, "status": "양호", "status_code": "good"}
             elif open_risky <= 1:
-                scores["ports"] = {"score": 15, "max": 25, "status": "주의"}
+                scores["ports"] = {"score": 15, "max": 25, "status": "주의", "status_code": "caution"}
             else:
-                scores["ports"] = {"score": 5, "max": 25, "status": "위험"}
+                scores["ports"] = {"score": 5, "max": 25, "status": "위험", "status_code": "risk"}
         else:
-            scores["ports"] = {"score": 15, "max": 25, "status": "확인 불가"}
+            scores["ports"] = {"score": 15, "max": 25, "status": "확인 불가", "status_code": "unknown"}
         total += scores["ports"]["score"]
 
         # 3. 방화벽 (25점)
         fw = firewall_check(server=server)
         if fw.get("rules"):
-            scores["firewall"] = {"score": 25, "max": 25, "status": "활성"}
+            scores["firewall"] = {"score": 25, "max": 25, "status": "활성", "status_code": "active"}
         else:
-            scores["firewall"] = {"score": 5, "max": 25, "status": "미확인"}
+            scores["firewall"] = {"score": 5, "max": 25, "status": "미확인", "status_code": "unverified"}
         total += scores["firewall"]["score"]
 
         # 4. 인증 로그 (25점)
@@ -755,13 +755,13 @@ def security_scan_tools(context: Any = None) -> list:
         if auth.get("ok"):
             suspicious = auth.get("unique_ips", 0)
             if suspicious == 0:
-                scores["auth"] = {"score": 25, "max": 25, "status": "양호"}
+                scores["auth"] = {"score": 25, "max": 25, "status": "양호", "status_code": "good"}
             elif suspicious <= 3:
-                scores["auth"] = {"score": 15, "max": 25, "status": "주의"}
+                scores["auth"] = {"score": 15, "max": 25, "status": "주의", "status_code": "caution"}
             else:
-                scores["auth"] = {"score": 5, "max": 25, "status": "위험"}
+                scores["auth"] = {"score": 5, "max": 25, "status": "위험", "status_code": "risk"}
         else:
-            scores["auth"] = {"score": 15, "max": 25, "status": "확인 불가"}
+            scores["auth"] = {"score": 15, "max": 25, "status": "확인 불가", "status_code": "unknown"}
         total += scores["auth"]["score"]
 
         overall = round(total / 100 * 100)

@@ -256,6 +256,7 @@ function ScanModal({
   onClose: () => void;
   onSelect: (result: ScanResult) => void;
 }) {
+  const { t } = useTranslation(["session", "common"]);
   const [scanning, setScanning] = useState(false);
   const [results, setResults] = useState<ScanResult[]>([]);
   const [scanned, setScanned] = useState(0);
@@ -294,7 +295,7 @@ function ScanModal({
   // Group results by host
   const grouped: Record<string, ScanResult[]> = {};
   for (const r of results) {
-    const key = r.host || "(로컬 파일)";
+    const key = r.host || t("session:database.scan.localFile");
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(r);
   }
@@ -302,12 +303,12 @@ function ScanModal({
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={onClose}>
       <div className="bg-panel rounded-xl2 border border-line p-6 w-[600px] max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-[15px] font-semibold text-ink mb-2">네트워크 데이터베이스 스캔</h3>
+        <h3 className="text-[15px] font-semibold text-ink mb-2">{t("session:database.scan.title")}</h3>
 
         {/* 네트워크 정보 */}
         {networkInfo.length > 0 && (
           <div className="mb-4 p-3 rounded-lg bg-paper border border-line">
-            <div className="text-[11.5px] font-semibold text-muted mb-1.5">내 네트워크</div>
+            <div className="text-[11.5px] font-semibold text-muted mb-1.5">{t("session:database.scan.myNetwork")}</div>
             {networkInfo.map((n, i) => (
               <div key={i} className="flex items-center gap-2 text-[12px] text-ink">
                 <span className="font-mono text-accent">{n.ip}</span>
@@ -322,7 +323,7 @@ function ScanModal({
         <div className="flex items-center gap-2 mb-4">
           <input
             className="flex-1 text-[12px] px-2.5 py-1.5 rounded-lg border border-line bg-paper text-ink font-mono"
-            placeholder="서브넷 (예: 192.168.1)"
+            placeholder={t("session:database.scan.subnetPlaceholder")}
             value={customSubnet}
             onChange={(e) => setCustomSubnet(e.target.value)}
           />
@@ -331,36 +332,42 @@ function ScanModal({
             disabled={scanning}
             onClick={() => doScan(false, customSubnet)}
           >
-            {scanning ? "스캔 중..." : "빠른 스캔"}
+            {scanning ? t("session:database.scan.scanning") : t("session:database.scan.quickScan")}
           </button>
           <button
             className="text-[12px] px-3 py-1.5 rounded-lg border border-accent text-accent font-medium disabled:opacity-50"
             disabled={scanning}
             onClick={() => doScan(true, customSubnet)}
           >
-            전체 스캔 (1-254)
+            {t("session:database.scan.fullScan")}
           </button>
         </div>
 
         {/* 스캔 결과 */}
         {scanning ? (
           <div className="text-[13px] text-muted py-8 text-center">
-            {customSubnet || subnets.join(", ") || "로컬"} 대역 스캔 중...
+            {t("session:database.scan.scanningRange", {
+              subnet: customSubnet || subnets.join(", ") || t("session:database.scan.localRange"),
+            })}
           </div>
         ) : results.length === 0 ? (
           <div className="text-[13px] text-muted py-6 text-center">
-            데이터베이스 서비스를 찾을 수 없습니다 ({scanned}개 포트 스캔됨)
+            {t("session:database.scan.noResults", { count: scanned })}
           </div>
         ) : (
           <div className="space-y-3 mb-4">
             <div className="flex items-center justify-between">
               <p className="text-[12px] text-faint">
-                {results.length}개 발견 / {scanned}개 스캔
-                {scanMode && <span className="ml-1 text-accent">({scanMode === "full" ? "전체" : scanMode === "quick" ? "빠른" : "커스텀"})</span>}
+                {t("session:database.scan.summary", { found: results.length, scanned })}
+                {scanMode && (
+                  <span className="ml-1 text-accent">
+                    ({t(`session:database.scan.mode${scanMode === "full" ? "Full" : scanMode === "quick" ? "Quick" : "Custom"}`)})
+                  </span>
+                )}
               </p>
               {subnets.length > 0 && (
                 <p className="text-[11px] text-faint font-mono">
-                  대역: {subnets.map(s => s + ".0/24").join(", ")}
+                  {t("session:database.scan.ranges", { list: subnets.map((s) => s + ".0/24").join(", ") })}
                 </p>
               )}
             </div>
@@ -371,8 +378,8 @@ function ScanModal({
                 <div className="px-3 py-2 bg-paper flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-ok" />
                   <span className="text-[13px] font-mono font-medium text-ink">{host}</span>
-                  <span className="text-[11px] text-faint">{items.length}개 서비스</span>
-                  {host === myIp && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">내 IP</span>}
+                  <span className="text-[11px] text-faint">{t("session:database.scan.serviceCount", { count: items.length })}</span>
+                  {host === myIp && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">{t("session:database.scan.myIp")}</span>}
                 </div>
                 {items.map((r, i) => (
                   <div key={i}
@@ -387,7 +394,7 @@ function ScanModal({
                       </span>
                     </div>
                     <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium shrink-0">
-                      등록 →
+                      {t("session:database.scan.register")}
                     </span>
                   </div>
                 ))}
@@ -396,7 +403,7 @@ function ScanModal({
           </div>
         )}
         <div className="flex justify-end">
-          <button className="text-[13px] px-3 py-1.5 rounded-lg border border-line text-muted" onClick={onClose}>닫기</button>
+          <button className="text-[13px] px-3 py-1.5 rounded-lg border border-line text-muted" onClick={onClose}>{t("common:button.close")}</button>
         </div>
       </div>
     </div>
@@ -881,7 +888,7 @@ export function DatabaseView() {
                           onClick={() => downloadCsv(queryResult.columns, queryResult.rows)}
                           className="text-xs px-2 py-0.5 rounded bg-paper hover:bg-accent/10 border border-line"
                         >
-                          CSV 다운로드
+                          {t("session:database.downloadCsv")}
                         </button>
                       </div>
                       <div className="flex items-center gap-2">

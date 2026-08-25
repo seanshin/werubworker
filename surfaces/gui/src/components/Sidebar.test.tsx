@@ -306,4 +306,33 @@ describe("Sidebar i18n", () => {
     expect(await screen.findByText("세션을 시작할 대상")).toBeTruthy();
     expect(screen.queryByText("Start a session as")).toBeNull();
   });
+
+  // 내비 라벨 4개(로그·토폴로지·보안·백업)만 한국어로 하드코딩돼 있었다 — 나머지 항목은
+  // 진작 번역 키를 쓰고 있어서, 영어 UI에서 이 넷만 한국어로 남았다.
+  it("운영 화면 내비 라벨이 영어에서 영문으로 렌더된다", async () => {
+    stubFetch([{ match: "/v1/personas", json: PERSONAS }]);
+    render(<Sidebar {...baseProps} />);
+
+    for (const [testid, label] of [
+      ["nav-logs", "Logs"],
+      ["nav-topology", "Topology"],
+      ["nav-security", "Security"],
+      ["nav-backup", "Backup"],
+    ]) {
+      expect(within(screen.getByTestId(testid)).getByText(label)).toBeTruthy();
+    }
+  });
+
+  it("한국어로 전환하면 운영 화면 내비 라벨이 번역된다", async () => {
+    i18n.addResourceBundle("ko", "common", {
+      label: { logs: "로그", topology: "토폴로지", security: "보안", backup: "백업" },
+    });
+    await i18n.changeLanguage("ko");
+
+    stubFetch([{ match: "/v1/personas", json: PERSONAS }]);
+    render(<Sidebar {...baseProps} />);
+
+    expect(within(screen.getByTestId("nav-logs")).getByText("로그")).toBeTruthy();
+    expect(within(screen.getByTestId("nav-backup")).getByText("백업")).toBeTruthy();
+  });
 });

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const CARD = "rounded-xl2 border border-line bg-panel";
 
@@ -34,6 +35,7 @@ const NODE_COLORS: Record<string, string> = {
 };
 
 export function TopologyView() {
+  const { t } = useTranslation(["session"]);
   const [nodes, setNodes] = useState<TopoNode[]>([]);
   const [edges, setEdges] = useState<TopoEdge[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,13 +65,13 @@ export function TopologyView() {
   return (
     <div className="flex flex-col h-full gap-3 p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">네트워크 토폴로지</h2>
+        <h2 className="text-lg font-semibold">{t("session:topology.title")}</h2>
         <button
           onClick={fetchTopology}
           disabled={loading}
           className="text-xs px-2 py-1 rounded bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50"
         >
-          {loading ? "로딩..." : "새로고침"}
+          {loading ? t("session:topology.loading") : t("session:topology.refresh")}
         </button>
       </div>
 
@@ -78,7 +80,7 @@ export function TopologyView() {
         <div className={CARD + " flex-1 relative overflow-hidden"}>
           {nodes.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted text-sm">
-              {loading ? "토폴로지 로딩 중..." : "등록된 서버/서비스가 없습니다"}
+              {loading ? t("session:topology.loadingCanvas") : t("session:topology.empty")}
             </div>
           ) : (
             <svg ref={svgRef} width="100%" height="100%" viewBox="0 0 800 600">
@@ -145,24 +147,24 @@ export function TopologyView() {
             </div>
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-muted">유형</span>
-                <span>{selectedNode.type === "local" ? "로컬" : selectedNode.type === "server" ? "서버" : "서비스"}</span>
+                <span className="text-muted">{t("session:topology.type")}</span>
+                <span>{t(`session:topology.type${selectedNode.type === "local" ? "Local" : selectedNode.type === "server" ? "Server" : "Service"}`)}</span>
               </div>
               {selectedNode.host && (
                 <div className="flex justify-between">
-                  <span className="text-muted">호스트</span>
+                  <span className="text-muted">{t("session:topology.host")}</span>
                   <span>{selectedNode.host}</span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-muted">상태</span>
+                <span className="text-muted">{t("session:topology.status")}</span>
                 <span style={{ color: STATUS_COLORS[selectedNode.status] || STATUS_COLORS.unknown }}>
-                  {selectedNode.status}
+                  {t(`session:topology.nodeStatus.${selectedNode.status}`, { defaultValue: selectedNode.status })}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted">연결</span>
-                <span>{edges.filter((e) => e.source === selectedNode.id || e.target === selectedNode.id).length}개</span>
+                <span className="text-muted">{t("session:topology.connections")}</span>
+                <span>{t("session:topology.connectionCount", { count: edges.filter((e) => e.source === selectedNode.id || e.target === selectedNode.id).length })}</span>
               </div>
             </div>
           </div>
@@ -171,13 +173,13 @@ export function TopologyView() {
 
       {/* Legend */}
       <div className="flex gap-4 text-xs text-muted">
-        <span><span style={{ color: NODE_COLORS.local }}>{"\u25CF"}</span> 로컬</span>
-        <span><span style={{ color: NODE_COLORS.server }}>{"\u2B21"}</span> 서버</span>
-        <span><span style={{ color: NODE_COLORS.service }}>{"\u25C6"}</span> 서비스</span>
+        <span><span style={{ color: NODE_COLORS.local }}>{"\u25CF"}</span> {t("session:topology.typeLocal")}</span>
+        <span><span style={{ color: NODE_COLORS.server }}>{"\u2B21"}</span> {t("session:topology.typeServer")}</span>
+        <span><span style={{ color: NODE_COLORS.service }}>{"\u25C6"}</span> {t("session:topology.typeService")}</span>
         <span className="ml-auto">
-          <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />정상
-          <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 ml-2 mr-1" />경고
-          <span className="inline-block w-2 h-2 rounded-full bg-red-500 ml-2 mr-1" />장애
+          <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />{t("session:topology.legendOk")}
+          <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 ml-2 mr-1" />{t("session:topology.legendWarn")}
+          <span className="inline-block w-2 h-2 rounded-full bg-red-500 ml-2 mr-1" />{t("session:topology.legendDown")}
         </span>
       </div>
     </div>

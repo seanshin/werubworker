@@ -56,7 +56,11 @@
     "database": "데이터베이스",
     "serviceConfig": "서비스 설정",
     "serviceWiki": "서비스 위키",
-    "monitoring": "모니터링"
+    "monitoring": "모니터링",
+    "logs": "로그",
+    "topology": "토폴로지",
+    "security": "보안",
+    "backup": "백업"
   },
   "monitoring": {
     "title": "모니터링 대시보드",

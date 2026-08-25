@@ -469,7 +469,7 @@ export function DevView() {
         if (d?.content) {
           try {
             setSelectedFile({ path: filepath, content: atob(d.content), sha: d.sha || "" });
-          } catch { setSelectedFile({ path: filepath, content: "(바이너리 파일)", sha: "" }); }
+          } catch { setSelectedFile({ path: filepath, content: t("session:dev.binaryFile"), sha: "" }); }
         }
       })
       .catch(() => {});
@@ -707,7 +707,7 @@ export function DevView() {
                               disabled={reviewingPr === pr.number}
                               className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50"
                             >
-                              {reviewingPr === pr.number ? "리뷰 중..." : "AI 리뷰"}
+                              {reviewingPr === pr.number ? t("session:dev.reviewing") : t("session:dev.aiReview")}
                             </button>
                             <span className={"text-[11px] px-2 py-0.5 rounded-full font-medium " + statusColor(pr.state)}>
                               {pr.state}
@@ -718,9 +718,9 @@ export function DevView() {
                               <span className={giteaReviewResult[pr.number].verdict === "APPROVED" ? "text-green-400" : giteaReviewResult[pr.number].verdict === "REQUEST_CHANGES" ? "text-red-400" : "text-yellow-400"}>
                                 {giteaReviewResult[pr.number].verdict}
                               </span>
-                              <span className="ml-2 text-muted">점수: {giteaReviewResult[pr.number].score}/100</span>
+                              <span className="ml-2 text-muted">{t("session:dev.reviewScore", { score: giteaReviewResult[pr.number].score })}</span>
                               {giteaReviewResult[pr.number].labels?.length > 0 && (
-                                <span className="ml-2 text-muted">라벨: {giteaReviewResult[pr.number].labels.join(", ")}</span>
+                                <span className="ml-2 text-muted">{t("session:dev.reviewLabels", { labels: giteaReviewResult[pr.number].labels.join(", ") })}</span>
                               )}
                             </div>
                           )}
@@ -1031,7 +1031,7 @@ export function DevView() {
                   </div>
                   <div className="space-y-2">
                     {webhookEvents.length === 0 ? (
-                      <div className="text-center text-muted text-xs py-8">Webhook 이벤트가 없습니다</div>
+                      <div className="text-center text-muted text-xs py-8">{t("session:dev.noWebhookEvents")}</div>
                     ) : webhookEvents.map((e, i) => {
                       const iconMap: Record<string, IconName> = { push: "code", pull_request: "branch", issues: "info", release: "diamond", create: "plus", delete: "trash" };
                       const iconName: IconName = iconMap[e.event_type as string] || "pin";
@@ -1078,17 +1078,19 @@ export function DevView() {
                       disabled={syncing}
                       className="text-xs px-2 py-1 rounded bg-paper hover:bg-accent/10 disabled:opacity-50"
                     >
-                      {syncing ? "동기화 중..." : "Wiki → Gitea 동기화"}
+                      {syncing ? t("session:dev.syncing") : t("session:dev.syncWiki")}
                     </button>
                     {syncResult && (
                       <span className="text-xs text-muted">
-                        {syncResult.ok ? `✅ ${syncResult.synced || syncResult.imported || 0}건 동기화` : `❌ ${syncResult.error}`}
+                        {syncResult.ok
+                          ? t("session:dev.syncDone", { count: syncResult.synced || syncResult.imported || 0 })
+                          : t("session:dev.syncFailed", { error: syncResult.error })}
                       </span>
                     )}
                   </div>
                   <div className="space-y-2">
                     {giteaRepos.length === 0 ? (
-                      <div className="text-center text-muted text-xs py-8">리포지토리가 없습니다</div>
+                      <div className="text-center text-muted text-xs py-8">{t("session:dev.noRepos")}</div>
                     ) : giteaRepos.map((r, i) => (
                       <div key={i} className={CARD + " p-3 text-xs"}>
                         <div className="flex items-center gap-2">
@@ -1098,7 +1100,7 @@ export function DevView() {
                             onClick={() => { const parts = r.full_name.split("/"); fetchFileTree(parts[0], parts[1]); }}
                             className="text-xs px-2 py-0.5 rounded bg-paper hover:bg-accent/10"
                           >
-                            코드 탐색
+                            {t("session:dev.browseCode")}
                           </button>
                           <button onClick={async () => {
                               const parts = r.full_name.split("/");
@@ -1108,7 +1110,7 @@ export function DevView() {
                               ]);
                               if (statsRes?.ok) setRepoStats(statsRes);
                               if (contribRes?.ok) setContributors(contribRes.contributors || []);
-                          }} className="text-xs px-2 py-0.5 rounded bg-paper hover:bg-accent/10">통계</button>
+                          }} className="text-xs px-2 py-0.5 rounded bg-paper hover:bg-accent/10">{t("session:dev.stats")}</button>
                           <button onClick={async () => {
                               setScanningSecrets(true);
                               const parts = r.full_name.split("/");
@@ -1117,7 +1119,7 @@ export function DevView() {
                               setScanningSecrets(false);
                           }} disabled={scanningSecrets}
                           className="text-xs px-2 py-0.5 rounded bg-paper hover:bg-accent/10">
-                              {scanningSecrets ? "스캔..." : "시크릿 스캔"}
+                              {scanningSecrets ? t("session:dev.secretScanning") : t("session:dev.secretScan")}
                           </button>
                           <span className="ml-auto text-muted">{"*"} {r.stars} | {r.forks} forks | {r.open_issues} issues</span>
                         </div>
@@ -1132,19 +1134,19 @@ export function DevView() {
                   {repoStats && (
                     <div className={CARD + " p-4 mt-4"}>
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-sm font-semibold">리포 통계: {repoStats.repo?.full_name}</h3>
-                            <button onClick={() => setRepoStats(null)} className="text-xs text-muted hover:text-ink">닫기</button>
+                            <h3 className="text-sm font-semibold">{t("session:dev.repoStats", { repo: repoStats.repo?.full_name })}</h3>
+                            <button onClick={() => setRepoStats(null)} className="text-xs text-muted hover:text-ink">{t("common:button.close")}</button>
                         </div>
                         <div className="grid grid-cols-4 gap-3 text-xs mb-3">
-                            <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-accent">{repoStats.branches}</div><div className="text-muted">브랜치</div></div>
-                            <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-accent">{repoStats.tags}</div><div className="text-muted">태그</div></div>
+                            <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-accent">{repoStats.branches}</div><div className="text-muted">{t("session:dev.branches")}</div></div>
+                            <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-accent">{repoStats.tags}</div><div className="text-muted">{t("session:dev.tags")}</div></div>
                             <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-yellow-400">{repoStats.open_pulls}</div><div className="text-muted">Open PR</div></div>
                             <div className="text-center p-2 rounded bg-paper"><div className="text-lg font-bold text-red-400">{repoStats.open_issues}</div><div className="text-muted">Open Issues</div></div>
                         </div>
                         {/* Languages */}
                         {repoStats.languages && Object.keys(repoStats.languages).length > 0 && (
                             <div className="mb-3">
-                                <div className="text-xs text-muted mb-1">언어</div>
+                                <div className="text-xs text-muted mb-1">{t("session:dev.languages")}</div>
                                 <div className="flex gap-1">
                                     {Object.entries(repoStats.languages).map(([lang, _bytes]) => (
                                         <span key={lang} className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent">{lang}</span>
@@ -1155,7 +1157,7 @@ export function DevView() {
                         {/* Contributors */}
                         {contributors.length > 0 && (
                             <div>
-                                <div className="text-xs text-muted mb-1">기여자</div>
+                                <div className="text-xs text-muted mb-1">{t("session:dev.contributors")}</div>
                                 <div className="space-y-1">
                                     {contributors.slice(0, 5).map((c: any, i: number) => (
                                         <div key={i} className="flex items-center gap-2 text-xs">
@@ -1177,11 +1179,11 @@ export function DevView() {
                   {secretScan && (
                     <div className={CARD + " p-4 mt-4"}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold">시크릿 스캔 결과</h3>
-                            <button onClick={() => setSecretScan(null)} className="text-xs text-muted hover:text-ink">닫기</button>
+                            <h3 className="text-sm font-semibold">{t("session:dev.secretScanResult")}</h3>
+                            <button onClick={() => setSecretScan(null)} className="text-xs text-muted hover:text-ink">{t("common:button.close")}</button>
                         </div>
                         <div className="text-xs mb-2">
-                            전체 {secretScan.total || 0}건 | <span className="text-red-400">Critical {secretScan.critical || 0}</span>
+                            {t("session:dev.secretTotal", { count: secretScan.total || 0 })} | <span className="text-red-400">Critical {secretScan.critical || 0}</span>
                         </div>
                         {secretScan.findings?.length > 0 ? (
                             <div className="space-y-1">
@@ -1192,7 +1194,7 @@ export function DevView() {
                                 ))}
                             </div>
                         ) : (
-                            <div className="text-xs text-green-400">시크릿이 발견되지 않았습니다</div>
+                            <div className="text-xs text-green-400">{t("session:dev.noSecrets")}</div>
                         )}
                     </div>
                   )}
@@ -1201,9 +1203,9 @@ export function DevView() {
                   {fileTree.length > 0 && (
                     <div className={CARD + " p-4 mt-4"}>
                       <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold">코드 브라우저: {browsingRepo}</h3>
+                        <h3 className="text-sm font-semibold">{t("session:dev.codeBrowser", { repo: browsingRepo })}</h3>
                         <button onClick={() => { setFileTree([]); setSelectedFile(null); }}
-                          className="text-xs text-muted hover:text-ink">닫기</button>
+                          className="text-xs text-muted hover:text-ink">{t("common:button.close")}</button>
                       </div>
                       <div className="flex gap-3" style={{ maxHeight: "400px" }}>
                         {/* File Tree */}
@@ -1262,7 +1264,7 @@ export function DevView() {
                               </pre>
                             </div>
                           ) : (
-                            <div className="text-xs text-muted text-center py-8">파일을 선택하세요</div>
+                            <div className="text-xs text-muted text-center py-8">{t("session:dev.selectFile")}</div>
                           )}
                         </div>
                       </div>
@@ -1290,7 +1292,7 @@ export function DevView() {
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-paper text-muted">{p.trigger}</span>
                         </div>
                         <div className="text-xs text-muted mb-2">
-                          브랜치: {p.branch_filter} | 단계: {p.stages?.join(" → ")}
+                          {t("session:dev.pipelineMeta", { branch: p.branch_filter, stages: p.stages?.join(" → ") })}
                         </div>
                         <button
                           onClick={async () => {
@@ -1304,14 +1306,14 @@ export function DevView() {
                           disabled={runningPipeline === p.name}
                           className="text-xs px-2 py-1 rounded bg-accent text-white hover:bg-accent/90 disabled:opacity-50"
                         >
-                          {runningPipeline === p.name ? "실행 중..." : "실행"}
+                          {runningPipeline === p.name ? t("session:dev.running") : t("session:dev.run")}
                         </button>
                       </div>
                     ))}
                   </div>
 
                   {/* Pipeline Runs */}
-                  <h3 className="text-sm font-semibold mb-2">실행 이력</h3>
+                  <h3 className="text-sm font-semibold mb-2">{t("session:dev.runHistory")}</h3>
                   <div className="space-y-1">
                     {pipelineRuns.map((r, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs p-2 rounded bg-paper">
@@ -1325,7 +1327,7 @@ export function DevView() {
                         <span className="text-muted">{r.user}</span>
                       </div>
                     ))}
-                    {pipelineRuns.length === 0 && <div className="text-center text-muted text-xs py-4">실행 이력이 없습니다</div>}
+                    {pipelineRuns.length === 0 && <div className="text-center text-muted text-xs py-4">{t("session:dev.noRuns")}</div>}
                   </div>
                 </div>
               )}

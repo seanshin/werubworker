@@ -1107,7 +1107,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
           onClick={props.onOpenLogs}
         >
           <Icon name="file" size={15} className="shrink-0" />
-          <span className="flex-1">로그</span>
+          <span className="flex-1">{t("common:label.logs")}</span>
         </button>
         <button
           className={
@@ -1118,7 +1118,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
           onClick={props.onOpenTopology}
         >
           <Icon name="plug" size={15} className="shrink-0" />
-          <span className="flex-1">토폴로지</span>
+          <span className="flex-1">{t("common:label.topology")}</span>
         </button>
         <button
           className={
@@ -1173,7 +1173,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
           onClick={props.onOpenSecurity}
         >
           <Icon name="shield" size={15} className="shrink-0" />
-          <span className="flex-1">보안</span>
+          <span className="flex-1">{t("common:label.security")}</span>
         </button>
         <button
           className={
@@ -1184,7 +1184,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
           onClick={props.onOpenBackup}
         >
           <Icon name="archive" size={15} className="shrink-0" />
-          <span className="flex-1">백업</span>
+          <span className="flex-1">{t("common:label.backup")}</span>
         </button>
       </div>
 

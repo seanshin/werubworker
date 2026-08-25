@@ -26,6 +26,11 @@ interface Props {
   onCancel: () => void;
 }
 
+const CATEGORY_KEYS = [
+  "service", "database", "server", "cloud", "model", "prompt",
+  "benchmark", "runbook", "api_doc", "architecture", "general",
+];
+
 export function WikiPageEditor({ pageId, onSave, onCancel }: Props) {
   const { t } = useTranslation(["session", "common"]);
   const [name, setName] = useState("");
@@ -38,21 +43,10 @@ export function WikiPageEditor({ pageId, onSave, onCancel }: Props) {
   const [categories, setCategories] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // All available categories: merge templates + existing DB categories
-  const CATEGORY_META: Record<string, string> = {
-    service: "서비스 문서 — 연결 정보, 크리덴셜",
-    database: "데이터베이스 — host/port/user, 백업",
-    server: "서버 설정 — SSH, OS, 실행 서비스",
-    cloud: "클라우드 — AWS/GCP/CF 계정, 리전",
-    model: "LLM 모델 카드 — 스펙, 가격, 기능",
-    prompt: "프롬프트 템플릿 — 변수, 대상 모델",
-    benchmark: "벤치마크 — 데이터셋, 결과 비교",
-    runbook: "런북 — 장애 대응 절차, 단계",
-    api_doc: "API 문서 — 엔드포인트, 인증, rate limit",
-    architecture: "아키텍처 — 컴포넌트, 데이터 플로우",
-    general: "일반 문서",
-  };
-  const ALL_CATEGORIES = Object.keys(CATEGORY_META);
+  // All available categories: merge templates + existing DB categories.
+  // 설명 문구는 번역에서 가져오되, DB가 돌려준 낯선 카테고리는 키 그대로 둔다.
+  const categoryLabel = (cat: string) =>
+    t(`session:wiki.categoryMeta.${cat}`, { defaultValue: cat });
 
   useEffect(() => {
     getWikiCategories()
@@ -60,10 +54,10 @@ export function WikiPageEditor({ pageId, onSave, onCancel }: Props) {
         const raw = Array.isArray(cats) ? cats : cats?.categories || [];
         const dbCats = raw.map((c: any) => typeof c === "string" ? c : c.category || "").filter(Boolean);
         // Merge: all template categories + any extra from DB
-        const merged = [...new Set([...ALL_CATEGORIES, ...dbCats])];
+        const merged = [...new Set([...CATEGORY_KEYS, ...dbCats])];
         setCategories(merged);
       })
-      .catch(() => setCategories(ALL_CATEGORIES));
+      .catch(() => setCategories(CATEGORY_KEYS));
   }, []);
 
   // Auto-fill from template when creating a new page and category changes
@@ -186,10 +180,10 @@ export function WikiPageEditor({ pageId, onSave, onCancel }: Props) {
           value={category}
           onChange={(e) => setCategory(e.target.value)}
         >
-          <option value="">-- 카테고리 선택 --</option>
+          <option value="">{t("session:wiki.selectCategory")}</option>
           {categories.map((cat) => (
             <option key={cat} value={cat}>
-              {CATEGORY_META[cat] || cat}
+              {categoryLabel(cat)}
             </option>
           ))}
         </select>
