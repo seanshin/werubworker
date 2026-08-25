@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coworker"
-version = "2.3.8"
+version = "2.3.9"
 description = "WeruBWorker — provider-agnostic agentic coworker runtime"
 requires-python = ">=3.10"
 dependencies = [
