@@ -121,7 +121,7 @@ export const ModelsTab = memo(function ModelsTab() {
 
       {ps.sel === "openai" && settings.source === "env" && (
         <p className="text-[12px] text-muted mt-3 leading-relaxed">
-          A key is set via <code>OPENAI_API_KEY</code> in this server's environment. You can override
+          A key is set via <code>OPENAI_API_KEY</code> in this server’s environment. You can override
           it above; the stored key is used only when the environment variable is absent.
         </p>
       )}
@@ -130,7 +130,7 @@ export const ModelsTab = memo(function ModelsTab() {
         <div className="mt-6">
           <div className={SEC_H + " mb-1.5"}>Models</div>
           <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
-            Ticked models show in the composer's picker; the black badge marks the default for new
+            Ticked models show in the composer’s picker; the black badge marks the default for new
             sessions.
           </p>
           <ModelChecklist
