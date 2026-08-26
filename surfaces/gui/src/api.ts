@@ -1567,12 +1567,27 @@ export async function setDmRoute(sessionId: string): Promise<{ ok: boolean; dm_s
 }
 
 // -- automations (scheduled tasks) --------------------------------------------
+
+/** `kind`는 daily | weekly | monthly | once | raw. `raw`는 이 네 모양보다 복잡한 cron이라
+ * `cron`을 그대로 보여준다. `dow`는 cron 규약(0=일요일)을 따른다. */
+export interface ScheduleDesc {
+  kind: "daily" | "weekly" | "monthly" | "once" | "raw";
+  hour?: number;
+  minute?: number;
+  dow?: number;
+  dom?: number;
+  fire_at?: string | null;
+  cron?: string;
+}
 export interface Automation {
   id: string;
   title: string;
   instructions: string;
+  /** 서버가 만든 **영어** 한 줄. 에이전트·Slack 봇이 읽는다 — 화면에는 `schedule_desc`를 쓴다. */
   schedule: string;
   schedule_raw?: { kind: string; cron?: string | null; fire_at?: string | null; timezone?: string };
+  /** 같은 읽기를 조각으로 준 것. 화면 문구는 사용자 언어로 여기서 만든다. */
+  schedule_desc?: ScheduleDesc;
   workspace: string;
   agent: string;
   enabled: boolean;

@@ -800,5 +800,26 @@
     "auditSessionId": "세션 id",
     "auditConnector": "커넥터",
     "auditTool": "도구"
+  },
+  "schedule": {
+    "daily": "매일 {{time}}쯤",
+    "weekly": "매주 {{day}} {{time}}쯤",
+    "monthly": "매월 {{dom}}일 {{time}}쯤",
+    "once": "{{when}}에 한 번",
+    "dow": {
+      "0": "일요일",
+      "1": "월요일",
+      "2": "화요일",
+      "3": "수요일",
+      "4": "목요일",
+      "5": "금요일",
+      "6": "토요일"
+    },
+    "runStatus": {
+      "running": "실행 중",
+      "ok": "성공",
+      "error": "실패",
+      "skipped": "건너뜀"
+    }
   }
 }

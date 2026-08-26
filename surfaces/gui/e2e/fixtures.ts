@@ -282,6 +282,8 @@ const AUTOMATION = {
   title: "Daily AI News",
   instructions: "Fetch the latest AI news and produce an HTML+Tailwind presentation.",
   schedule: "Every day at ~5:40 PM",
+  // 서버는 영어 한 줄과 조각을 함께 보낸다 — 화면 문구는 클라이언트가 만든다.
+  schedule_desc: { kind: "daily", hour: 17, minute: 40 },
   schedule_raw: { kind: "cron", cron: "40 17 * * *", fire_at: null, timezone: "local" },
   workspace: "",
   agent: "cowork",
@@ -306,6 +308,7 @@ const AUTOMATION_CLEAN = {
   id: "task-2",
   title: "Weekly CRM digest",
   schedule: "Every Monday at ~9:00 AM",
+  schedule_desc: { kind: "weekly", hour: 9, minute: 0, dow: 1 },
   last_status: "ok",
   unseen_runs: 0,
   unseen_failed: false,

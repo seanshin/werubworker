@@ -800,5 +800,26 @@
     "auditSessionId": "session id",
     "auditConnector": "connector",
     "auditTool": "tool"
+  },
+  "schedule": {
+    "daily": "Every day at ~{{time}}",
+    "weekly": "Every {{day}} at ~{{time}}",
+    "monthly": "Monthly on day {{dom}} at ~{{time}}",
+    "once": "Once at {{when}}",
+    "dow": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "runStatus": {
+      "running": "running",
+      "ok": "ok",
+      "error": "error",
+      "skipped": "skipped"
+    }
   }
 }

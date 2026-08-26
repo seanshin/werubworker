@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { scheduleLabel } from "../scheduleLabel";
 import { List } from "react-window";
 import { useTranslation } from "react-i18next";
 import {
@@ -722,7 +723,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
             >
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] text-ink truncate">{a.title}</div>
-                <div className="text-[11px] text-faint truncate">{a.schedule}</div>
+                <div className="text-[11px] text-faint truncate">{scheduleLabel(t, a.schedule_desc, a.schedule)}</div>
               </div>
               <UnseenBadge n={a.unseen_runs || 0} failed={a.unseen_failed} />
             </button>

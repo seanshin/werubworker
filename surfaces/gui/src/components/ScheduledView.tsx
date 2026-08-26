@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { runStatus, scheduleLabel } from "../scheduleLabel";
 import { formatDateTime, fromEpoch } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import {
@@ -186,13 +187,13 @@ export function ScheduledView({ onOpenRun, onRunNow, initialOpenId }: Props) {
               </div>
               <div className="flex items-center gap-1.5 text-[12px] text-muted">
                 <Icon name="clock" size={13} className="text-faint shrink-0" />
-                {task.enabled ? task.schedule : t("session:chrome.paused")}
+                {task.enabled ? scheduleLabel(t, task.schedule_desc, task.schedule) : t("session:chrome.paused")}
                 {" · "}
                 {t("session:chrome.nextRun", { when: fmt(task.next_run) })}
                 {" · "}
                 {t("session:chrome.runCount", { count: task.run_count })}
                 {task.last_status
-                  ? ` · ${t("session:chrome.lastStatus", { status: task.last_status })}`
+                  ? ` · ${t("session:chrome.lastStatus", { status: runStatus(t, task.last_status) })}`
                   : ""}
               </div>
             </div>
@@ -440,7 +441,7 @@ function TaskDetail({
             </label>{" "}
             {task.enabled
               ? `${t("session:chrome.active")} · ${t("session:chrome.nextRun", { when: fmt(task.next_run) })}`
-              : t("session:chrome.paused")}{" · "}{task.schedule}
+              : t("session:chrome.paused")}{" · "}{scheduleLabel(t, task.schedule_desc, task.schedule)}
           </div>
         )}
 
@@ -507,7 +508,7 @@ function TaskDetail({
                 {seenMark !== null && r.started_at > seenMark && (
                   <span className="run-new-pill" data-testid="run-new">new</span>
                 )}
-                {fmt(r.started_at)} · <span className={"run-" + r.status}>{r.status}</span> · {r.trigger}
+                {fmt(r.started_at)} · <span className={"run-" + r.status}>{runStatus(t, r.status)}</span> · {r.trigger}
                 {r.artifacts.length > 0 && <span className="dim"> · {r.artifacts.length} file(s)</span>}
               </span>
               <span className="sched-run-go" aria-hidden>

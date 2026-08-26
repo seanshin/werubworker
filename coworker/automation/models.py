@@ -10,7 +10,14 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+# cron은 0=일요일, 1=월요일…6=토요일(7도 일요일)이고 이 표는 월요일부터 시작한다. 그래서
+# 인덱스는 `dow - 1`이다. 예전에는 `dow % 7`이라 라벨이 하루씩 밀려 있었다 — croniter가 도는
+# 실제 발화는 맞았으므로, "매주 월요일"로 만든 자동화가 "Every Tuesday"라고 적혀 있었다.
 _DOW = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def _dow_name(dow: int) -> str:
+    return _DOW[(dow - 1) % 7]
 
 
 def _now() -> float:
@@ -72,24 +79,51 @@ class Schedule:
     timezone: str = "local"  # 'local' = the machine's clock (a local-first tool default)
 
     def human(self) -> str:
-        """Best-effort human label ('Every day at ~7:10 PM'); falls back to the raw cron."""
-        if self.kind == "once":
+        """Best-effort human label ('Every day at ~7:10 PM'); falls back to the raw cron.
+
+        English, and it stays that way: agents and the Slack bot read this line. The GUI
+        renders `describe()` instead so the user's language decides the wording.
+        """
+        d = self.describe()
+        kind = d["kind"]
+        if kind == "once":
             return f"Once at {self.fire_at}"
+        if kind == "daily":
+            return f"Every day at ~{_human_time(d['hour'], d['minute'])}"
+        if kind == "weekly":
+            return f"Every {_dow_name(d['dow'])} at ~{_human_time(d['hour'], d['minute'])}"
+        if kind == "monthly":
+            return f"Monthly on day {d['dom']} at ~{_human_time(d['hour'], d['minute'])}"
+        return self.cron or "?"
+
+    def describe(self) -> dict:
+        """The same reading as `human()`, but as data the client can put into its own words.
+
+        `human()` was the only description on the wire, so the GUI printed an English
+        sentence into a Korean screen. This is the `status_code` treatment from
+        `security_score`: keep the English label for the readers that want prose, and ship
+        the parts alongside for the readers that want to phrase it themselves.
+
+        `kind` is one of daily | weekly | monthly | once | raw. `raw` means the cron is
+        richer than these shapes (ranges, steps) — show `cron` verbatim.
+        """
+        if self.kind == "once":
+            return {"kind": "once", "fire_at": self.fire_at}
         parts = (self.cron or "").split()
         if len(parts) != 5:
-            return self.cron or "?"
-        minute, hour, dom, month, dow = parts
+            return {"kind": "raw", "cron": self.cron or "?"}
+        minute, hour, dom, _month, dow = parts
         try:
-            t = _human_time(int(hour), int(minute))
+            h, m = int(hour), int(minute)
         except ValueError:
-            return self.cron  # non-trivial cron (ranges/steps) — show as-is
+            return {"kind": "raw", "cron": self.cron or "?"}
         if dom == "*" and dow == "*":
-            return f"Every day at ~{t}"
+            return {"kind": "daily", "hour": h, "minute": m}
         if dom == "*" and dow.isdigit():
-            return f"Every {_DOW[int(dow) % 7]} at ~{t}"
+            return {"kind": "weekly", "hour": h, "minute": m, "dow": int(dow)}
         if dom.isdigit() and dow == "*":
-            return f"Monthly on day {dom} at ~{t}"
-        return self.cron
+            return {"kind": "monthly", "hour": h, "minute": m, "dom": int(dom)}
+        return {"kind": "raw", "cron": self.cron or "?"}
 
     def to_dict(self) -> dict:
         return {
@@ -192,6 +226,8 @@ class ScheduledTask:
             "instructions": self.instructions,
             "schedule": self.schedule.human(),
             "schedule_raw": self.schedule.to_dict(),
+            # 화면 문구는 클라이언트가 만든다 — `schedule`은 영어 고정(에이전트·Slack 봇이 읽는다).
+            "schedule_desc": self.schedule.describe(),
             "workspace": self.workspace,
             "agent": self.agent,
             "enabled": self.enabled,
