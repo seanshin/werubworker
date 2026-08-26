@@ -331,6 +331,12 @@ export const Composer = memo(function Composer(props: Props) {
       props.onConnectModel?.();
       return;
     }
+    // Socket not up yet: keep the draft, same as above. The Send button is already disabled
+    // on `connected`, but Enter reaches submit() directly — and without this check it handed
+    // the text to a session socket that wasn't there (null between session switches, or a
+    // closed one), then cleared the box. The user's bubble stayed on screen with no reply
+    // coming, and nothing to retype. Sending re-arms the moment `connected` flips.
+    if (!props.connected) return;
     props.onSend(t, attachments, skill);
     setText("");
     setAttachments([]);

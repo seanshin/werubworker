@@ -4,9 +4,9 @@
 
 서비스 위키를 중앙 설정 리포지토리로 활용하여 서버·DB·서비스 설정 정보를 세션에서 저장·분석하고, 실 서비스 연동 시 자동으로 참조하는 로컬 우선 운영 플랫폼입니다. Gitea + MCP를 통합하여 에이전트와 소스 리포지토리가 하나의 플랫폼으로 동작합니다.
 
-[![Version](https://img.shields.io/badge/version-2.3.14-blue)]()
+[![Version](https://img.shields.io/badge/version-2.3.15-blue)]()
 [![Tests](https://img.shields.io/badge/tests-1%2C463%20passed-brightgreen)]()
-[![UI Tests](https://img.shields.io/badge/ui%20tests-161%20passed-brightgreen)]()
+[![UI Tests](https://img.shields.io/badge/ui%20tests-164%20passed-brightgreen)]()
 [![E2E](https://img.shields.io/badge/e2e-142%20passed-brightgreen)]()
 [![Tools](https://img.shields.io/badge/tools-300%2B-orange)]()
 [![Capabilities](https://img.shields.io/badge/capabilities-28-purple)]()
@@ -650,7 +650,7 @@ cd surfaces/gui && npx tsc --noEmit
 
 # 프론트엔드 테스트
 cd surfaces/gui && npx vitest run
-# 161 passed (33 files)
+# 164 passed (34 files)
 
 # E2E (Playwright, 백엔드 없이 동작)
 cd surfaces/gui && npm run e2e
@@ -700,7 +700,7 @@ cd surfaces/gui && npm run e2e
 | [**v2.0 아키텍처**](docs/v2-architecture.md) | 전체 시스템 구조, 모니터링/위키/도구 아키텍처, 데이터 저장소 |
 | [**v2.0 API 레퍼런스**](docs/v2-api-reference.md) | 대시보드/인프라/Wiki API 엔드포인트 전체 명세 |
 | [**MCP 서버 설정**](docs/mcp-setup.md) | Claude Desktop/Cursor/Claude Code MCP 연동 가이드 |
-| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.14 전체 변경 이력 |
+| [**CHANGELOG**](CHANGELOG.md) | v2.0.0 ~ v2.3.15 전체 변경 이력 |
 | [**확장 설계서**](docs/cloud-server-ops-expansion-design.md) | 통합 모니터링, 알림, 인시던트, 서비스 위키 리포지토리 설계 |
 | [**개발팀 조율 가이드**](docs/dev-team/TEAM-COORDINATION.md) | 병렬 개발 규칙, 작업 분배, 충돌 방지 |
 
@@ -708,7 +708,8 @@ cd surfaces/gui && npm run e2e
 
 | 버전 | 날짜 | 주요 내용 |
 |------|------|----------|
-| **v2.3.14** | **2026-08-26** | **i18n 기획서 완주(Phase 5 항목 28): 서버가 만들던 일정 문구를 구조로 분리(`schedule_desc`) — 영어 한 줄은 에이전트·Slack 봇용으로 유지. 요일 라벨이 하루씩 밀려 "매주 월요일"이 "Every Tuesday"로 보이던 버그도 수정** |
+| **v2.3.15** | **2026-08-26** | **소켓이 붙기 전 Enter로 메시지가 조용히 사라지던 버그 수정 — Send 버튼은 막혀 있었지만 키보드 경로가 같은 검사를 거치지 않았다. 초안을 지키고, `connected`가 "이 세션의 소켓이 열림"만 뜻하도록 바로잡음** |
+| v2.3.14 | 2026-08-26 | i18n 기획서 완주(Phase 5 항목 28): 서버가 만들던 일정 문구를 구조로 분리(`schedule_desc`) — 영어 한 줄은 에이전트·Slack 봇용으로 유지. 요일 라벨이 하루씩 밀려 "매주 월요일"이 "Every Tuesday"로 보이던 버그도 수정 |
 | v2.3.13 | 2026-08-26 | i18n 기획서 Phase 5 마무리: 한국어 UI에 남은 영어 28곳 → 0곳(화면 문구·접근성 라벨 34곳 배선), 날짜·시각 표기를 `formatDate.ts`로 통일(인자 없는 `toLocale*`가 앱이 아닌 브라우저 언어를 따르고 있었다), 레이아웃 깨짐 3폭×2언어×12화면 0건 |
 | v2.3.12 | 2026-08-26 | E2E 스위트 복구: 22 → 142 통과(전체 165개). 로케일 미고정으로 한국어 UI에서 돌던 것, 앱 이름 변경 잔재, 아포스트로피 통일 누락을 정리하고, 재구축 때 유실된 로그아웃 계정 행과 자동화 읽음 표시 경합을 수정 |
 | v2.3.11 | 2026-08-25 | i18n 미이전 운영 뷰 완주: Dev·Topology·Wiki·Backup·Security·Database 6개 뷰 + 사이드바 내비 4개(번역 키 134개 추가), `security_score`가 한국어 status 대신 번역 가능한 `status_code`를 함께 반환 (테스트 1,448개 / 프론트엔드 154개) |

@@ -445,7 +445,15 @@ function AppInner() {
       onClose: () => setConnected(false),
     });
     sessionRef.current = session;
-    return () => session.close();
+    return () => {
+      // `connected` has to mean "THIS session's socket is open" — the composer's Enter path
+      // now refuses to send while it is false, so a stale `true` would hand a message to a
+      // socket that is closing or to an effect that bailed at the guards above (booting, or
+      // Code waiting on its folder). Cleanup runs before the next body, so the successor's
+      // `onOpen` still flips it back on.
+      setConnected(false);
+      session.close();
+    };
     // NOTE: `workspace` is intentionally NOT a dependency. Every real workspace change
     // (pick folder, select/switch session, new session) is paired with a `sessionId`
     // change, so the socket still reconnects when it should. The one workspace-only change
