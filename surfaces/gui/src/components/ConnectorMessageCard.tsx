@@ -14,6 +14,7 @@
 // for keyboard focus too; the ids are also mirrored into the header `title` for quick reference.
 
 import { useState, type CSSProperties } from "react";
+import { formatDate, formatTime, fromEpoch } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import type { MessageSource } from "../api";
 import { ConnectorBadge, hexToRgba, NEUTRAL } from "../connectors/ConnectorIcon";
@@ -32,13 +33,13 @@ function relativeTime(tsSeconds: number, t: (key: string, opts?: any) => string)
   if (hrs < 24) return t("common:misc.hAgo", { count: hrs });
   const days = Math.round(diff / 86_400_000);
   if (days < 7) return t("common:misc.dAgo", { count: days });
-  return new Date(then).toLocaleDateString();
+  return formatDate(new Date(then));
 }
 
 /** Absolute clock time (for the time element's title), e.g. "2:14 PM". */
 function clockTime(tsSeconds: number): string {
   if (!tsSeconds || !isFinite(tsSeconds)) return "";
-  return new Date(tsSeconds * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return formatTime(fromEpoch(tsSeconds), { hour: "numeric", minute: "2-digit" });
 }
 
 export function ConnectorMessageCard({

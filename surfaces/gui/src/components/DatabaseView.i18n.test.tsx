@@ -34,7 +34,7 @@ async function openScanModal() {
     await Promise.resolve();
     await Promise.resolve();
   });
-  fireEvent.click(screen.getByText("Scan"));
+  fireEvent.click(screen.getByTestId("db-scan"));
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();

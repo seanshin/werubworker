@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { agentReady, test, expect } from "./fixtures";
 
 // The core loop: boot-resume into the last session, send a message over the WebSocket, and render
 // the streamed reply — plus the in-session approval round-trip (permission_required suspends the
@@ -9,6 +9,7 @@ test("send → user bubble → streamed echo reply renders", async ({ page }) =>
 
   // Boot resumes the most recent session ("Draft the launch note") and connects; the composer is
   // live once the fake agent's `ready` lands.
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await expect(box).toBeVisible();
 
@@ -31,6 +32,7 @@ test("send → user bubble → streamed echo reply renders", async ({ page }) =>
 
 test("approval: tool request suspends the turn; Allow once resumes it", async ({ page }) => {
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await expect(box).toBeVisible();
 
@@ -47,6 +49,7 @@ test("approval: tool request suspends the turn; Allow once resumes it", async ({
 
 test("approval: Deny skips the tool and the agent says so", async ({ page }) => {
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await expect(box).toBeVisible();
 
@@ -60,6 +63,7 @@ test("approval: Deny skips the tool and the agent says so", async ({ page }) => 
 
 test("long user pastes clamp with a more…/less… toggle", async ({ page }) => {
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await expect(box).toBeVisible();
 

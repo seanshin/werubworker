@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatTime } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import { List, useDynamicRowHeight, useListRef, type RowComponentProps } from "react-window";
 
@@ -37,7 +38,7 @@ function formatTs(epoch: number, locale: string): string {
   // The locale follows the UI language: hardcoding "ko-KR" rendered "7시 13분 20초" in the
   // English UI. `hour12: false` stays — a log console wants a fixed-width 24h clock whatever
   // the locale's default is.
-  return d.toLocaleTimeString(locale, { hour12: false });
+  return formatTime(d, { hour12: false }, locale);
 }
 
 export function LogView() {

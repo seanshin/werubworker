@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { formatDateTime, formatTime } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import type { ApprovalDecision, Item } from "../types";
 import { shortArgs } from "./ApprovalCard";
@@ -60,14 +61,14 @@ function BubbleMeta({ text, ts, align }: { text: string; ts?: number; align: "le
         <button
           className="flex items-center cursor-pointer hover:text-muted"
           data-testid="bubble-copy"
-          title="Copy message"
+          title={t("session:chrome.copyMessage")}
           onClick={copy}
         >
           {copied ? t("common:status.copied") : <Icon name="copy" size={11} />}
         </button>
         {when && (
-          <span data-testid="bubble-ts" title={when.toLocaleString()}>
-            {when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          <span data-testid="bubble-ts" title={formatDateTime(when)}>
+            {formatTime(when, { hour: "numeric", minute: "2-digit" })}
           </span>
         )}
       </div>
@@ -214,7 +215,7 @@ const StepRow = memo(function StepRow({ tool, approval }: { tool: ToolItem; appr
           <span
             className="text-[11px] text-warnInk shrink-0"
             data-testid="tool-hidden-count"
-            title="Removed by your privacy filters before the agent saw the results — agents get no trace of these."
+            title={t("session:chrome.redactedByFilters")}
           >
             {tool.hidden} hidden
           </span>

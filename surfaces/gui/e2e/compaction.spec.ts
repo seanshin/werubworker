@@ -2,7 +2,7 @@
 // pin POST through, and the "context compacted" divider renders inline mid-session
 // (driven by the fixtures' scripted `compacted` event) without touching the transcript.
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 test("Settings: Context compaction card edits threshold, cap, and summarizer model", async ({
   page,
@@ -53,6 +53,7 @@ test("the compacted divider renders mid-session and the transcript stays intact"
 }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
 
   // An earlier exchange that must survive the compaction marker (transcript intact).

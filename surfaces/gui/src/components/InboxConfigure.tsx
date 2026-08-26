@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatDateTime, fromEpoch } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import {
   getConnectors,
@@ -279,7 +280,7 @@ function SubscriptionsCard() {
                   {s.collision && (
                     <span
                       className="ml-1.5 text-[11px] text-warnInk bg-warnSoft/70 border border-warnInk/15 rounded px-1.5 py-0.5"
-                      title="This channel is also your Inbox-routing target — inbound and outbound on one channel conflate broadcast with request/reply."
+                      title={t("session:chrome.routingCollide")}
                     >
                       {t("session:inboxConfigure.collides")}
                     </span>
@@ -289,7 +290,7 @@ function SubscriptionsCard() {
                 <td className="px-4 py-2.5 text-right">
                   <button
                     className="text-faint hover:text-danger"
-                    title="Unsubscribe"
+                    title={t("session:chrome.unsubscribe")}
                     onClick={() => remove(s.session_id, s.channel)}
                   >
                     ×
@@ -362,7 +363,7 @@ function UnroutedTable() {
           {(items ?? []).map((it, i) => (
             <tr className="border-t border-line" key={i}>
               <td className="px-4 py-2.5 text-muted whitespace-nowrap">
-                {new Date(it.ts * 1000).toLocaleString()}
+                {formatDateTime(fromEpoch(it.ts))}
               </td>
               <td className="px-4 py-2.5" title={it.sender}>
                 {it.source}

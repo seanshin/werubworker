@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import { formatTime } from "./formatDate";
 import { useTranslation } from "react-i18next";
 import {
   finalizeAutomationRun,
@@ -634,7 +635,7 @@ function AppInner() {
         sessionId: d.session_id || "",
         workspace: d.workspace || "",
         agent: d.agent || "cowork",
-        time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+        time: formatTime(new Date(), { hour: "numeric", minute: "2-digit" }),
       });
       announceAutomationsChanged(); // the Scheduled band's badge is now stale
     });
@@ -926,7 +927,7 @@ function AppInner() {
             <button
               className="text-[12px] text-faint px-0.5"
               data-testid="toast-dismiss"
-              title="Dismiss"
+              title={t("session:inboxCard.dismiss")}
               onClick={() => setRunToast(null)}
             >
               ✕
@@ -1130,8 +1131,8 @@ function AppInner() {
                 <button
                   className="topbar-icon-btn"
                   onClick={() => setSearchOpen(true)}
-                  aria-label="Search"
-                  title="Search"
+                  aria-label={t("common:label.search")}
+                  title={t("common:label.search")}
                 >
                   <Icon name="search" size={16} />
                 </button>
@@ -1167,7 +1168,7 @@ function AppInner() {
                 className="topbar-artifacts-btn"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => setRailHidden(false)}
-                title="Show files this conversation produced"
+                title={t("session:chrome.showArtifacts")}
               >
                 <Icon name="file" size={14} />
                 <span>Artifacts</span>
@@ -1181,8 +1182,8 @@ function AppInner() {
                 className="topbar-icon-btn"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => setRailHidden((h) => !h)}
-                aria-label={railHidden ? "Show side panel" : "Hide side panel"}
-                title={railHidden ? "Show side panel" : "Hide side panel"}
+                aria-label={t(railHidden ? "session:chrome.showSidePanel" : "session:chrome.hideSidePanel")}
+                title={t(railHidden ? "session:chrome.showSidePanel" : "session:chrome.hideSidePanel")}
               >
                 <Icon name="sidebarRight" size={16} />
               </button>
@@ -1335,10 +1336,10 @@ function AppInner() {
               contextBar={contextBar}
               placeholder={
                 agent === "code"
-                  ? "Ask the coder to build, fix, or explain…  (drop or paste files)"
+                  ? t("session:chrome.askCoder")
                   : agent === "chat"
-                    ? "Ask anything…  (drop or paste files)"
-                    : "Ask the coworker…  (drop or paste files)"
+                    ? t("session:chrome.askAnything")
+                    : t("session:chrome.askPlaceholder")
               }
               approvalSlot={
                 // Live inline cards are for ATTENDED sessions only; when Unattended the prompt is

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { formatDate as formatDateLocalized, formatDateTime, fromEpoch } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import { PanelHead } from "./IntegrationsView";
 import { Icon, type IconName } from "./Icon";
@@ -225,7 +226,7 @@ function NewIssueModal({ onClose, onCreated }: { onClose: () => void; onCreated:
           <div>
             <label className="block text-[12px] text-muted mb-1">{t("session:dev.issueBody")}</label>
             <textarea className="w-full text-[13px] px-3 py-2 rounded-lg border border-line bg-paper text-ink min-h-[100px] resize-y"
-              value={body} onChange={(e) => setBody(e.target.value)} placeholder="Describe the issue..." />
+              value={body} onChange={(e) => setBody(e.target.value)} placeholder={t("session:chrome.describeIssue")} />
           </div>
           <div>
             <label className="block text-[12px] text-muted mb-1">{t("session:dev.issueLabels")}</label>
@@ -292,7 +293,7 @@ function NewReleaseModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <div>
             <label className="block text-[12px] text-muted mb-1">{t("session:dev.releaseBody")}</label>
             <textarea className="w-full text-[13px] px-3 py-2 rounded-lg border border-line bg-paper text-ink min-h-[100px] resize-y"
-              value={body} onChange={(e) => setBody(e.target.value)} placeholder="Release notes..." />
+              value={body} onChange={(e) => setBody(e.target.value)} placeholder={t("session:chrome.releaseNotes")} />
           </div>
           <label className="flex items-center gap-2 text-[13px] text-ink cursor-pointer">
             <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} />
@@ -582,7 +583,7 @@ export function DevView() {
     const diff = now - d.getTime();
     if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`;
     if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`;
-    return d.toLocaleDateString();
+    return formatDateLocalized(d);
   };
 
   return (
@@ -1042,7 +1043,7 @@ export function DevView() {
                             <span className="font-medium">{e.event_type}</span>
                             {e.action && <span className="text-muted">({e.action})</span>}
                             <span className="text-muted ml-auto">{e.sender}</span>
-                            <span className="text-muted">{new Date(e.timestamp * 1000).toLocaleString("ko-KR", { hour12: false })}</span>
+                            <span className="text-muted">{formatDateTime(fromEpoch(e.timestamp), { hour12: false })}</span>
                           </div>
                           <div className="mt-1 text-muted">{e.summary}</div>
                         </div>
@@ -1125,7 +1126,7 @@ export function DevView() {
                         </div>
                         {r.description && <div className="mt-1 text-muted">{r.description}</div>}
                         <div className="mt-1 text-muted text-[10px]">
-                          {r.updated_at ? new Date(r.updated_at).toLocaleDateString("ko-KR") : ""}
+                          {r.updated_at ? formatDateLocalized(new Date(r.updated_at)) : ""}
                         </div>
                       </div>
                     ))}

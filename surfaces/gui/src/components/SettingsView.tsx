@@ -438,7 +438,7 @@ function AppearanceSection() {
 
       <div className={CARD + " p-4 mb-4"}>
         <div className={FIELD_LABEL}>{t("settings:general.theme")}</div>
-        <div className="seg mt-2.5" role="radiogroup" aria-label="Appearance">
+        <div className="seg mt-2.5" role="radiogroup" aria-label={t("settings:general.appearance")}>
           {(["light", "dark", "auto"] as const).map((p) => (
             <button key={p} className={p === theme ? "active" : ""} onClick={() => setTheme(p)}>
               {p === "light" ? t("settings:general.light") : p === "dark" ? t("settings:general.dark") : t("settings:general.auto")}
@@ -506,7 +506,7 @@ function LanguageCard() {
   return (
     <div className={CARD + " p-4 mb-4"}>
       <div className={FIELD_LABEL}>{t("general.language")}</div>
-      <div className="seg mt-2.5" role="radiogroup" aria-label="Language">
+      <div className="seg mt-2.5" role="radiogroup" aria-label={t("settings:general.language")}>
         <button className={lang === "ko" ? "active" : ""} onClick={() => change("ko")}>한국어</button>
         <button className={lang === "en" ? "active" : ""} onClick={() => change("en")}>English</button>
       </div>
@@ -668,7 +668,7 @@ function TokenSavingsCard() {
       </div>
 
       <div className="mt-3 text-[13px] text-ink">{t("models.pdfFallback")}</div>
-      <div className="seg mt-2" role="radiogroup" aria-label="PDF fallback" data-testid="pdf-fallback">
+      <div className="seg mt-2" role="radiogroup" aria-label={t("session:chrome.pdfFallback")} data-testid="pdf-fallback">
         <button
           className={pdf.pdf_fallback === "text" ? "active" : ""}
           onClick={() => save({ pdf_fallback: "text" })}

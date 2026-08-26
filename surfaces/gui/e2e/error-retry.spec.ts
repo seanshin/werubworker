@@ -2,13 +2,14 @@
 // visible, persistent marker with a Retry affordance. Retry re-runs the failed turn with NO
 // new user bubble; once the turn recovers, the button disappears (the notice is history).
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 test("provider error shows a retriable notice; Retry re-runs without a new user message", async ({
   page,
 }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("please fail the turn");
   await box.press("Enter");
@@ -29,6 +30,7 @@ test("provider error shows a retriable notice; Retry re-runs without a new user 
 test("Retry survives a model switch — the intended recovery path", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("please fail the turn");
   await box.press("Enter");

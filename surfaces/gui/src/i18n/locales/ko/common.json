@@ -60,7 +60,8 @@
     "logs": "로그",
     "topology": "토폴로지",
     "security": "보안",
-    "backup": "백업"
+    "backup": "백업",
+    "never": "없음"
   },
   "monitoring": {
     "title": "모니터링 대시보드",

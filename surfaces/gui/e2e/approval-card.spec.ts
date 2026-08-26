@@ -4,12 +4,13 @@
 // description, external actions wear the leaves-this-Mac note. No "PERMISSION REQUIRED"
 // kicker, no raw args dump, no solid-fill buttons.
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 test("routine write → compact row: humanized title, inline preview, Allow resolves", async ({
   page,
 }) => {
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("please write a file");
   await page.getByRole("button", { name: "Send" }).click();
@@ -38,6 +39,7 @@ test("run_shell → full card: description title, command preview, stays-on-this
   page,
 }) => {
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("please run a tool");
   await page.getByRole("button", { name: "Send" }).click();
@@ -60,6 +62,7 @@ test("a one-paragraph digest send is clamped to a card, expandable in place", as
   page,
 }) => {
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("post the long digest");
   await page.getByRole("button", { name: "Send" }).click();

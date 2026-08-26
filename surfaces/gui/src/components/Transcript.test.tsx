@@ -178,8 +178,10 @@ describe("bubble hover affordances (FB-005)", () => {
     const stamps = screen.getAllByTestId("bubble-ts");
     expect(stamps).toHaveLength(1); // the ts-less assistant bubble shows none
     const when = new Date(TS * 1000);
-    expect(stamps[0].textContent).toBe(when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
-    expect(stamps[0].getAttribute("title")).toBe(when.toLocaleString());
+    // 앱 언어를 따라야 한다. 예전에는 인자 없이 불러 **브라우저** 로케일을 따랐고, 그래서
+    // 한국어 UI가 영어 시각을, 영어 UI가 한국어 시각을 보였다 (`formatDate.ts` 참고).
+    expect(stamps[0].textContent).toBe(when.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" }));
+    expect(stamps[0].getAttribute("title")).toBe(when.toLocaleString("en"));
   });
 });
 

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { agentReady, test, expect } from "./fixtures";
 
 // §16 workspace collapse: the persona FAMILY alone decides the workspace behavior.
 //   code      → an explicit project folder, enforced by the FolderGate (no chat-behind-it escape)
@@ -15,6 +15,7 @@ async function startAs(page: import("@playwright/test").Page, persona: RegExp) {
 
 test("knowledge persona: new session starts instantly, no folder gate", async ({ page }) => {
   await page.goto("/");
+  await agentReady(page);
   await expect(page.getByPlaceholder(/Ask the coworker/)).toBeVisible();
 
   await startAs(page, /Ops/);
@@ -24,6 +25,7 @@ test("knowledge persona: new session starts instantly, no folder gate", async ({
 
 test("code persona: the folder gate blocks until a project is chosen", async ({ page }) => {
   await page.goto("/");
+  await agentReady(page);
   await expect(page.getByPlaceholder(/Ask the coworker/)).toBeVisible();
 
   await startAs(page, /Code/);

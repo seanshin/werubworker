@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { formatDateTime, fromEpoch } from "../formatDate";
 import { useTranslation } from "react-i18next";
 
 const CARD = "rounded-xl2 border border-line bg-panel";
@@ -19,13 +20,13 @@ interface BackupTarget {
   size_human: string;
 }
 
-function formatDate(epoch: number, locale: string): string {
+function backupDate(epoch: number): string {
   if (!epoch) return "\u2014";
-  return new Date(epoch * 1000).toLocaleString(locale, { hour12: false });
+  return formatDateTime(fromEpoch(epoch), { hour12: false });
 }
 
 export function BackupView() {
-  const { t, i18n } = useTranslation(["session"]);
+  const { t } = useTranslation(["session"]);
   const [backups, setBackups] = useState<BackupRecord[]>([]);
   const [targets, setTargets] = useState<BackupTarget[]>([]);
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
@@ -118,7 +119,7 @@ export function BackupView() {
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium text-white ${b.status === "completed" ? "bg-green-500" : b.status === "partial" ? "bg-yellow-500" : "bg-red-500"}`}>
                   {t(`session:backup.status${b.status === "completed" ? "Completed" : b.status === "partial" ? "Partial" : "Failed"}`)}
                 </span>
-                <span className="text-muted">{formatDate(b.timestamp, i18n.language)}</span>
+                <span className="text-muted">{backupDate(b.timestamp)}</span>
                 <span className="text-muted">{b.size_human}</span>
                 <span className="flex-1 truncate">{b.targets.join(", ")}</span>
                 <div className="flex gap-1">

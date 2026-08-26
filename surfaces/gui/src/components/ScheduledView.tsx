@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatDateTime, fromEpoch } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import {
   createAutomation,
@@ -31,7 +32,7 @@ function fromCron(cron?: string | null): { time: string; freq: string } {
 }
 
 const fmt = (t: number | null) =>
-  t ? new Date(t * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
+  t ? formatDateTime(fromEpoch(t), { dateStyle: "medium", timeStyle: "short" }) : "—";
 
 // Map a simple time-of-day + frequency selection to a 5-field cron string.
 function toCron(time: string, freq: string): string {
@@ -162,21 +163,21 @@ export function ScheduledView({ onOpenRun, onRunNow, initialOpenId }: Props) {
         )
       ) : (
         <div className="flex flex-col gap-2.5">
-          {tasks.map((t) => (
+          {tasks.map((task) => (
             <div
               className={CARD + " sched-card px-4 py-3 cursor-pointer hover:border-lineStrong transition-colors"}
-              key={t.id}
-              onClick={() => setOpenId(t.id)}
+              key={task.id}
+              onClick={() => setOpenId(task.id)}
             >
               <div className="flex items-center justify-between gap-2.5 mb-1">
-                <span className="text-[13.5px] font-semibold truncate">{t.title}</span>
+                <span className="text-[13.5px] font-semibold truncate">{task.title}</span>
                 <button
                   className="sched-card-del"
-                  title="Delete automation"
-                  aria-label={`Delete ${t.title}`}
+                  title={t("session:chrome.deleteAutomation")}
+                  aria-label={t("session:chrome.deleteAutomation")}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    await deleteAutomation(t.id);
+                    await deleteAutomation(task.id);
                     refresh();
                   }}
                 >
@@ -185,8 +186,14 @@ export function ScheduledView({ onOpenRun, onRunNow, initialOpenId }: Props) {
               </div>
               <div className="flex items-center gap-1.5 text-[12px] text-muted">
                 <Icon name="clock" size={13} className="text-faint shrink-0" />
-                {t.enabled ? t.schedule : "Paused"} · next {fmt(t.next_run)} · {t.run_count} run{t.run_count === 1 ? "" : "s"}
-                {t.last_status ? ` · last ${t.last_status}` : ""}
+                {task.enabled ? task.schedule : t("session:chrome.paused")}
+                {" · "}
+                {t("session:chrome.nextRun", { when: fmt(task.next_run) })}
+                {" · "}
+                {t("session:chrome.runCount", { count: task.run_count })}
+                {task.last_status
+                  ? ` · ${t("session:chrome.lastStatus", { status: task.last_status })}`
+                  : ""}
               </div>
             </div>
           ))}
@@ -220,13 +227,13 @@ function NewAutomationForm({
       </div>
       <input
         className="tmpl-input"
-        placeholder="Title (e.g. Daily standup notes)"
+        placeholder={t("session:chrome.automationTitlePlaceholder")}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
       />
       <textarea
         className="tmpl-input tmpl-textarea"
-        placeholder="What should it do each run? (e.g. Summarize today's calendar and open tasks.)"
+        placeholder={t("session:chrome.automationPromptPlaceholder")}
         value={instructions}
         onChange={(e) => setInstructions(e.target.value)}
       />
@@ -383,7 +390,7 @@ function TaskDetail({
               className="tmpl-input sched-edit-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
+              placeholder={t("session:chrome.titlePlaceholder")}
             />
           ) : (
             <h2 className="text-[18px] font-semibold tracking-tight">{task.title}</h2>
@@ -431,7 +438,9 @@ function TaskDetail({
               <input type="checkbox" checked={task.enabled} onChange={toggle} />
               <span className="slider" />
             </label>{" "}
-            {task.enabled ? `Active · next ${fmt(task.next_run)}` : "Paused"} · {task.schedule}
+            {task.enabled
+              ? `${t("session:chrome.active")} · ${t("session:chrome.nextRun", { when: fmt(task.next_run) })}`
+              : t("session:chrome.paused")}{" · "}{task.schedule}
           </div>
         )}
 
@@ -461,7 +470,7 @@ function TaskDetail({
                   </span>
                   <button
                     className="link"
-                    title="This automation will ask for approval again"
+                    title={t("session:chrome.willAskAgain")}
                     onClick={async () => {
                       await updateAutomation(id, { revoke: rule.entry });
                       refresh();
@@ -491,7 +500,7 @@ function TaskDetail({
                 title: task.title,
               })
             }
-            title="Open this run's conversation"
+            title={t("session:chrome.openRunConversation")}
           >
             <div className="sched-run-row">
               <span>

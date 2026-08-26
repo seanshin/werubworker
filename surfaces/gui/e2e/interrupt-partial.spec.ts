@@ -3,11 +3,12 @@
 // (assistant_message is what promotes text into the transcript, and an interrupted turn never
 // emits one). The fix flushes the buffer into a durable assistant item on interrupted/error.
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 test("interrupted partial stream survives the next turn", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("stream the epic");
   await box.press("Enter");

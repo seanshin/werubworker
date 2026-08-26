@@ -665,8 +665,8 @@ export function DatabaseView() {
                 {t("session:database.configured")}
               </h3>
               <div className="flex gap-2">
-                <button className="text-[12.5px] text-accent font-medium" onClick={() => setShowScanModal(true)}>
-                  <Icon name="search" size={13} className="inline mr-1" />Scan
+                <button className="text-[12.5px] text-accent font-medium" data-testid="db-scan" onClick={() => setShowScanModal(true)}>
+                  <Icon name="search" size={13} className="inline mr-1" />{t("session:database.scan.quickScanShort")}
                 </button>
                 <button className="text-[12.5px] text-accent font-medium" onClick={() => { setScanPrefill(null); setShowAddModal(true); }}>
                   <Icon name="plus" size={13} className="inline mr-1" />{t("session:database.addDatabase")}

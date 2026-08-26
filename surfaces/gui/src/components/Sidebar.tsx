@@ -84,13 +84,14 @@ function UnseenBadge({ n, failed }: { n: number; failed?: boolean }) {
 // Liveness = working (in-flight turn) / sleeping (a self-wake is pending). A count-less dot that
 // never bubbles — it says "this is alive", not "this needs you".
 function LiveDot({ state }: { state?: "working" | "sleeping" | "idle" }) {
+  const { t } = useTranslation(["common"]);
   if (state !== "working" && state !== "sleeping") return null;
   return state === "working" ? (
-    <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" title="Working now" />
+    <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" title={t("common:status.working")} />
   ) : (
     <span
       className="w-1.5 h-1.5 rounded-full bg-faint/60 shrink-0"
-      title="Sleeping (will wake itself)"
+      title={t("common:status.sleeping")}
     />
   );
 }
@@ -486,8 +487,8 @@ export const Sidebar = memo(function Sidebar(props: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <button
-          title="Session actions"
-          aria-label="Session actions"
+          title={t("session:chrome.sessionActions")}
+          aria-label={t("session:chrome.sessionActions")}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           data-testid="row-menu"
@@ -521,7 +522,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
               <div className="h-px bg-line my-1 mx-2" />
               {confirmDelId === s.session_id ? (
                 <button
-                  title="Click again to permanently delete"
+                  title={t("session:chrome.clickAgainToDelete")}
                   className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[12.5px] text-left font-medium text-danger hover:bg-paper"
                   data-testid="row-menu-delete"
                   role="menuitem"
@@ -693,7 +694,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
     pinnedSessions.length > 0 ? (
       <div>
         <div className="px-1.5 text-[10.5px] uppercase tracking-[0.07em] text-faint font-semibold mb-1">
-          Pinned
+          {t("session:chrome.pinned")}
         </div>
         <div className="space-y-0.5">
           {pinnedSessions.map((s) => cardRow(s))}
@@ -708,7 +709,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
     automations.length > 0 ? (
       <div data-testid="scheduled-band">
         <div className="px-1.5 text-[10.5px] uppercase tracking-[0.07em] text-faint font-semibold mb-1">
-          Scheduled
+          {t("session:chrome.scheduled")}
         </div>
         <div className="space-y-0.5">
           {automations.map((a) => (
@@ -740,12 +741,12 @@ export const Sidebar = memo(function Sidebar(props: Props) {
     return (
     <div className="relative flex items-center justify-between px-1.5 mb-1" data-testid="recent-header">
       <span className="text-[10.5px] uppercase tracking-[0.07em] text-faint font-semibold">
-        Recent
+        {t("session:chrome.recentHeading")}
       </span>
       <button
         className="w-6 h-6 grid place-items-center rounded-md text-faint hover:text-ink hover:bg-paper -mr-1"
         title={t("session:groupFilter")}
-        aria-label="Group and filter conversations"
+        aria-label={t("session:chrome.groupAndFilter")}
         onClick={() => setGroupMenuOpen((v) => !v)}
       >
         <Icon name="sliders" size={14} />
@@ -957,7 +958,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                               className="px-2 py-1 text-[12px] text-faint hover:text-muted"
                               onClick={() => setProjShowAll((s) => toggleSet(s, proj))}
                             >
-                              Show more ({list.length - peek})
+                              {t("session:chrome.showMoreCount", { count: list.length - peek })}
                             </button>
                           )}
                         </div>
@@ -988,7 +989,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                     className="px-2 py-1 text-[12px] text-faint hover:text-muted"
                     onClick={() => setPersonaShowAll((s) => toggleSet(s, browseKey))}
                   >
-                    Show more ({mine.filter(matches).length - peek})
+                    {t("session:chrome.showMoreCount", { count: mine.filter(matches).length - peek })}
                   </button>
                 )}
               </>
@@ -1028,8 +1029,8 @@ export const Sidebar = memo(function Sidebar(props: Props) {
         {props.onCollapse && (
           <button
             className="nav-pin-btn w-7 h-7 grid place-items-center rounded-md text-faint hover:text-ink hover:bg-paper shrink-0"
-            title={props.collapsed ? "Dock sidebar (⌘B)" : "Collapse sidebar (⌘B)"}
-            aria-label={props.collapsed ? "Dock sidebar" : "Collapse sidebar"}
+            title={t(props.collapsed ? "session:chrome.dockSidebarShortcut" : "session:chrome.collapseSidebarShortcut")}
+            aria-label={t(props.collapsed ? "session:chrome.dockSidebar" : "session:chrome.collapseSidebar")}
             onClick={props.onCollapse}
           >
             <Icon name="sidebar" size={16} />
@@ -1395,7 +1396,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
             {cloud?.signed_in && (
               <span
                 className="w-[7px] h-[7px] rounded-full bg-ok shrink-0"
-                title="Signed in to WeruBWorker Cloud"
+                title={t("session:chrome.signedInToCloud")}
                 aria-hidden
               />
             )}
@@ -1413,7 +1414,7 @@ export const Sidebar = memo(function Sidebar(props: Props) {
                 aria-label={
                   totalAttention > 0 ? t("session:inboxItems", { count: totalAttention }) : t("common:label.inbox")
                 }
-                title={totalAttention > 0 ? `Inbox — ${totalAttention} items need you` : "Inbox"}
+                title={totalAttention > 0 ? t("session:chrome.inboxNeedsYou", { count: totalAttention }) : t("common:label.inbox")}
                 onClick={(e) => {
                   // The chip goes STRAIGHT to Inbox — the menu is the row's target, not the chip's.
                   e.stopPropagation();
@@ -1520,13 +1521,13 @@ function NewSessionSplit({
           }
           onClick={() => onNew(solo && enabled.length === 1 ? enabled[0].id : current)}
         >
-          <Icon name="plus" size={15} className="shrink-0" /> New session
+          <Icon name="plus" size={15} className="shrink-0" /> {t("session:chrome.newSessionPlain")}
         </button>
         {!solo && (
           <button
             className="px-2.5 rounded-r-lg bg-accent text-white border-l border-white/25 hover:opacity-95 flex items-center"
-            title="Start with a specific persona"
-            aria-label="Choose a persona"
+            title={t("session:chrome.startWithPersona")}
+            aria-label={t("session:chrome.choosePersona")}
             onClick={() => setOpen((v) => !v)}
           >
             <Icon name="chevronDown" size={13} />

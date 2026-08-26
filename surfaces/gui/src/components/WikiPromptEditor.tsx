@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { formatDateTime, fromEpoch } from "../formatDate";
 import { useTranslation } from "react-i18next";
 
 const CARD = "rounded-xl2 border border-line bg-panel";
@@ -123,7 +124,7 @@ export function WikiPromptEditor({ pageId, content }: { pageId: string; content:
                     <td className="py-1.5 pr-3">
                       <span className={run.success ? "text-ok" : "text-err"}>{run.success ? "\u2713" : "\u2717"}</span>
                     </td>
-                    <td className="py-1.5 text-faint">{new Date(run.created_at * 1000).toLocaleString()}</td>
+                    <td className="py-1.5 text-faint">{formatDateTime(fromEpoch(run.created_at))}</td>
                   </tr>
                 ))}
               </tbody>

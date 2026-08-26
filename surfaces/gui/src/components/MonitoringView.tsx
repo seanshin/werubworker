@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatDateTime, formatTime, fromEpoch } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { connectMetrics, fetchAnomalies, analyzeAnomalies, generatePostmortem, fetchEscalationPolicies } from "../api";
@@ -201,7 +202,7 @@ function TabButton({
 type TabId = "dashboard" | "overview" | "alerts" | "incidents" | "healthchecks" | "audit";
 
 export function MonitoringView() {
-  const { t, i18n } = useTranslation(["common"]);
+  const { t } = useTranslation(["common"]);
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -476,7 +477,7 @@ export function MonitoringView() {
           <h1 className="text-lg font-semibold text-ink">{t("common:monitoring.title")}</h1>
           {lastRefresh && (
             <span className="text-[11px] text-faint">
-              {t("common:monitoring.lastUpdated")}: {lastRefresh.toLocaleTimeString(i18n.language)}
+              {t("common:monitoring.lastUpdated")}: {formatTime(lastRefresh)}
             </span>
           )}
         </div>
@@ -1007,7 +1008,7 @@ function IncidentsPanel({
                     <div className="w-1.5 h-1.5 mt-1.5 rounded-full bg-accent shrink-0" />
                     <div>
                       <p className="text-[12px] text-faint">
-                        {new Date(entry.ts * 1000).toLocaleString("ko-KR")}
+                        {formatDateTime(fromEpoch(entry.ts))}
                       </p>
                       <p className="text-sm text-ink">{entry.text}</p>
                     </div>
@@ -1224,7 +1225,7 @@ function AuditPanel({
               <tr key={i} className="border-b border-subtle">
                 <td className="py-2 pr-4 text-faint text-[12px] whitespace-nowrap">
                   {e.ts
-                    ? new Date(e.ts * 1000).toLocaleString("ko-KR")
+                    ? formatDateTime(fromEpoch(e.ts))
                     : "—"}
                 </td>
                 <td className="py-2 pr-4 text-ink">{e.user || "—"}</td>

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { agentReady, test, expect } from "./fixtures";
 
 // Guards the three-control composer row (§22): send-gating (accent only with content), the "+"
 // attach menu, and the Mode menu (permission options + the folded-in Send-to-Inbox toggle).
@@ -6,6 +6,7 @@ test("composer: send-gating, + attach menu, Mode menu", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
 
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   const send = page.getByRole("button", { name: "Send" });
 

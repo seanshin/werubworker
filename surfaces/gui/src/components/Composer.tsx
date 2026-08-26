@@ -450,7 +450,7 @@ export const Composer = memo(function Composer(props: Props) {
           <button
             className="shrink-0 opacity-60 hover:opacity-100"
             onClick={() => setAttachNotice(null)}
-            title="Dismiss"
+            title={t("session:inboxCard.dismiss")}
           >
             ✕
           </button>
@@ -485,7 +485,7 @@ export const Composer = memo(function Composer(props: Props) {
         {/* "/" force-run popup — in-flow above the textarea; rows are the session's
             effective menu only (muted/disabled skills never appear). */}
         {slashQuery !== null && (
-          <div className="px-2 pt-2" data-testid="skill-popup" role="listbox" aria-label="Skills">
+          <div className="px-2 pt-2" data-testid="skill-popup" role="listbox" aria-label={t("settings:tab.skills")}>
             {slashSkills === null ? (
               <div className="px-2 py-1.5 text-[12px] text-faint">Loading skills…</div>
             ) : slashMatches.length === 0 ? (
@@ -621,7 +621,7 @@ export const Composer = memo(function Composer(props: Props) {
               className="pill chip text-faint cursor-default"
               disabled
               data-testid="models-loading"
-              title="Fetching the model list from the server"
+              title={t("session:chrome.fetchingModels")}
             >
               <span className="pill-label">{t("session:composer.loadingModels")}</span>
             </button>
@@ -728,7 +728,7 @@ function UsageChip({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Token usage"
+        aria-label={t("session:chrome.tokenUsage")}
         title={
           showBar
             ? `Context window ${pct}% full · ${formatTokens(total)} tokens this session`
@@ -855,7 +855,7 @@ function ModeMenu({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Mode"
+        aria-label={t("session:chrome.composerMode")}
         title={
           `${t("session:permission.mode")} ${current?.label || mode}` +
           (unattended ? " · approvals go to the Inbox" : "")
@@ -905,7 +905,7 @@ function ModeMenu({
                   <Toggle
                     checked={!!unattended}
                     onChange={onUnattendedChange}
-                    title="Send approvals to the Inbox"
+                    title={t("session:chrome.approvalsToInbox")}
                   />
                 </div>
               </>
@@ -930,6 +930,7 @@ function attachItem(icon: "image" | "file" | "fileCode", label: string, onClick:
 }
 
 function AttachChip({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
+  const { t } = useTranslation(["common"]);
   return (
     <div className={"attach-chip" + (a.kind === "image" ? " img" : "")}>
       {a.kind === "image" ? (
@@ -940,7 +941,7 @@ function AttachChip({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
           <span className="attach-name">{a.name}</span>
         </>
       )}
-      <button className="attach-x" onClick={onRemove} title="Remove">
+      <button className="attach-x" onClick={onRemove} title={t("common:button.remove")}>
         ✕
       </button>
     </div>

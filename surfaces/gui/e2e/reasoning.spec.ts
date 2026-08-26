@@ -2,13 +2,14 @@
 // pulsing "Thinking…" disclosure that streams the trace; once the message finalizes the
 // trace folds into a collapsed "Thought process" disclosure on the answer bubble.
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 test("thinking streams live, then persists as a collapsed disclosure on the answer", async ({
   page,
 }) => {
   await page.goto("/");
   await page.getByText("Draft the launch note").first().click();
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("think hard about this");
   await box.press("Enter");

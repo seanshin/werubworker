@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { agentReady, test, expect } from "./fixtures";
 
 // Standing scoped approvals (UX-DECISIONS §25): the creation consent card renders the agent's
 // proposed permission set (reads = disclosure, writes = grants); a recurring run's approval card
@@ -15,6 +15,7 @@ async function openTaskDetail(page: import("@playwright/test").Page) {
 
 test("creation consent card renders writes as grants and reads as disclosure", async ({ page }) => {
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await expect(box).toBeVisible();
 
@@ -46,6 +47,7 @@ test("a run session's approval card offers Allow every time and sends always_tas
   await expect(page.getByText(/Echo: .*Fetch the latest AI news/)).toBeVisible();
 
   // An eligible gated write inside the run (the event carries the pinnable target).
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("post the digest");
   await page.getByRole("button", { name: "Send" }).click();
@@ -64,6 +66,7 @@ test("a plain session never offers Allow every time, even for an eligible call",
   page,
 }) => {
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await expect(box).toBeVisible();
 

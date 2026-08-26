@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { agentReady, test, expect } from "./fixtures";
 
 // SKILLS-SPEC §9 journey 2 — liveness from the session's seat: the composer's "/" popup is
 // the live "what can my worker use right now" view. A skill created in Settings is offered;
@@ -9,6 +9,7 @@ test("skills-session: new skill offered in '/', disabled one absent", async ({ p
   await page.getByText("Draft the launch note").first().click();
 
   // The seeded menu: both enabled skills offered on "/".
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("/");
   await expect(page.getByTestId("skill-popup")).toBeVisible();

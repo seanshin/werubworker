@@ -468,7 +468,7 @@ export function ProviderForm({
               <button
                 className="mt-2.5 inline-flex items-center gap-2 rounded-lg border border-line bg-panel px-2.5 py-1.5 text-[12px] font-mono text-ink hover:border-lineStrong"
                 onClick={() => void navigator.clipboard?.writeText(selected.command || "")}
-                title="Copy command"
+                title={t("session:chrome.copyCommand")}
                 data-testid={`${tp}-cmd-copy`}
               >
                 {selected.command}

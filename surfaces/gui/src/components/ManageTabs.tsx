@@ -563,7 +563,7 @@ export function UnauthorizedBlock({
               <button
                 className="text-[11.5px] px-2 py-1 rounded-md bg-accent text-white"
                 data-testid={`parked-allow-deliver-${m.id}`}
-                title="Add the sender to the allow-list and deliver this message now"
+                title={t("session:chrome.allowAndDeliver")}
                 onClick={() => act(m.id, "allow_deliver")}
               >
                 {t("settings:manageTabs.allowDeliver")}
@@ -571,7 +571,7 @@ export function UnauthorizedBlock({
               <button
                 className={BTN_BORDERED}
                 data-testid={`parked-allow-${m.id}`}
-                title="Add the sender to the allow-list; this message is discarded"
+                title={t("session:chrome.allowAndDiscard")}
                 onClick={() => act(m.id, "allow")}
               >
                 {t("settings:manageTabs.allowOnly")}
@@ -579,7 +579,7 @@ export function UnauthorizedBlock({
               <button
                 className="text-[11.5px] px-2 py-1 rounded-md text-faint hover:text-danger"
                 data-testid={`parked-dismiss-${m.id}`}
-                title="Throw this message away"
+                title={t("session:chrome.discardMessage")}
                 onClick={() => act(m.id, "dismiss")}
               >
                 Dismiss
@@ -625,7 +625,7 @@ export function ListeningSessionsBlock({ c }: { c: Connector }) {
               </span>
               <button
                 className="ml-auto text-faint hover:text-danger shrink-0"
-                title="Unsubscribe this session"
+                title={t("connectors:shared.unsubscribe")}
                 onClick={async () => {
                   await unsubscribeChannel(s.session_id, s.channel);
                   load();
@@ -686,7 +686,7 @@ export function AllowlistBlock({
               {names?.[u] || u}
               <button
                 className="w-4 h-4 grid place-items-center text-faint hover:text-danger"
-                title="remove"
+                title={t("settings:manageTabs.remove")}
                 onClick={async () => {
                   await disallowUser(c.name, u, teamId);
                   onChanged();

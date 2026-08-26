@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatDate } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import { getWikiPages, getWikiCategories, getWikiAlerts, searchWiki } from "../api";
 import { PanelHead } from "./IntegrationsView";
@@ -348,7 +349,7 @@ export function WikiView() {
                   </div>
                   {page.updated_at && (
                     <span className="text-[11px] text-faint tabular-nums shrink-0">
-                      {new Date(page.updated_at).toLocaleDateString()}
+                      {formatDate(new Date(page.updated_at))}
                     </span>
                   )}
                   <Icon

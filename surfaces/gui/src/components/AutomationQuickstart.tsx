@@ -388,7 +388,7 @@ export function AutomationQuickstart({
                 <input
                   className="w-28 px-3 py-2 rounded-lg border border-line bg-panel text-[13.5px] outline-none focus:border-accent"
                   type="time"
-                  aria-label="Time"
+                  aria-label={tr("session:serviceConfig.auditTime")}
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                 />

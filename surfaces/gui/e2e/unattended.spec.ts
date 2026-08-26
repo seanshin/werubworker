@@ -5,7 +5,7 @@
 // card; the Inbox list itself is covered by inbox.spec.ts). The mocked /v1/sessions/:id/unattended
 // is stateful so the toggle persists across a reload.
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 // The toggle sits inside the composer's Mode menu (§22).
 async function openModeMenu(page) {
@@ -15,6 +15,7 @@ async function openModeMenu(page) {
 
 test("attended (default): a tool request surfaces the inline approval card", async ({ page }) => {
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("please run a tool");
   await page.getByRole("button", { name: "Send" }).click();
@@ -47,6 +48,7 @@ test("unattended: a tool request parks (no inline approval card)", async ({ page
   // The menu's full-screen overlay closes it on any outside click.
   await page.mouse.click(5, 5);
 
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("please run a tool");
   await page.getByRole("button", { name: "Send", exact: true }).click();
@@ -94,6 +96,7 @@ test("answering the live approval never re-flashes its parked Inbox mirror", asy
   });
 
   await page.goto("/");
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("please run a tool");
   await page.getByRole("button", { name: "Send", exact: true }).click();

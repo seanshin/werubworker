@@ -60,7 +60,8 @@
     "logs": "Logs",
     "topology": "Topology",
     "security": "Security",
-    "backup": "Backup"
+    "backup": "Backup",
+    "never": "Never"
   },
   "monitoring": {
     "title": "Monitoring Dashboard",

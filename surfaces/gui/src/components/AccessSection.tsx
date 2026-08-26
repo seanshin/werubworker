@@ -221,7 +221,7 @@ export function AccessSection({
   const folderPart = projectScoped
     ? baseName(workspace || roots.find((r) => r.primary)?.path || "") || null
     : roots.length > 0
-      ? `${roots.length} folder${roots.length === 1 ? "" : "s"}`
+      ? t("session:access.folderCount", { count: roots.length })
       : null;
   const summary = [sourcesPart, folderPart].filter(Boolean).join(" · ");
 
@@ -241,7 +241,7 @@ export function AccessSection({
         </button>
       </div>
       {open && (
-        <div className="rail-section-body" role="region" aria-label="Session access">
+        <div className="rail-section-body" role="region" aria-label={t("session:chrome.sessionAccess")}>
           {connectFor ? (
             <ConnectInline
               c={connectFor}
@@ -506,7 +506,7 @@ function ConnectInline({
       <button
         className="inline-flex items-center gap-1 text-[12px] text-faint hover:text-ink mb-2"
         onClick={onBack}
-        aria-label="Back to sources"
+        aria-label={t("session:access.backToSources")}
       >
         <Icon name="arrowLeft" size={13} /> {t("session:access.connectTitle", { title: c.title })}
       </button>
@@ -572,7 +572,7 @@ function ChannelsInline({
               {s.collision && (
                 <span
                   className="text-[10.5px] text-warnInk bg-warnSoft/70 border border-warnInk/15 rounded px-1 shrink-0"
-                  title="This channel is also this session's Inbox-routing target — inbound and outbound collide."
+                  title={t("session:chrome.routingCollideSession")}
                 >
                   ⚠
                 </span>

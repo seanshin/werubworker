@@ -161,7 +161,7 @@ export function PersonasTab({ onOpenPersona }: { onOpenPersona?: (id: string) =>
               ) : (
                 <button
                   className="text-faint hover:text-danger shrink-0 p-1"
-                  title="Delete this persona"
+                  title={t("session:chrome.deletePersona")}
                   aria-label={"Delete " + p.name}
                   data-testid={"persona-delete-" + p.id}
                   onClick={() => setConfirmDel(p.id)}

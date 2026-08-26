@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatTime, fromEpoch } from "../formatDate";
 import { Trans, useTranslation } from "react-i18next";
 import { PanelHead } from "./IntegrationsView";
 import { Icon } from "./Icon";
@@ -1368,7 +1369,7 @@ export function OpsView() {
                           <div>
                             <div className="text-faint">{t("session:ops.lastCheck")}</div>
                             <div className="text-ink font-medium">
-                              {c.last_check > 0 ? new Date(c.last_check * 1000).toLocaleTimeString() : "Never"}
+                              {c.last_check > 0 ? formatTime(fromEpoch(c.last_check)) : t("common:label.never")}
                             </div>
                           </div>
                         </div>

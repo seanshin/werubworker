@@ -1,4 +1,5 @@
 import { memo, useEffect, useState, type ReactNode } from "react";
+import { formatTime, fromEpoch } from "../formatDate";
 import { useTranslation } from "react-i18next";
 import {
   getArtifacts,
@@ -207,7 +208,7 @@ export const RightRail = memo(function RightRail({
                     </span>
                     <span className="artifact-name">
                       {a.name}
-                      <span className="artifact-row-meta">{formatBytes(a.size)} · {formatTime(a.modified_at)}</span>
+                      <span className="artifact-row-meta">{formatBytes(a.size)} · {clockTime(a.modified_at)}</span>
                     </span>
                     <span className="artifact-open">{t("common:button.open")}</span>
                   </button>
@@ -357,16 +358,16 @@ function ArtifactViewer({
           <button
             className="artifact-icon-btn"
             onClick={() => navigator.clipboard?.writeText(artifact.abs_path || artifact.path)}
-            aria-label="Copy path"
-            title="Copy full path"
+            aria-label={t("session:chrome.copyPath")}
+            title={t("session:chrome.copyFullPath")}
           >
             <Icon name="copy" size={16} />
           </button>
           <button
             className="artifact-icon-btn"
             onClick={() => revealArtifact(sessionId, artifact.path, "reveal")}
-            aria-label="Show in folder"
-            title="Show in folder"
+            aria-label={t("session:chrome.showInFolder")}
+            title={t("session:chrome.showInFolder")}
           >
             <Icon name="folder" size={16} />
           </button>
@@ -592,7 +593,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatTime(epochSeconds: number): string {
+function clockTime(epochSeconds: number): string {
   if (!epochSeconds) return "";
-  return new Date(epochSeconds * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return formatTime(fromEpoch(epochSeconds), { hour: "numeric", minute: "2-digit" });
 }

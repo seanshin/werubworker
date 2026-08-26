@@ -266,7 +266,7 @@ export function SkillsTab({
           </span>
           <button
             className="ml-auto shrink-0 opacity-60 hover:opacity-100"
-            aria-label="Dismiss"
+            aria-label={t("session:inboxCard.dismiss")}
             onClick={() => setNotice(null)}
           >
             ✕
@@ -387,7 +387,7 @@ export function SkillsTab({
             </div>
             <button
               className={BTN_BORDERED}
-              title="Edit"
+              title={t("session:automation.editTask")}
               onClick={() =>
                 setEditor({
                   mode: "edit",

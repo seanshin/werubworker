@@ -3,7 +3,7 @@
 // facts replacing the locked-model pill and the topbar About-persona button), and the model
 // picker's fresh-session-only placement.
 import { expect } from "@playwright/test";
-import { test } from "./fixtures";
+import { agentReady, test } from "./fixtures";
 
 test("top-left cluster renders only while the sidebar is collapsed", async ({ page }) => {
   await page.goto("/");
@@ -46,6 +46,7 @@ test("facts subtitle: absent on a fresh session, model-only after the first turn
 
   // First turn → the facts move up to the subtitle; the picker STAYS in the composer
   // (§17 rev 2026-07-22: mid-session model switching shipped, so it remains actionable).
+  await agentReady(page);
   const box = page.getByPlaceholder(/Ask the coworker/);
   await box.fill("hello");
   await page.getByRole("button", { name: "Send" }).click();
